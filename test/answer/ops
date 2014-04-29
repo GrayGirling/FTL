@@ -1,0 +1,41 @@
+ftl byoutput/ops.ftl@54: in
+ftl byoutput/ops.ftl:57: undefined symbol 'yfy'
+ftl byoutput/ops.ftl:57: code has trailing text: ...
+ftl byoutput/ops.ftl:58: undefined symbol 'x'
+ftl byoutput/ops.ftl:58: code has trailing text: ...
+16
+15
+-5
+10
+-16
+-24
+4
+"str"
+<3>
+4
+"(xfy 5 6)"
+"(yfx 5 6)"
+"(yfy 5 6)"
+"(xfx 5 6)"
+"(fx 7)"
+"(fy 7)"
+"(xf 4)"
+"(yf 4)"
+"(xfy (xfy 5 6) 7)"
+"(yfx 5 (yfx 6 7))"
+  0: xfy "or"
+  1: xfy "and"
+  2:  fy "not"
+  3: xfx "=="
+  3: xfx "!="
+  3: xfx "lt"
+  3: xfx "le"
+  3: xfx "gt"
+  3: xfx "ge"
+  4: xfy "shl"
+  4: xfy "shr"
+  5:  fy "-"
+  6: xfy "+"
+  6: xfy "-"
+  7: xfy "*"
+  7: xfy "/"

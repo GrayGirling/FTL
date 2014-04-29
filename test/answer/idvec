@@ -1,0 +1,66 @@
+ftl: value has wrong type - type is int, expected string
+ftl: value has wrong type - type is int, expected string
+ftl: value has wrong type - type is int, expected string
+ftl byoutput/idvec.ftl:24: expected ']'
+ftl byoutput/idvec.ftl:24: expected ']'
+ftl byoutput/idvec.ftl:24: failed to evaluate expression
+ftl byoutput/idvec.ftl:24: warning - trailing text '=1] '
+ftl byoutput/idvec.ftl:28: left of '::' must be an environment without unbound variables
+ftl byoutput/idvec.ftl:28: failed to evaluate expression
+ftl byoutput/idvec.ftl:28: warning - trailing text '    '
+ftl byoutput/idvec.ftl:31: left of '::' must be an environment without unbound variables
+ftl byoutput/idvec.ftl:31: failed to evaluate expression
+ftl byoutput/idvec.ftl:31: warning - trailing text ' '
+ftl byoutput/idvec.ftl:38: left of '::' must be an environment without unbound variables
+ftl byoutput/idvec.ftl:38: can't invoke closure - no argument for "_1"
+ftl byoutput/idvec.ftl:38: warning - trailing text ' '
+ftl byoutput/idvec.ftl:45: left of ':' must be an environment without unbound variables
+ftl byoutput/idvec.ftl:45: failed to evaluate expression
+ftl byoutput/idvec.ftl:45: warning - trailing text ' '
+ftl byoutput/idvec.ftl:57: too many arguments (no unbound symbols in closure) - missing ';'?
+["d"=4,"c"=3,"b"=2,"a"=1]
+ftl byoutput/idvec.ftl:57: failed to evaluate expression
+[]
+["z"=NULL]
+["z"=NULL]
+[]
+["a"=0,"b"=1]
+["z"=4]
+["z"=2]
+["z"=NULL,"z "=4]
+0
+1
+1
+0
+2
+1
+1
+2
+["a"]
+["a", "b"]
+["a", "a"]
+["a"=1, "b"]
+["a"=1, "a"]
+["b"=2,"a"=1]
+["a"=-1,"b"=0,"c"=1,"d"=2,"e"=3]
+["a"=1, "b"]
+["a"=1, "b", "c", "d"]
+["a"=5,"b"=2]
+2
+5
+1
+1
+2
+["a"=0]:root
+["a"=0]:root
+["b"=1,"a"=0]:root
+["a"=0,"b"=1]:root
+["a"]:root
+["c"=3,"b"=2,"a"=1]
+4
+["c"=3,"a"=1]
+["a"=4]
+["b"=2,"a"=1]
+["b"=2,"a"=1, "c", "d"]
+["c"=3,"b"=2,"a"=1, "d"]
+["d"=4,"c"=3,"b"=2,"a"=1]

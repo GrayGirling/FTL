@@ -1,0 +1,68 @@
+ftl: names in a vector must be an integer not a string
+ftl byoutput/vec.ftl:10: expected '>'
+ftl: names in a vector must be an integer not a string
+ftl byoutput/vec.ftl:10: expected '>'
+ftl byoutput/vec.ftl:10: failed to evaluate expression
+ftl byoutput/vec.ftl:10: warning - trailing text '4> '
+ftl byoutput/vec.ftl:35: syntax - [<env>|<closure>|<string>] - number of elements in object
+ftl: name 10 has a constant value
+ftl byoutput/vec.ftl:47: can't set a value for 10 here
+ftl byoutput/vec.ftl:50: index symbol undefined in parent '0'
+ftl byoutput/vec.ftl:50: failed to evaluate expression
+ftl byoutput/vec.ftl:51: index symbol undefined in parent '-1'
+ftl byoutput/vec.ftl:51: failed to evaluate expression
+ftl byoutput/vec.ftl:52: index symbol undefined in parent '1'
+ftl byoutput/vec.ftl:52: failed to evaluate expression
+ftl byoutput/vec.ftl:55: index symbol undefined in parent '-1'
+ftl byoutput/vec.ftl:55: failed to evaluate expression
+ftl byoutput/vec.ftl:56: index symbol undefined in parent '1'
+ftl byoutput/vec.ftl:56: failed to evaluate expression
+ftl byoutput/vec.ftl:58: index symbol undefined in parent '2'
+ftl byoutput/vec.ftl:58: failed to evaluate expression
+ftl byoutput/vec.ftl:60: index symbol undefined in parent '4'
+ftl byoutput/vec.ftl:60: failed to evaluate expression
+ftl byoutput/vec.ftl:62: index symbol undefined in parent '8'
+ftl byoutput/vec.ftl:62: failed to evaluate expression
+ftl byoutput/vec.ftl:69: index symbol undefined in parent '5'
+ftl byoutput/vec.ftl:69: failed to evaluate expression
+<>
+<100>
+<1000, 2000>
+<"a">
+<1, 2, 7=9>
+<5=9, 10, 11>
+<3=3, 7=7>
+<10 .. 13>
+<10 .. 13>
+<13 .. 10>
+<13 .. 10>
+<4, 7 .. 23>
+<4, 11 .. 23>
+<1 .. 134217727>
+<1 .. 134217727>
+<1 .. 134217727>
+<1 .. 134217727>
+<1 .. -134217727>
+<1 .. 1>
+<1 .. 8>
+<1 .. 8>
+<4, 6 .. 12>
+TRUE
+TRUE
+0
+8
+8
+8
+4
+4
+7
+<1 .. 10>
+42
+33
+77
+4
+8
+12
+16
+20
+24

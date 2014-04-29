@@ -1,4 +1,0 @@
-FTL
-===
-
-Fun Tiny Language

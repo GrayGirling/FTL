@@ -1,0 +1,153 @@
+#!/bin/sh
+
+cmd_this="$0"
+cmd_dir=`dirname "$cmd_this"`
+cmd_dir=`cd "$cmd_dir">/dev/null && /bin/pwd`
+cmd_name=`basename "$cmd_this"`
+
+dir_cmdparent=`cd "$cmd_dir/..">/dev/null;pwd`
+dir_results="/tmp/ftltest"
+file_diff="/tmp/ftltest.diff"
+
+dir_test="$dir_cmdparent/test"
+dir_test_outtest="byoutput"
+dir_test_answer="answer"
+ftl_cmd="$dir_cmdparent/ftl"
+
+cmd_show=less
+
+verbose=false
+
+log()
+{   echo "$cmd_name:" "$@"
+}
+
+verbage()
+{   $verbose && log "$@"
+}
+
+err()
+{    log "$@" >&2
+}
+
+help()
+{   echo "syntax: $cmd_name [-v][-r][-l][-s][-a] | [test_name]"
+    echo "    -v        verbose"
+    echo "    -r        record result as correct answer"
+    echo "    -l        list possible tests"
+    echo "    -s        show ideal results"
+    echo "    -a        all tests"
+}
+
+do_list=false
+do_record=false
+do_all=false
+do_show=false
+
+runtest()
+{  local testfile="$1"
+   local testname=`basename "$testfile" .ftl`
+   local rc=1
+   
+   if [ ! -r "$testfile" ]; then
+       err "'$testfile' test file not readable"
+       rc=0
+   else
+       local result="$dir_results/$testname"
+       local answer="$dir_test/$dir_test_answer/$testname"
+       mkdir -p "$dir_results"
+
+       if $ftl_cmd $testfile &> "$result"; then
+           if $do_record; then
+               cp "$result" "$answer"
+               log "'$testname' answer file recorded"
+           else
+               if [ ! -r "$answer" ]; then
+                   err "'$testname' result not recorded yet - use -r"
+                   rc=0
+               elif diff "$result" "$answer" > $file_diff; then
+                   verbage "'$testname' OK"
+               else
+                   err "'$testname' test execution differs from ideal:"
+                   cat $file_diff >&2
+                   err "result in $result"
+                   err "answer in $answer"
+                   rc=0
+               fi
+           fi
+       else
+           err "'$testfile' test execution failed"
+           cat "$result"
+           rc=0
+       fi
+   fi
+   return $rc
+}
+
+do_help=false
+option=true
+
+while $option; do
+    case "$1" in
+       -a | --all)
+          do_all=true;;
+       -l | --list)
+          do_list=true;;
+       -s | --show)
+          do_show=true;;
+       -r | --record)
+          do_record=true;;
+       -v | --verbose)
+          verbose=true;;
+       -h | --help)
+          do_help=true;;
+       -*)
+          echo "Syntax: unknown option $1" >&2
+          do_help=true;;
+       *)
+          option=false;;
+    esac
+    
+    if $option; then
+       shift
+    fi
+done
+
+name="$1"; shift
+
+if $do_help; then
+    help >&2
+elif $do_list; then
+    cd "$dir_test/$dir_test_outtest">/dev/null
+    ls -1 *.ftl
+elif $do_all; then
+    export FTL_PATH= # pick up only fully qualified file names 
+    if cd "$dir_test">/dev/null; then
+        for name in `ls $dir_test_outtest`; do
+            case "$name" in
+                *.ftl)
+                    name=`basename "$name"`
+                    runtest "$dir_test_outtest/$name";;
+            esac
+        done
+    fi
+    exit $?
+elif [ -z "$name" ]; then
+    help >&2
+elif $do_show; then
+    testname=`basename "$name" .ftl`
+    answer="$dir_test/$dir_test_answer/$testname"
+
+    if [ -r "$answer" ]; then
+        $cmd_show "$answer"
+    else
+        err "'$name' result not recorded yet - use -r"
+    fi
+else
+    export FTL_PATH= # pick up only fully qualified file names 
+    if cd "$dir_test">/dev/null; then
+        runtest "$dir_test_outtest/$name" 
+    fi
+    exit $?
+fi
+
