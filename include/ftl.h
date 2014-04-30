@@ -61,7 +61,9 @@ extern "C" {
 
 #ifdef _WIN32
 
-#include <winsock2.h> /* one way to get HANDLE! */
+/* The following two should mimic the Windows.h types */
+typedef void *PVOID;   
+typedef PVOID HANDLE;   
 typedef HANDLE thread_os_t;
 #define THREAD_OS_BAD 0
     
@@ -73,15 +75,21 @@ typedef HANDLE thread_os_t;
 
 /*          Numbers 					                     */
 
+#ifdef __GNUC__ /* mingw */
+typedef long long number_t;
+typedef unsigned long long unumber_t;
+#else
 typedef __int64 number_t;
 typedef unsigned __int64 unumber_t;
-    
+#endif
+   
 #define NUMBER(digits) digits##ll
 #define UNUMBER(digits) digits##ull
 /* printf formats */
 #define F_NUMBER_T "I64d"
 #define FX_UNUMBER_T "I64x"
 #define FXC_UNUMBER_T "I64X"
+#define FO_UNUMBER_T "I64o"
 #define F_UNUMBER_T "I64u"
 
 #else /* assume Linux */
@@ -115,6 +123,7 @@ typedef unsigned long unumber_t;
 #define F_NUMBER_T "ld"
 #define FX_UNUMBER_T "lx"
 #define FXC_UNUMBER_T "lX"
+#define FO_UNUMBER_T "lo"
 #define F_UNUMBER_T "lu"
 
 #else
@@ -128,6 +137,7 @@ typedef unsigned long long unumber_t;
 #define F_NUMBER_T "lld"
 #define FX_UNUMBER_T "llx"
 #define FXC_UNUMBER_T "llX"
+#define FO_UNUMBER_T "llo"
 #define F_UNUMBER_T "llu"
 
 #endif /* _SIZEOF_LONG == 8 */
@@ -503,6 +513,10 @@ value_string_new(const char *string, size_t len);
 #define value_string_new_measured(_string) \
         value_string_new(_string, strlen(_string))
 
+/*! data source is newly allocated buffer returned for initialization */
+extern value_t *
+value_string_alloc_new(size_t len, char **out_string);
+   
 extern value_t *
 value_wcstring_new(const wchar_t *wcstring, size_t string_wchars);
 /* convert from unicode string */
@@ -562,11 +576,11 @@ value_stream_openfile_new(FILE *file, bool autoclose,
 			  const char *name, bool read, bool write);
 
 extern value_t *
-value_stream_file_new(const char *name, bool read, bool write);
+value_stream_file_new(const char *name, bool binary, bool read, bool write);
 
 extern value_t *
 value_stream_file_path_new(const char *path, const char *name, size_t namelen,
-			   bool read, bool write,
+			   bool binary, bool read, bool write,
 	                   char *namebuf, size_t buflen);
   
 /*          Socket Stream Values                                             */
@@ -997,7 +1011,7 @@ dir_array_update(const value_t **ref_value, array_spec_t *spec, bool is_const,
 /*          String Argument vector Directories		                     */
 
 extern dir_t *
-dir_argvec_new(int argc, char **argv);
+dir_argvec_new(int argc, const char **argv);
 
 /*          Integer vector Directories			                     */
 
@@ -1075,15 +1089,19 @@ value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end);
 extern bool
 value_closure_pushenv(const value_t *value, value_env_t *env, bool env_end);
 
+/*! return the component code, environment and unbound arguments of a closure */
 extern bool
 value_closure_get(const value_t *value, const value_t **out_code,
 		  dir_t **out_env, const value_t **out_unbound);
 
+/*! give a closure an unbound argument */
 extern value_t * /*pos*/
 value_closure_pushunbound(value_t *value, value_t *pos, value_t *name);
 
+/*! ind a new argument to a closure */
 extern value_t *
 value_closure_bind(const value_t *envval, const value_t *value);
+
 
 /*          Transfer Functions					             */
 
@@ -1343,10 +1361,14 @@ extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
 extern const value_t *
-parser_expand_exec(parser_state_t *state, charsource_t *source,
-		   const char *cmd_str, const char *rcfile_id,
-		   bool expect_no_locals);
-
+parser_expand_exec_int(parser_state_t *state, charsource_t *source,
+		       const char *cmd_str, const char *rcfile_id,
+		       bool expect_no_locals, bool interactive);
+   
+#define parser_expand_exec(state, source, cmd_str, rc_file_id, no_locals)     \
+        parser_expand_exec_int(state, source, cmd_str, rc_file_id, no_locals, \
+                               FALSE)
+   
 #define parser_expand_string_exec(state, cstring, stringlen, no_locals)       \
         parser_expand_exec(state,                                             \
 			   charsource_cstring_new(#cstring, cstring,          \
@@ -1374,7 +1396,7 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
 /*          Generic Commands					             */
 
 extern void
-cmds_generic(parser_state_t *state, int argc, char **argv);
+cmds_generic(parser_state_t *state, int argc, const char **argv);
 
 /*          Library initialization				             */
 
@@ -1394,3 +1416,4 @@ ftl_end(void);
 
 
 #endif /* _FTL_H */
+

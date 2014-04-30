@@ -1,0 +1,77 @@
+.p4config
+tags
+TAGS
+.*.sw?
+*.sv.so
+*.sv.o
+*.bak
+*.tmp
+*.exe
+*.d
+*.a
+*.cmd
+*.o
+*.ko
+*.mod.c
+*.symvers
+*.order
+.tmp*
+*.bbb
+.depend
+*~
+\#*\#
+*.kdev4
+*.bbb
+.project
+.cproject
+*.class
+/prebuilt
+*.obj
+*.pdb
+*.ilk
+*.manifest
+*.stackdump
+
+# Temporary kdiff3 files
+*.BACKUP.*
+*.BASE.*
+*.LOCAL.*
+*.REMOTE.*
+*.orig
+
+# cscope files
+cscope.*
+
+# Temporary make files
+MetaWare/VideoCore/mk/vcvars.mk
+MetaWare/VideoCore/mk/vcvars.sh
+
+# Temporary binaries
+MetaWare/VideoCore/mw_plugins/*.dll
+MetaWare/VideoCore/mw_plugins/*.exp
+MetaWare/VideoCore/mw_plugins/*.lib
+MetaWare/VideoCore/mw_plugins/*.so
+MetaWare/VideoCore/driver/*.dll
+MetaWare/VideoCore/driver/*.exp
+MetaWare/VideoCore/driver/*.lib
+MetaWare/VideoCore/driver/*.so
+MetaWare/VideoCore/driver/cs-ntal/*.lib
+MetaWare/VideoCore/driver/csdev/*.lib
+MetaWare/VideoCore/driver/csdev/csdev
+MetaWare/VideoCore/driver/cstool/cstool
+MetaWare/VideoCore/driver/daptool/*.lib
+MetaWare/VideoCore/driver/daptool/*.dll
+MetaWare/VideoCore/driver/daptool/daptool
+
+# Shell scripts initializing environment variables for debugger
+MetaWare/VideoCore/driver/*.env
+
+
+# Visual Studio auto generated files
+*.ncb
+*.suo
+*.user
+*.exp
+
+# Eclipse settings
+/.settings

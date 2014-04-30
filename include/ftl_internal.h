@@ -102,6 +102,8 @@ _value_unlocal(const value_t *val, int lineno)
 
 #define value_unlocal(val) _value_unlocal(val, __LINE__)
 
+extern void
+value_delete(value_t **ref_val);
   
 /*          Directories					                     */
 
