@@ -263,6 +263,8 @@
 
 /*#define FTL_BOOL_ISINT*/
 
+#define FTL_ERROR_TRAIL_LINES 4
+
 #ifdef MB_LEN_MAX
 #define FTL_MB_LEN_MAX MB_LEN_MAX
 #endif
@@ -3206,16 +3208,10 @@ linesource_eof(linesource_t *source)
 
 
 extern int
-vreport(charsink_t *sink, linesource_t *source, const char *format, va_list ap)
+vreport_line(charsink_t *sink, linesource_t *source,
+             const char *format, va_list ap)
 {   int n = 0;
-    const char *at_source = instack_source(source->in);
-    int at_lineno = instack_lineno(source->in);
 
-    /* report rest of the stack if it is different to last time */
-    if (!code_place_eq(&source->report_place, at_source, at_lineno))
-    {   code_place_set(&source->report_place, at_source, at_lineno);
-	n += instack_print(source->in, sink);
-    }
     if (NULL == sink)
     {   n += fprintf(stderr, "%s %s:%d: ",
 		    codeid(), linesource_source(source),
@@ -3228,6 +3224,24 @@ vreport(charsink_t *sink, linesource_t *source, const char *format, va_list ap)
 			      linesource_lineno(source));
 	return n + charsink_vsprintf(sink, format, ap);
     }
+}
+
+
+
+
+
+extern int
+vreport(charsink_t *sink, linesource_t *source, const char *format, va_list ap)
+{   int n = 0;
+    const char *at_source = instack_source(source->in);
+    int at_lineno = instack_lineno(source->in);
+
+    /* report rest of the stack if it is different to last time */
+    if (!code_place_eq(&source->report_place, at_source, at_lineno))
+    {   code_place_set(&source->report_place, at_source, at_lineno);
+	n += instack_print(source->in, sink);
+    }
+    return vreport_line(sink, source, format, ap);
 }
 
 
@@ -11255,11 +11269,19 @@ parser_suspend_set(parser_state_t *parser_state, suspend_fn_t *sleep)
 }
 
 
-
+/* reports error with backtrace */
 extern int
 charsink_parser_vreport(charsink_t *sink, parser_state_t *parser_state,
 	                const char *format, va_list ap)
 {   return vreport(sink, parser_linesource(parser_state), format, ap);
+}
+
+
+/* omits initial backtrace - for report continuation lines */
+extern int
+charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
+      	                     const char *format, va_list ap)
+{   return vreport_line(sink, parser_linesource(parser_state), format, ap);
 }
 
 
@@ -11274,7 +11296,7 @@ charsink_parser_value_print(charsink_t *sink, parser_state_t *parser_state,
 }
 
 
-
+/* generate initial line of error report */
 extern int
 parser_report(parser_state_t *parser_state, const char *format, ...)
 {   va_list args;
@@ -11282,6 +11304,22 @@ parser_report(parser_state_t *parser_state, const char *format, ...)
 
     va_start(args, format);
     len = parser_vreport(parser_state, format, args);
+    va_end(args);
+
+    return len;
+}
+
+
+
+
+/* generate subsequent lines of error report (no backtrace) */
+extern int
+parser_report_line(parser_state_t *parser_state, const char *format, ...)
+{   va_list args;
+    int len;
+
+    va_start(args, format);
+    len = parser_vreport_line(parser_state, format, args);
     va_end(args);
 
     return len;
@@ -15418,8 +15456,28 @@ parser_argv_exec(parser_state_t *state, const char **argv, int argn,
 
 
 
+static void
+parser_report_trailing(parser_state_t *state, const char *msg,
+                       const char *phrase)
+{
+    char *p;
+    int width;
+    int lines = 0;
 
-
+    p = strchr(phrase, '\n');
+    width = p == NULL? strlen(phrase)+1: p - phrase;
+    /*printf("%s: width of trailing line %d is %d\n", codeid(), lines, width);*/
+    parser_report(state, "%s%.*s\n", msg, width, phrase);
+    while (p != NULL && lines < FTL_ERROR_TRAIL_LINES) {
+        phrase += width+1;
+        p = strchr(phrase, '\n');
+        width = p == NULL? strlen(phrase): p - phrase;
+        /*printf("%s: width of trailing line %d is %d\n",
+          codeid(), lines, width); */
+        parser_report(state, "%.*s\n", width, phrase);
+        lines++;
+    }
+}
 
 
 
@@ -15493,9 +15551,11 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                 val = mod_exec_cmd(&phrase, state);
 
                 if (val != NULL)
-                {   if (!parse_empty(&phrase))
-                        parser_report(state, "warning - trailing text '%s'\n",
-                                      phrase);
+                {   if (!parse_empty(&phrase)) {
+                        parser_report_trailing(state,
+                                               "warning - trailing text ...",
+                                               phrase);
+                    }
                     if (!value_type_equal(val, type_null) && NULL != resultout)
                     {   value_fprint(resultout,
                                      dir_value(parser_root(state)), val);
