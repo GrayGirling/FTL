@@ -368,6 +368,10 @@ vreport(charsink_t *sink, linesource_t *source,
 extern int
 report(charsink_t *sink, linesource_t *source, const char *format, ...);
 
+/* continuation line */
+extern int
+report_line(charsink_t *sink, linesource_t *source, const char *format, ...);
+
 
 
     
@@ -1179,8 +1183,15 @@ extern int
 charsink_parser_vreport(charsink_t *sink, parser_state_t *parser_state,
 	                const char *format, va_list ap);
 
+extern int
+charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
+	                     const char *format, va_list ap);
+
 #define parser_vreport(state, format, ap) \
         charsink_parser_vreport(NULL, state, format, ap)
+
+#define parser_vreport_line(state, format, ap) \
+        charsink_parser_vreport_line(NULL, state, format, ap)
 
 extern int
 charsink_parser_value_print(charsink_t *sink, parser_state_t *parser_state,

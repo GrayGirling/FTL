@@ -3210,19 +3210,27 @@ linesource_eof(linesource_t *source)
 extern int
 vreport_line(charsink_t *sink, linesource_t *source,
              const char *format, va_list ap)
-{   int n = 0;
+{   if (NULL == source)
+    {
+        if (NULL == sink)
+            return vfprintf(stderr, format, ap);
+        else
+            return charsink_vsprintf(sink, format, ap);
+    } else {
+        int n = 0;
 
-    if (NULL == sink)
-    {   n += fprintf(stderr, "%s %s:%d: ",
-		    codeid(), linesource_source(source),
-		    linesource_lineno(source));
-	return n + vfprintf(stderr, format, ap);
-    } else
-    {   int n = 0;
-        n += charsink_sprintf(sink, "%s %s:%d: ",
-			      codeid(), linesource_source(source),
-			      linesource_lineno(source));
-	return n + charsink_vsprintf(sink, format, ap);
+        if (NULL == sink)
+        {   n += fprintf(stderr, "%s %s:%d: ",
+                        codeid(), linesource_source(source),
+                        linesource_lineno(source));
+            return n + vfprintf(stderr, format, ap);
+        } else
+        {   int n = 0;
+            n += charsink_sprintf(sink, "%s %s:%d: ",
+                                  codeid(), linesource_source(source),
+                                  linesource_lineno(source));
+            return n + charsink_vsprintf(sink, format, ap);
+        }
     }
 }
 
@@ -3233,15 +3241,19 @@ vreport_line(charsink_t *sink, linesource_t *source,
 extern int
 vreport(charsink_t *sink, linesource_t *source, const char *format, va_list ap)
 {   int n = 0;
-    const char *at_source = instack_source(source->in);
-    int at_lineno = instack_lineno(source->in);
+    
+    if (source != NULL)
+    {
+        const char *at_source = instack_source(source->in);
+        int at_lineno = instack_lineno(source->in);
 
-    /* report rest of the stack if it is different to last time */
-    if (!code_place_eq(&source->report_place, at_source, at_lineno))
-    {   code_place_set(&source->report_place, at_source, at_lineno);
-	n += instack_print(source->in, sink);
+        /* report rest of the stack if it is different to last time */
+        if (!code_place_eq(&source->report_place, at_source, at_lineno))
+        {   code_place_set(&source->report_place, at_source, at_lineno);
+            n += instack_print(source->in, sink);
+        }
     }
-    return vreport_line(sink, source, format, ap);
+    return n+vreport_line(sink, source, format, ap);
 }
 
 
@@ -3255,6 +3267,22 @@ report(charsink_t *sink, linesource_t *source, const char *format, ...)
 
     va_start(args, format);
     len = vreport(sink, source, format, args);
+    va_end(args);
+
+    return len;
+}
+
+
+
+
+
+extern int
+report_line(charsink_t *sink, linesource_t *source, const char *format, ...)
+{   va_list args;
+    int len;
+
+    va_start(args, format);
+    len = vreport_line(sink, source, format, args);
     va_end(args);
 
     return len;
@@ -11273,7 +11301,9 @@ parser_suspend_set(parser_state_t *parser_state, suspend_fn_t *sleep)
 extern int
 charsink_parser_vreport(charsink_t *sink, parser_state_t *parser_state,
 	                const char *format, va_list ap)
-{   return vreport(sink, parser_linesource(parser_state), format, ap);
+{   return vreport(sink,
+                   NULL==parser_state? NULL: parser_linesource(parser_state),
+                   format, ap);
 }
 
 
@@ -11281,7 +11311,10 @@ charsink_parser_vreport(charsink_t *sink, parser_state_t *parser_state,
 extern int
 charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
       	                     const char *format, va_list ap)
-{   return vreport_line(sink, parser_linesource(parser_state), format, ap);
+{   return
+        vreport_line(sink,
+                     NULL==parser_state? NULL: parser_linesource(parser_state),
+                     format, ap);
 }
 
 
@@ -11327,6 +11360,27 @@ parser_report_line(parser_state_t *parser_state, const char *format, ...)
 
 
 
+
+static void
+parser_error_longstring(parser_state_t *state, const char *line,
+                         const char *msg)
+{   const char *p  = strchr(line,'\n');
+    if (p == NULL)
+        parser_error(state, "%s '%s'\n", msg, line);
+    else {
+        int n = FTL_ERROR_TRAIL_LINES;
+        parser_error(state, "%s '%*.s\n", msg, p-line, line);
+        do {
+            line = p+1;
+            p  = strchr(line,'\n');
+            if (p == NULL)
+                parser_report_line(/*state*/NULL/*no pos*/, "%s'\n", line);
+            else
+                parser_report_line(/*state*/NULL/*no pos*/, "%.*s%s\n",
+                                   p-line, line, n==1?"...":"");
+        } while (--n > 0 && p != NULL);
+    }
+}
 
 
 
@@ -14705,9 +14759,6 @@ parse_expr(const char **ref_line, parser_state_t *state,
 
 
 
-
-
-
 /* This function may cause a garbage collection */
 static bool
 parse_cmdlist(const char **ref_line, parser_state_t *state,
@@ -14735,8 +14786,8 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
     }
 
     if (parse_space(ref_line) && !parse_empty(ref_line))
-	parser_error(state, "error in '%s'\n", *ref_line);
-		
+        parser_error_longstring(state, *ref_line, "error in");
+                                 
     return ok;
 }
 
@@ -15132,7 +15183,7 @@ mod_invoke_argv(const char ***ref_argv, int *ref_argn, const char *execpath,
         if (parse_cmdlist(&buf, state, &value))
             return value;
         else
-        {   parser_error(state, "code execution failed - %s\n", buf);
+        {   parser_error_longstring(state, buf, "code execution failed -");
             return &value_null;
         }
     } else
@@ -15515,7 +15566,7 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
             } else {
                 /* retreat to back to the main source */
                 linesource_t *linesource = parser_linesource(state);
-
+                /*GRAY: TODO remove debugging */
                 fprintf(stderr, "%s: popping input stack\n", codeid());
                 while (linesource != NULL &&
                        linesource_charsource(linesource) != source)
@@ -16764,8 +16815,8 @@ fn_opeval(const value_t *this_fn, parser_state_t *state)
 		
 		val = newval;
 	    else
-                parser_report(state, "code has trailing text: ...%s\n",
-			      code);
+                parser_error_longstring(state, code,
+                                        "code has trailing text -");
 	}
     } else
         parser_report_help(state, this_fn);
@@ -20624,8 +20675,9 @@ cmd_eval(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
     if (!(parse_expr(ref_line, state, &val) && parse_space(ref_line)))
     {   parser_error(state, "failed to evaluate expression\n");
         val = &value_null;
-    } else if (!parse_empty(ref_line))
-    {   parser_error(state, "trailing text in expression: ...%s\n", *ref_line);
+    } else if (!parse_empty(ref_line)) 
+    {   parser_error_longstring(state, *ref_line,
+                                "trailing text in expression -");
         val = &value_null;
     } /* else success */
     return val;
