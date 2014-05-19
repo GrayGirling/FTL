@@ -72,6 +72,7 @@ typedef HANDLE thread_os_t;
 #define OS_FS_CASE_EQ TRUE
 #define OS_FS_NOWHERE "nul:"
 #define OS_FS_DIR_HERE "."
+#define OS_FS_ABSPATH(path) ((path)[0]!='\0' && (path)[1]==':')
 
 /*          Numbers 					                     */
 
@@ -103,6 +104,7 @@ typedef pthread_t thread_os_t;
 #define OS_FS_CASE_EQ FALSE
 #define OS_FS_NOWHERE "/dev/null"
 #define OS_FS_DIR_HERE "."
+#define OS_FS_ABSPATH(path) ((path)[0]=='/')
 
 #if defined(__ia64__) || defined(__x86_64__)
 #define _SIZEOF_LONG 8

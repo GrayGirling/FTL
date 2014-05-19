@@ -1579,6 +1579,8 @@ charsource_init(charsource_t *source,
 	{   va_start(args, name_format);
 	    (void)vsnprintf(namebuf, namelen+1, name_format, args);
 	    va_end(args);
+            IGNORE(printf("%s: name '%s' -> [%d] '%s'\n",
+                          codeid(), name_format, namelen, namebuf););
 	}
     }
 }
@@ -1773,7 +1775,8 @@ static void charsource_file_delete(charsource_t *source)
 static charsource_t *
 charsource_file_init(charsource_file_t *source, charsource_delete_fn_t *delete,
 		     const char *name, FILE *stream)
-{    charsource_init(&source->base,
+{    IGNORE(printf("%s: new file '%s'\n", codeid(), name););
+     charsource_init(&source->base,
 		     &charsource_file_rdch, &charsource_file_read, delete,
 		     &charsource_file_close, "%s", name);
      source->stream = stream;
@@ -1835,9 +1838,21 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
 	     const char *mode, char *namebuf, size_t buflen)
 {   FILE *stream = NULL;
 
-    
-    if (NULL != namebuf)
-    {   const char *pathpos;
+    if (NULL == namebuf)
+        stream = NULL;
+    else if (OS_FS_ABSPATH(name))
+    {
+        if (1+namelen < buflen) {
+            stream = fopen(name, mode);
+            if (stream != NULL) {
+                memcpy(namebuf, name, namelen);
+                namebuf[namelen] = '\0';
+            }
+            IGNORE(fprintf(stderr, "%s: open absolute '%s' %s\n",
+                           codeid(), name, stream!=NULL?"OK":"FAILED"););
+	} /* else buffer not big enough for this path prefix */
+    } else {
+        const char *pathpos;
         const char *pend;
 
 	if (NULL == path)
@@ -1868,8 +1883,8 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
 		    namebuf[prefixlen+1+namelen] = '\0';
 		}
 		stream = fopen(namebuf, mode);
-		IGNORE(fprintf(stderr, "%s: open '%s' %s\n",
-			       codeid(), namebuf, stream!=NULL?"OK":"FAILED");)
+	        IGNORE(fprintf(stderr, "%s: open '%s' %s\n",
+			       codeid(), namebuf, stream!=NULL?"OK":"FAILED"););
 	    } /* else buffer not big enough for this path prefix */
 
 	    if (OS_PATH_SEP == *pend)
@@ -1896,6 +1911,7 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
     charsource_file_t *source = NULL;
 
     if (NULL != name)
+        /*expand file name into fullname[] */
         stream = fopen_onpath(path, name, namelen, "r",
 			      &fullname[0], sizeof(fullname));
     
@@ -1909,6 +1925,8 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
 	else
 	    fclose(stream);
     }
+    IGNORE (else printf("%s: couldn't open file on path '%s' - [%d]%s\n",
+                        codeid(), path, namelen, name););
     
     return (charsource_t *)source;
 }
@@ -3067,10 +3085,18 @@ code_place_unset(code_place_t *place)
 
 
 STATIC_INLINE void
-code_place_set(code_place_t *place, const char *source, int lineno)
-{   place->lineno = lineno;
-    strncpy(&place->posname[0], source, sizeof(place->posname));
-    place->posname[sizeof(place->posname)-1] = '\0';
+code_place_set(code_place_t *place, const char *sourcename, int lineno)
+{   size_t sourcename_len = strlen(sourcename);
+    place->lineno = lineno;
+    if (sourcename_len < sizeof(place->posname)-1)
+        strcpy(&place->posname[0], sourcename);
+    else {
+        const char* prefix = "...";
+        sourcename += sourcename_len - sizeof(place->posname) + 1;
+        strncpy(&place->posname[0], sourcename, sizeof(place->posname));
+        place->posname[sizeof(place->posname)-1] = '\0';
+        memcpy(&place->posname[0], prefix, strlen(prefix));
+    }
 }
 
 
@@ -3219,10 +3245,13 @@ vreport_line(charsink_t *sink, linesource_t *source,
     } else {
         int n = 0;
 
+        IGNORE(printf("%s: sink is %sset - source is '%s'\n",
+                      codeid(),NULL==sink? "un":"",
+                      linesource_source(source)););
         if (NULL == sink)
         {   n += fprintf(stderr, "%s %s:%d: ",
-                        codeid(), linesource_source(source),
-                        linesource_lineno(source));
+                         codeid(), linesource_source(source),
+                         linesource_lineno(source));
             return n + vfprintf(stderr, format, ap);
         } else
         {   int n = 0;
@@ -5849,19 +5878,8 @@ value_code_init(value_code_t *code, const value_t *string,
 		value_delete_fn_t *delete_fn,
                 const char *sourcename, int lineno)
 {   value_t *initval;
-    size_t sourcename_len = strlen(sourcename);
     code->string = string;
-    code->place.lineno = lineno;
-    if (sourcename_len < sizeof(code->place.posname)-1)
-        strcpy(&code->place.posname[0], sourcename);
-    else {
-        const char* prefix = "...";
-        sourcename += sourcename_len - sizeof(code->place.posname) + 1;
-        strncpy(&code->place.posname[0], sourcename,
-                sizeof(code->place.posname));
-        code->place.posname[sizeof(code->place.posname)-1] = '\0';
-        memcpy(&code->place.posname[0], prefix, strlen(prefix));
-    }
+    code_place_set(&code->place, sourcename, lineno);
     initval = value_init(&code->value, type_code, &value_code_print,
 		         &value_code_compare, delete_fn, &value_code_markver);
     value_unlocal(string);
@@ -6278,6 +6296,7 @@ value_stream_file_path_new(const char *path, const char *name, size_t namelen,
     else
        mode = (read? (write? "rw": "r"): (write? "w": ""));
     
+    /* expand file name into namebuf[] */
     str = fopen_onpath(path, name, namelen, mode, namebuf, buflen);
 
     if (NULL == str)
@@ -17077,6 +17096,30 @@ cmd_uid(const char **ref_line, const value_t *this_cmd,
 
 
 
+static const value_t *
+fn_fs_absname(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *filename = parser_builtin_arg(state, 1);
+    bool is_abs = FALSE;
+    bool ok = FALSE;
+
+    if (value_istype(filename, type_string))
+    {   const char *name;
+	size_t namelen;
+        
+	if (value_string_get(filename, &name, &namelen)) {
+            ok = TRUE;
+            is_abs = OS_FS_ABSPATH(name);
+        }
+    }
+
+    if (!ok)
+        parser_report_help(state, this_fn);
+
+    return is_abs? value_true: value_false;
+}
+
+    
 
 static const value_t *
 fn_path(const value_t *this_fn, parser_state_t *state)
@@ -17101,7 +17144,8 @@ fn_path(const value_t *this_fn, parser_state_t *state)
 	{   char fullname[PATHNAME_MAX];
 	    FILE *str = fopen_onpath(path, name, namelen, "r",
 				     &fullname[0], sizeof(fullname));
-	    if (NULL != str)
+	    /* expand file name into fullname[] */
+            if (NULL != str)
 	    {   fclose(str);
 		val = value_string_new_measured(fullname);
 	    }
@@ -17266,6 +17310,9 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     mod_add_val(fscmds, "nowhere", value_string_new_measured(OS_FS_NOWHERE));
     mod_add_val(fscmds, "thisdir", value_string_new_measured(OS_FS_DIR_HERE));
     mod_add_val(fscmds, "casematch", OS_FS_CASE_EQ? value_true: value_false);
+    mod_addfn(fscmds, "absname",
+              "<file> - TRUE iff file has an absolute path name",
+	      &fn_fs_absname, 1);
     (void)dir_lock(fscmds, NULL); /* prevents additions to this directory */
     
     sep[0] = OS_PATH_SEP;
@@ -17882,7 +17929,7 @@ fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
 static const value_t *
 cmd_source(const char **ref_line, const value_t *this_cmd,
 	   parser_state_t *state)
-{   char filename[128];
+{   char filename[PATHNAME_MAX];
     int rc = 0;
     
     if (parse_itemstr(ref_line, &filename[0], sizeof(filename)) &&
@@ -17894,7 +17941,7 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
         
         sprintf(&pathname[0], ENV_FTL_PATH(codeid_uc()));
         path = getenv(&pathname[0]);
-        inchars = charsource_file_path_new(path, filename, sizeof(filename));
+        inchars = charsource_file_path_new(path, filename, strlen(filename));
         
 	if (NULL == inchars)
 	{   rc = errno;
