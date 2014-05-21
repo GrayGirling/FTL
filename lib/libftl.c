@@ -10301,6 +10301,7 @@ dir_stack_copy(dir_stack_t *old)
 struct value_env_s
 {   dir_stack_t dirs;       /* stack of bound variables */
     value_t *unbound;       /* stack of unbound variables */
+    /* value_t's have a 'link' field which is used to implement a stack */
 } /* value_env_t */;
 
 
@@ -10835,6 +10836,18 @@ value_closure_copy(const value_t *oldclosureval)
     return closure==NULL? NULL: &closure->value;
 }
 
+
+
+
+
+
+
+/* return a value_t for the value_env_t in the closure */
+static const value_t *
+value_closure_env(const value_t *value)
+{   return value_istype(value, type_closure)?
+           value_env_value(((value_closure_t *)value)->env): NULL;
+}
 
 
 
@@ -13109,8 +13122,7 @@ mod_add_cmd(dir_t *dir, const char *name, const char *help, value_t *cmd,
     else
     {   int args = value_type_equal(cmd, type_func)?
 		   value_func_args((value_func_t *)cmd): 1;
-	value_t *closure = value_closure_new(cmd, (value_env_t *)
-					     (value_t *)value_env_new());
+	value_t *closure = value_closure_new(cmd, value_env_new());
 	
 	if (scope != NULL)
 	    (void)value_closure_pushdir(closure,
@@ -14009,13 +14021,15 @@ parse_code(const char **ref_line, parser_state_t *state,
 
 
 /* If *out_isenv is TRUE the value assigned to out_val is based on a value_env_t
+ * (otherwise it might be any other type of value_t)
  * This function may cause a garbage collection
  */
 static bool
 parse_base_env(const char **ref_line, parser_state_t *state,
 	       const value_t **out_val, bool *out_isenv)
-{   /* syntax: '<' <vec> '>' | '{' <code> '}' | <identifier> | <string> |
-               <integer expression>
+{   /* syntax: '(' <expr> ') | '[' <id-dir> ']' |
+               '<' <vec> '>' | '{' <code> '}' |
+               <identifier> | <string> | <integer expression>
     */
     number_t val;
     bool ok = TRUE;
@@ -14086,27 +14100,28 @@ parse_base(const char **ref_line, parser_state_t *state,
 
 
 
-/* new_env is either a value_env_t if new_env_is_literal is true or is a
-   dir_t */
+/* new_env is either a value_env_t if new_is_env_t is true else is a dir_t */
 static void
 env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
-        bool new_env_is_literal, bool no_inherit)
-{   if (*ref_env == NULL && new_env_is_literal && no_inherit)
+        bool new_is_env_t, bool inherit)
+{   if (*ref_env == NULL && new_is_env_t && !inherit)
         *ref_env = (value_env_t *)new_env;
     else
     {   if (*ref_env == NULL) 
             *ref_env = value_env_new();
 
-        if (!no_inherit) {
+        if (inherit) {
             dir_t *def_env = parser_env_copy(state);
             if (NULL != def_env)
                 (void)value_env_pushdir(*ref_env, def_env, /*env_end*/FALSE);
         }
-        if (new_env_is_literal)
+        if (new_is_env_t)
+            /* we know the new_env is a value_env_t */
             (void)value_env_pushenv(*ref_env, (value_env_t *)new_env,
                                     /*env_end*/FALSE);
         else
-        {   dir_t *new_dir = (dir_t *)new_env;
+        {   /* new_env is a dir_t */
+            dir_t *new_dir = (dir_t *)new_env;
             /* need a "copy" of dir to get a free link ptr */
             (void)value_env_pushdir(*ref_env,
                                     value_env_newpushdir(new_dir, FALSE),
@@ -14132,19 +14147,19 @@ parse_closure(const char **ref_line, parser_state_t *state,
     const value_t *closure = NULL; /* and this is we get a <code> value */
     const value_t *lhs = NULL; 
     bool lhs_is_literal = FALSE;  /* i.e. lhs was '['...']' */
-    bool no_inherit = FALSE; /* ':' not '::' */
+    bool inherit = TRUE; /* ':' not '::' */
 
     DEBUGTRACE(DPRINTF("env expr: %s\n", *ref_line);)
     
     ok = parse_base_env(ref_line, state, &lhs, &lhs_is_literal);
     /* lhs_is_literal will be true if [<id-dir>] is parsed - and lhs will be a
-     * value_env_t */
+     * value_env_t (otherwise it could be any kind of value_t) */
     
     while (ok && 
            value_type_equal(lhs, type_dir) &&
            closure == NULL &&
            parse_space(ref_line) &&
-	   ((no_inherit = parse_key(ref_line, "::")) ||
+	   (!(inherit = !parse_key(ref_line, "::")) ||
             parse_key(ref_line, ":")) &&
 	   parse_space(ref_line))
     {   const value_t *rhs = NULL;
@@ -14152,14 +14167,14 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
 	if (env == NULL)
 	{   /* create the right environment for an initial closure */
-            env_add(state, &env, lhs, lhs_is_literal, no_inherit);
+            env_add(state, &env, lhs, lhs_is_literal, inherit);
 	}
 
 	ok = parse_base_env(ref_line, state, &rhs, &rhs_is_literal);
 
         if (!ok)
 	    parser_error(state, "right of '%s' could not be parsed\n",
-                         no_inherit? "::": ":");
+                         inherit? ":": "::");
         
 	else if (NULL != env /* env==NULL => allocation failure */)
 	{   /* deal with the code value on the right hand of the ':' */
@@ -14167,7 +14182,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 	    if (rhs == NULL)
 	    {   ok = FALSE;
 		parser_error(state, "right of '%s' is undefined\n",
-                             no_inherit? "::": ":");
+                             inherit? ":": "::");
                 
 	    } else if (value_type_equal(rhs, type_code))
             {   closure = value_closure_new(/*code*/rhs, env);
@@ -14177,11 +14192,11 @@ parse_closure(const char **ref_line, parser_state_t *state,
             {   if (NULL != value_env_unbound(env))
                 {   parser_error(state, "left of '%s' must be an "
                                  "environment without unbound variables\n",
-                                 no_inherit? "::": ":");
+                                 inherit? ":": "::");
                     ok = FALSE;
                 } else
                 {   env_add(state, &env, rhs, rhs_is_literal,
-                            /*no_inherit*/TRUE);
+                            /*inherit*/FALSE);
                     /* BUG - we need to include no_inherit based on the
                        next ":" or "::" somehow */
                 }
@@ -14189,11 +14204,11 @@ parse_closure(const char **ref_line, parser_state_t *state,
             {   ok = FALSE;
                 parser_error(state, "right of '%s' is a "
                              "closure - not yet supported\n",
-                             no_inherit? "::": ":");
+                             inherit? ":": "::");
             } else
             {   ok = FALSE;
                 parser_error(state,  "right of '%s' must be "
-                             "code or environment\n", no_inherit? "::": ":");
+                             "code or environment\n", inherit? ":": "::");
             }
 
 	    lhs = value_env_value(env);
@@ -15991,6 +16006,202 @@ fprint_init(void)
 {    print_formats = NULL;
 }
 
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Commands - Closure                                               *
+ *          ==================		                                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+static const value_t *
+fn_closure(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = &value_null;
+    const value_t *inhval = parser_builtin_arg(state, 1);
+    const value_t *argenvval = parser_builtin_arg(state, 2);
+    const value_t *code = parser_builtin_arg(state, 3);
+    bool nocode = value_type_equal(code, type_null);
+    bool closure_env = value_type_equal(argenvval, type_closure);
+
+    if (value_istype(inhval, type_bool) &&
+        (closure_env || value_istype(argenvval, type_dir))) {
+         if (nocode ||
+	     value_type_equal(code, type_code) ||
+	     value_type_equal(code, type_cmd) ||
+	     value_type_equal(code, type_func))
+         {
+             bool inherit = (inhval != value_false);
+             value_env_t *newenvval = NULL;
+             bool is_env_t;
+
+             if (closure_env) {
+                 argenvval = value_closure_env(argenvval);
+                 is_env_t = TRUE;  /* argenvval is a value_env_t */
+             } else
+                 is_env_t = FALSE; /* argenvval is a dir_t */
+
+             /* return to the calling environment before inheriting it */
+             parser_env_return(state, parser_env_calling_pos(state));
+             env_add(state, &newenvval, argenvval, is_env_t, inherit);
+             val = value_closure_new(nocode? NULL: code, newenvval);
+         } else
+ 	    parser_error(state, "argument must be a command, function or "
+                         "code object (not a %s)\n",
+            		 value_type_name(code));
+    } else
+        parser_report_help(state, this_fn);
+    
+    return val;
+}
+         
+   
+
+
+static const value_t *
+fn_bind(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *arg = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+    
+    if (value_istype(closure, type_closure))
+        val = value_closure_bind(closure, arg);
+    else
+        parser_report_help(state, this_fn);
+        
+    return val;
+}
+
+
+
+static const value_t *
+fn_code(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    
+    if (value_istype(closure, type_closure))
+    {   
+        dir_t *env = NULL;
+        const value_t *unbound = NULL;
+        
+	(void)value_closure_get(closure, &val, &env, &unbound);
+    } else
+        parser_report_help(state, this_fn);
+        
+    return val;
+}
+
+
+
+static const value_t *
+fn_context(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    
+    if (value_istype(closure, type_closure))
+    {   val = value_closure_env(closure);
+    } else
+        parser_report_help(state, this_fn);
+        
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_argname(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    
+    if (value_istype(closure, type_closure))
+    {
+        const value_t *code = NULL;
+        dir_t *env = NULL;
+        const value_t *unbound = NULL;
+        
+	if (value_closure_get(closure, &code, &env, &unbound) &&
+            unbound != NULL)
+            /* WARNING - the values returned in this vector have an _in use_
+                         link field.  It could be overwritten if the value
+                         were used in a context that wanted to use the link
+                         This needs fixing really.
+            */
+            val = unbound;
+    } else
+        parser_report_help(state, this_fn);
+        
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_argnames(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    
+    if (value_istype(closure, type_closure))
+    {
+        const value_t *code = NULL;
+        dir_t *env = NULL;
+        const value_t *unbound = NULL;
+        dir_t *namevec = dir_vec_new();
+        
+	if (value_closure_get(closure, &code, &env, &unbound))
+        {
+            int n = 0;
+            const value_t *nameval = unbound;
+            /* WARNING - the values returned in this vector have an _in use_
+                         link field.  It could be overwritten if the value
+                         were used in a context that wanted to use the link
+                         This needs fixing really.
+            */
+            while (NULL != nameval) {
+                dir_int_set(namevec, n++, nameval);
+                nameval = nameval->link;
+            }
+            val = dir_value(namevec);
+        }
+    } else
+        parser_report_help(state, this_fn);
+        
+    return val;
+}
+
+
+
+
+static void
+cmds_generic_closure(parser_state_t *state, dir_t *cmds)
+{   mod_addfn(cmds, "closure",
+	      "<bool> <dir> <code> - create closure from code and dir (inherrit call context if <bool>)",
+	      &fn_closure, 3);
+    mod_addfn(cmds, "bind",
+	      "<closure> <arg> - bind argument to unbound closure argument",
+	      &fn_bind, 2);
+    mod_addfn(cmds, "code",
+	      "<closure> - return code component of a closure",
+	      &fn_code, 1);
+    mod_addfn(cmds, "context",
+	      "<closure> - return environment component of a closure",
+	      &fn_context, 1);
+    mod_addfn(cmds, "argname",
+	      "<closure> - return name of 1st argument to be bound or NULL",
+	      &fn_argname, 1);
+    mod_addfn(cmds, "argnames",
+	      "<closure> - return vector of arguments to be bound",
+	      &fn_argnames, 1);
+    
+}
 
 
 
@@ -21342,6 +21553,7 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     cmds_generic_string(state, cmds);
     cmds_generic_ipaddr(state, cmds);
     cmds_generic_macaddr(state, cmds);
+    cmds_generic_closure(state, cmds);
     cmds_generic_dir(state, cmds);
     
     mod_add(cmds,
