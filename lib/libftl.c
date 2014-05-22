@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
+ * Copyright (c) 2014, Broadcom Inc.
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -10580,7 +10582,7 @@ value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
 
 
 
-STATIC_INLINE const value_t *
+STATIC_INLINE value_t *
 value_env_unbound(value_env_t *env)
 {   if (NULL != env)
     {   return env->unbound;
@@ -10645,6 +10647,35 @@ value_env_bind(value_env_t *envdir, const value_t *value)
 
 
 
+
+
+static bool
+value_env_add_env(value_env_t **ref_baseenv, value_env_t *plusenv)
+{   bool ok = TRUE;
+    
+    if (*ref_baseenv == NULL)
+        *ref_baseenv = plusenv;
+    
+    else if (plusenv != NULL)
+    {
+        const dir_t *env = value_env_dir(plusenv);
+        const dir_t *baseenv_env = value_env_dir(*ref_baseenv);
+        value_t *unbound = value_env_unbound(plusenv);
+        value_t *baseenv_unbound = value_env_unbound(*ref_baseenv);
+
+        if (baseenv_env == NULL && baseenv_unbound == NULL)
+            *ref_baseenv = plusenv;
+        else if (unbound != NULL && baseenv_unbound != NULL) {
+            ok = FALSE;
+        } else {
+            *ref_baseenv = value_env_copy(*ref_baseenv);
+            if (unbound == NULL)
+                (*ref_baseenv)->unbound = baseenv_unbound;
+        }
+    }
+    
+    return ok;
+}
 
 
 
@@ -14101,15 +14132,27 @@ parse_base(const char **ref_line, parser_state_t *state,
 
 
 /* new_env is either a value_env_t if new_is_env_t is true else is a dir_t */
-static void
+static bool
 env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         bool new_is_env_t, bool inherit)
-{   if (*ref_env == NULL && new_is_env_t && !inherit)
+{   bool ok = TRUE;
+    
+    if (*ref_env == NULL && new_is_env_t && !inherit)
         *ref_env = (value_env_t *)new_env;
     else
     {   if (*ref_env == NULL) 
             *ref_env = value_env_new();
 
+        if (*ref_env != NULL && new_is_env_t)
+        {   value_env_t *nenv = (value_env_t *)new_env;
+            if (value_env_unbound(*ref_env) == NULL)
+                (*ref_env)->unbound = value_env_unbound(nenv);
+            else if (value_env_unbound(nenv) != NULL)
+            {   ok = FALSE;
+                parser_error(state, "can't combine two environments with "
+                             "unbound variables\n");
+            }
+        }                
         if (inherit) {
             dir_t *def_env = parser_env_copy(state);
             if (NULL != def_env)
@@ -14129,6 +14172,7 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         }
     }
     /* *ref_env will not normally be set to NULL now */
+    return ok;
 }
 
 
@@ -14144,6 +14188,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 {   /* [[<base>]:]*<base> | <base> */
     bool ok = FALSE;
     value_env_t *env = NULL; /* we are constructing this */
+    const value_t *code = NULL; /* we construct this too */
     const value_t *closure = NULL; /* and this is we get a <code> value */
     const value_t *lhs = NULL; 
     bool lhs_is_literal = FALSE;  /* i.e. lhs was '['...']' */
@@ -14153,7 +14198,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
     
     ok = parse_base_env(ref_line, state, &lhs, &lhs_is_literal);
     /* lhs_is_literal will be true if [<id-dir>] is parsed - and lhs will be a
-     * value_env_t (otherwise it could be any kind of value_t) */
+     * value_env_t (otherwise it could be any value_t) */
     
     while (ok && 
            value_type_equal(lhs, type_dir) &&
@@ -14172,7 +14217,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
 	ok = parse_base_env(ref_line, state, &rhs, &rhs_is_literal);
 
-        if (!ok)
+       if (!ok)
 	    parser_error(state, "right of '%s' could not be parsed\n",
                          inherit? ":": "::");
         
@@ -14185,26 +14230,32 @@ parse_closure(const char **ref_line, parser_state_t *state,
                              inherit? ":": "::");
                 
 	    } else if (value_type_equal(rhs, type_code))
-            {   closure = value_closure_new(/*code*/rhs, env);
-                /* setting this non NULL halts the parse loop */
-
-            } else if (value_type_equal(rhs, type_dir))
-            {   if (NULL != value_env_unbound(env))
+            {   if (code == NULL)
+                    code = rhs;
+                else
                 {   parser_error(state, "left of '%s' must be an "
                                  "environment without unbound variables\n",
                                  inherit? ":": "::");
                     ok = FALSE;
-                } else
-                {   env_add(state, &env, rhs, rhs_is_literal,
-                            /*inherit*/FALSE);
-                    /* BUG - we need to include no_inherit based on the
-                       next ":" or "::" somehow */
                 }
+            } else if (value_type_equal(rhs, type_dir))
+            {   ok = env_add(state, &env, rhs, rhs_is_literal,
+                             /*inherit*/FALSE);
+                /* BUG - we need to include 'inherit' based on the
+                         next ":" or "::" somehow */
             } else if (value_type_equal(rhs, type_closure))
-            {   ok = FALSE;
-                parser_error(state, "right of '%s' is a "
-                             "closure - not yet supported\n",
-                             inherit? ":": "::");
+            {   const value_closure_t *extra_closure =
+                      (const value_closure_t *)rhs;
+                if (code != NULL)
+                {   parser_error(state, "both sides of '%s' contain code\n",
+                                 inherit? ":": "::");
+                    ok = FALSE;
+                } else
+                    ok = value_env_add_env(&env, extra_closure->env);
+                if (!ok)
+                    parser_error(state, "can't join two environments with "
+                                 "unbound variables - not yet supported\n");
+                    
             } else
             {   ok = FALSE;
                 parser_error(state,  "right of '%s' must be "
@@ -14222,11 +14273,11 @@ parse_closure(const char **ref_line, parser_state_t *state,
             if (env == NULL && lhs_is_literal &&
                 value_env_unbound((value_env_t *)lhs))
                 /* need to make it into a closure for unbound vars */
-                closure = value_closure_new(/*code*/NULL, (value_env_t *)lhs);
+                closure = value_closure_new(code, (value_env_t *)lhs);
 
             else if (env != NULL && (NULL != value_env_unbound(env)))
                 /* only a closure type carries unbound variables */
-                closure = value_closure_new(/*code*/NULL, env);
+                closure = value_closure_new(code, env);
         }
         if (NULL != closure)
 	    *out_val = closure;
@@ -16050,8 +16101,8 @@ fn_closure(const value_t *this_fn, parser_state_t *state)
 
              /* return to the calling environment before inheriting it */
              parser_env_return(state, parser_env_calling_pos(state));
-             env_add(state, &newenvval, argenvval, is_env_t, inherit);
-             val = value_closure_new(nocode? NULL: code, newenvval);
+             if (env_add(state, &newenvval, argenvval, is_env_t, inherit))
+                 val = value_closure_new(nocode? NULL: code, newenvval);
          } else
  	    parser_error(state, "argument must be a command, function or "
                          "code object (not a %s)\n",
