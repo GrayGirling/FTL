@@ -399,8 +399,8 @@
 #undef DO
 #endif
 
-#define DO(x) x
-#define IGNORE(x) 
+#define DO(_x) _x
+#define IGNORE(_x) 
 
 #define FORCEDEBUG
 
@@ -4422,6 +4422,8 @@ parse_int_base(const char **ref_line, parser_state_t *state,
     
     if (ok)
 	*ref_line = line;
+    
+    DEBUGTRACE(DPRINTF("int %s: %s\n", ok?"OK":"FAIL", *ref_line);)
     
     return ok;
 }
@@ -10310,6 +10312,7 @@ struct value_env_s
 
 
 
+/* warning: these macros throw away information about the unbound variables */
 
 #define value_env_value(env) dir_stack_value(&((env)->dirs))
 
@@ -10439,6 +10442,20 @@ value_env_print(outchar_t *out, const value_t *root, const value_t *value)
 
 
     
+static void
+value_env_unlocal(const value_env_t *envdir)
+{   value_t *unbound = envdir->unbound;
+    
+    while (NULL != unbound)
+    {   value_unlocal(unbound);
+	unbound = unbound->link;
+    }
+}
+
+
+
+
+
 static void
 value_env_markver(const value_t *value, int heap_version)
 {   value_env_t *envdir = (value_env_t *)value;
@@ -10648,9 +10665,9 @@ value_env_bind(value_env_t *envdir, const value_t *value)
 
 
 
-
+/* accumulate sum of two envionments in the first */
 static bool
-value_env_add_env(value_env_t **ref_baseenv, value_env_t *plusenv)
+value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
 {   bool ok = TRUE;
     
     if (*ref_baseenv == NULL)
@@ -10658,19 +10675,24 @@ value_env_add_env(value_env_t **ref_baseenv, value_env_t *plusenv)
     
     else if (plusenv != NULL)
     {
-        const dir_t *env = value_env_dir(plusenv);
-        const dir_t *baseenv_env = value_env_dir(*ref_baseenv);
+        dir_t *env = value_env_dir(plusenv);
+        dir_t *baseenv_env = value_env_dir(*ref_baseenv);
         value_t *unbound = value_env_unbound(plusenv);
         value_t *baseenv_unbound = value_env_unbound(*ref_baseenv);
 
+        DEBUGENV(DPRINTF("env sum: (%s+%s) + (%s+%s)\n",
+                         baseenv_env==NULL?"":"dir",
+                         baseenv_unbound==NULL?"":"unbound",
+                         env==NULL?"":"dir", unbound==NULL?"":"unbound"););
         if (baseenv_env == NULL && baseenv_unbound == NULL)
-            *ref_baseenv = plusenv;
+            *ref_baseenv = value_env_copy(plusenv);
+            /* nothing in the new environment! */
         else if (unbound != NULL && baseenv_unbound != NULL) {
-            ok = FALSE;
+            ok = FALSE; /* can't have unbound variables in both */
         } else {
-            *ref_baseenv = value_env_copy(*ref_baseenv);
-            if (unbound == NULL)
-                (*ref_baseenv)->unbound = baseenv_unbound;
+            value_env_pushdir(*ref_baseenv, env, /*env_end*/FALSE);
+            if (baseenv_unbound == NULL)
+                (*ref_baseenv)->unbound = unbound;
         }
     }
     
@@ -10826,13 +10848,11 @@ value_closure_new(const value_t *code, value_env_t *env)
 
     if (NULL == closure)
     {   value_unlocal(code);
-	value_unlocal(value_env_value(env));
-	return NULL;
+	value_env_unlocal(env);
+	return (value_t *)NULL;
     } else
 	return value_closure_value(closure);
 }
-
-
 
 
 
@@ -12633,12 +12653,13 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
 
 
 
-
+/*! Parse for operators using parse_arg to parse the lowest level of
+ *  precidence */
 static bool
 parse_opterm(const char **ref_line, parser_state_t *state,
 	     parse_arg_fn_t *parse_arg, dir_t *opdefs,
 	     const value_t **out_term)
-{   /* <oparg> <op> <oparg> .... decoded correctly for precority */
+{   /* <oparg> <op> <oparg> .... decoded correctly for precidence */
     op_state_t ops;
     ops.state = state;
     ops.opdefs = opdefs;
@@ -13616,6 +13637,9 @@ parse_env(const char **ref_line, parser_state_t *state,
 		 parse_index_expr(ref_line, state, &index) &&
 		 parse_space(ref_line));
 
+        IGNORE(DPRINTF("env %sunbound%s: %s\n",
+                       ok? "":"(FAIL) ",unbound?"":" (NONE)", *ref_line););
+
 	if (ok && unbound)
 	{   if (NULL == env)
 		env = value_env_new();
@@ -14110,6 +14134,8 @@ parse_base_env(const char **ref_line, parser_state_t *state,
 	    ok = FALSE;
     }
 
+    DEBUGTRACE(DPRINTF("base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
+        
     return ok;
 }
 
@@ -14185,105 +14211,181 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
 static bool
 parse_closure(const char **ref_line, parser_state_t *state,
 	      const value_t **out_val)
-{   /* [[<base>]:]*<base> | <base> */
-    bool ok = FALSE;
-    value_env_t *env = NULL; /* we are constructing this */
-    const value_t *code = NULL; /* we construct this too */
-    const value_t *closure = NULL; /* and this is we get a <code> value */
-    const value_t *lhs = NULL; 
-    bool lhs_is_literal = FALSE;  /* i.e. lhs was '['...']' */
+{   /* [[<base>|<code>]:[:]]*[<base>|<code>] | <base> */
+    bool ok;
+    bool is_closure = TRUE;
+    bool lhs_is_env = FALSE;  /* i.e. lhs was '['...']' & value_env_t */
     bool inherit = TRUE; /* ':' not '::' */
+    /* if we can express the result as a directory we use these: */
+        const value_t *lhs = NULL; 
+        bool lhs_is_dir_nonenv = FALSE;  /* i.e. lhs is dir */
+    /* otherwise if lhs_is_dir_nonenv is FALSE we use these */
+        value_env_t *env = NULL; /* we are constructing this */
+        const value_t *code = NULL; /* we construct this too */
+        
 
     DEBUGTRACE(DPRINTF("env expr: %s\n", *ref_line);)
     
-    ok = parse_base_env(ref_line, state, &lhs, &lhs_is_literal);
-    /* lhs_is_literal will be true if [<id-dir>] is parsed - and lhs will be a
+    ok = parse_base_env(ref_line, state, &lhs, &lhs_is_env);
+    /* lhs_is_env will be true if [<id-dir>] is parsed - and lhs will be a
      * value_env_t (otherwise it could be any value_t) */
-    
-    while (ok && 
-           value_type_equal(lhs, type_dir) &&
-           closure == NULL &&
-           parse_space(ref_line) &&
-	   (!(inherit = !parse_key(ref_line, "::")) ||
-            parse_key(ref_line, ":")) &&
-	   parse_space(ref_line))
-    {   const value_t *rhs = NULL;
-        bool rhs_is_literal = FALSE;
 
-	if (env == NULL)
-	{   /* create the right environment for an initial closure */
-            env_add(state, &env, lhs, lhs_is_literal, inherit);
-	}
-
-	ok = parse_base_env(ref_line, state, &rhs, &rhs_is_literal);
-
-       if (!ok)
-	    parser_error(state, "right of '%s' could not be parsed\n",
-                         inherit? ":": "::");
+    IGNORE(DPRINTF("env expr base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
         
-	else if (NULL != env /* env==NULL => allocation failure */)
-	{   /* deal with the code value on the right hand of the ':' */
-
-	    if (rhs == NULL)
-	    {   ok = FALSE;
-		parser_error(state, "right of '%s' is undefined\n",
-                             inherit? ":": "::");
-                
-	    } else if (value_type_equal(rhs, type_code))
-            {   if (code == NULL)
-                    code = rhs;
-                else
-                {   parser_error(state, "left of '%s' must be an "
-                                 "environment without unbound variables\n",
-                                 inherit? ":": "::");
-                    ok = FALSE;
-                }
-            } else if (value_type_equal(rhs, type_dir))
-            {   ok = env_add(state, &env, rhs, rhs_is_literal,
-                             /*inherit*/FALSE);
-                /* BUG - we need to include 'inherit' based on the
-                         next ":" or "::" somehow */
-            } else if (value_type_equal(rhs, type_closure))
-            {   const value_closure_t *extra_closure =
-                      (const value_closure_t *)rhs;
-                if (code != NULL)
-                {   parser_error(state, "both sides of '%s' contain code\n",
-                                 inherit? ":": "::");
-                    ok = FALSE;
-                } else
-                    ok = value_env_add_env(&env, extra_closure->env);
-                if (!ok)
-                    parser_error(state, "can't join two environments with "
-                                 "unbound variables - not yet supported\n");
-                    
-            } else
-            {   ok = FALSE;
-                parser_error(state,  "right of '%s' must be "
-                             "code or environment\n", inherit? ":": "::");
-            }
-
-	    lhs = value_env_value(env);
-	}
-    }
-
-    if (ok)
-    {
-        if (NULL == closure) {
-            /* did we parse a no colon but found a dir with unbound vars? */
-            if (env == NULL && lhs_is_literal &&
-                value_env_unbound((value_env_t *)lhs))
-                /* need to make it into a closure for unbound vars */
-                closure = value_closure_new(code, (value_env_t *)lhs);
-
-            else if (env != NULL && (NULL != value_env_unbound(env)))
-                /* only a closure type carries unbound variables */
-                closure = value_closure_new(code, env);
+    if (ok) {
+        if (value_type_equal(lhs, type_code) ||
+            value_type_equal(lhs, type_func) ||
+            value_type_equal(lhs, type_cmd))
+            code = lhs;
+        else if (value_type_equal(lhs, type_closure)) {
+            const value_closure_t *closure = (const value_closure_t *)lhs;
+            code = closure->code;
+            env = closure->env;
+        } else if (lhs_is_env)
+            env = (value_env_t *)lhs;
+        else {
+            is_closure = lhs_is_dir_nonenv = value_type_equal(lhs, type_dir);
         }
-        if (NULL != closure)
-	    *out_val = closure;
-	else 
-            *out_val = lhs;
+    }        
+
+    if (!is_closure)
+        *out_val = lhs;
+    else
+    {
+        while (ok &&
+               parse_space(ref_line) &&
+               (!(inherit = !parse_key(ref_line, "::")) ||
+                parse_key(ref_line, ":")) &&
+               parse_space(ref_line))
+        {   const value_t *rhs = NULL;
+            bool rhs_is_env = FALSE;
+
+            ok = parse_base_env(ref_line, state, &rhs, &rhs_is_env);
+
+            if (!ok)
+                parser_error(state, "right of '%s' could not be parsed\n",
+                             inherit? ":": "::");
+
+            else if (rhs == NULL)
+            {   ok = FALSE;
+                parser_error(state, "right of '%s' is undefined\n",
+                             inherit? ":": "::");
+
+            } else
+            {   /* deal with the code value on the right hand of the ':' */
+
+                bool rhs_is_code    = value_type_equal(rhs, type_code) ||
+                                      value_type_equal(rhs, type_cmd) ||
+                                      value_type_equal(rhs, type_func);
+                bool rhs_is_closure = value_type_equal(rhs, type_closure);
+                bool rhs_is_dir     = value_type_equal(rhs, type_dir);
+                bool promote_to_env = inherit || rhs_is_closure ||
+                                      rhs_is_dir ||
+                                      code != NULL;
+                const value_t *rhs_code = NULL;
+
+                if (promote_to_env && lhs_is_dir_nonenv)
+                {
+                    /* only an environment can have state added to it */
+                    env = (value_env_t *)value_env_newpushdir((dir_t *)lhs,
+                                                              /*env_end*/FALSE);
+                    lhs_is_dir_nonenv = FALSE;
+                    lhs_is_env = TRUE;
+                }
+
+                if (inherit)
+                {   dir_t *def_env = parser_env_copy(state);
+                    if (NULL != def_env)
+                        (void)value_env_pushdir(env, def_env, /*env_end*/FALSE);
+                }
+
+                if (rhs_is_code)
+                    rhs_code = rhs;
+                else
+
+                if (rhs_is_closure || rhs_is_dir)
+                {   /* we have always promoted to lhs_is_env */
+                    value_env_t *rhs_env = NULL;
+                    dir_t *rhs_dir = NULL;
+
+                    if (rhs_is_closure) {
+                        const value_closure_t *closure =
+                            (const value_closure_t *)rhs;
+                        rhs_code = closure->code;
+                        /* rhs_dir is NULL */
+                        rhs_env  = closure->env;
+                    } else if (rhs_is_env)
+                        /* rhs_dir is NULL */
+                        rhs_env = (value_env_t *)rhs;
+                    else
+                        rhs_dir = (dir_t *)rhs;
+                        /* rhs_env is NULL */
+
+                    if (rhs_env == NULL && rhs_dir != NULL)
+                    {   value_env_pushdir(env, rhs_dir, /*env_end*/FALSE);
+                    } else
+                    {   ok = value_env_sum(&env, rhs_env);
+                        if (!ok)
+                            parser_error(state,
+                                         "can't join two environments with "
+                                         "unbound variables - not yet "
+                                         "supported\n");
+                    }
+                } else
+                {   ok = FALSE;
+                    parser_error(state,  "right of '%s' must be "
+                                 "code or environment\n", inherit? ":": "::");
+                }
+
+                if (ok && rhs_code != NULL)
+                {   if (code == NULL)
+                        code = rhs_code;
+                    else
+                    {   parser_error(state, "can't create a closure with "
+                                     "two code values with '%s'\n",
+                                     inherit? ":": "::");
+                        ok = FALSE;
+                    }
+                }             
+            }
+        }
+
+        if (ok)
+        {
+            IGNORE(DPRINTF("env expr: %sDIR - env %sNULL code %sNULL\n",
+                           lhs_is_dir_nonenv? "": "not ",
+                           env == NULL? "": "not ", code == NULL? "": "not "););
+            if (lhs_is_dir_nonenv)
+                *out_val = lhs;
+            else if (env == NULL && code != NULL)
+                *out_val = code;
+            else if (env == NULL)
+            {   parser_error(state, "failed to create a closure - "
+                             "internal error\n");
+                ok = FALSE;
+            } else 
+            {   /* we have accumulated an environment and perhaps some code */
+
+                value_t *unbound = value_env_unbound(env);
+
+                DEBUGENV(DPRINTF("env expr: closure unbound %sNULL "
+                                 "code %sNULL\n",
+                                 NULL==unbound? "":"not ",
+                                 NULL==code? "":"not "););
+                /* did we parse a no colon but found a dir with unbound vars? */
+                if (NULL != unbound || NULL != code)
+                    *out_val = value_closure_new(code, env);
+                else
+                    /* don't need a closure after all */
+                    *out_val = value_env_value(env);
+            }
+        }
     }
+    
+    if (!ok)
+        *out_val = NULL;
+    
+    DEBUGTRACE(DPRINTF("env expr %s: %s\n", ok?"OK":"FAIL", *ref_line);)
     
     return ok;
 }
@@ -14445,10 +14547,13 @@ parse_retrieval_base(const char **ref_line, op_state_t *ops,
 
 
 
-/* This function may cause a garbage collection */
+/*! Parse operator expression using parse_retrieval_base to parse lowest
+ *  level of precience.
+ *  This function may cause a garbage collection
+ */
 static bool
-parse_operator(const char **ref_line, parser_state_t *state,
-	       const value_t **out_val)
+parse_operator_expr(const char **ref_line, parser_state_t *state,
+	            const value_t **out_val)
 {   /* parse based on defined operator definitions */
     return parse_opterm(ref_line, state, &parse_retrieval_base, state->opdefs,
 			out_val);
@@ -14684,7 +14789,7 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
 	*ref_val = invoke(*ref_val, state);
     
     while (ok /* && parse_key(ref_line, "~") && parse_space(ref_line) */
-	   && parse_operator(ref_line, state, &newarg) &&
+	   && parse_operator_expr(ref_line, state, &newarg) &&
 	   parse_space(ref_line))
     {   const value_t *code = *ref_val;
 	
@@ -14736,7 +14841,7 @@ parse_substitution_argv(const char ***ref_argv, int *ref_argn,
     }
     
     while (ok && *ref_argn > 0 && !complete &&
-	   parse_operator(&line, state, &newarg) &&
+	   parse_operator_expr(&line, state, &newarg) &&
 	   parse_empty(&line))
     {   const value_t *code = *ref_val;
 	
@@ -14787,8 +14892,8 @@ parse_substitution(const char **ref_line, parser_state_t *state,
 
     DEBUGTRACE(DPRINTF("substitute: %s\n", *ref_line);)
 	
-    if (parse_operator(ref_line, state, out_val) && parse_space(ref_line))
-    {
+    if (parse_operator_expr(ref_line, state, out_val) && parse_space(ref_line))
+    {   IGNORE(DPRINTF("substitute args: %s\n", *ref_line););
 	return parse_substitution_args(ref_line, state, out_val);
     } else
     {   *out_val = &value_null;
@@ -15215,9 +15320,9 @@ argv_to_string(const char ***ref_argv, int *ref_argn, char *buf, size_t len)
 static const value_t *
 mod_invoke_argv(const char ***ref_argv, int *ref_argn, const char *execpath,
                 const value_t *value, parser_state_t *state)
-{   DEBUGTRACE(DPRINTF("mod argv exec: %s %s\n",
-		       value_type_name(value), *ref_line);)
-    DEBUGENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state)));)
+{   DEBUGTRACE(DPRINTF("mod argv exec: %s [%d]\n",
+		       value_type_name(value), *ref_argn););
+    DEBUGENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state))););
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code;
