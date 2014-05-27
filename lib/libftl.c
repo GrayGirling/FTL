@@ -417,6 +417,7 @@
 /* #define DEBUGOP DO */
 /* #define DEBUGRCFILE DO */
 /* #define DEBUGEXECV DO */
+/* #define DEBUGCMP DO */
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUGGC
@@ -432,6 +433,7 @@
 #undef DEBUGOP
 #undef DEBUGEXECV
 #undef DEBUGRCFILE
+#undef DEBUGCMP
 #endif
 
 
@@ -474,6 +476,9 @@
 #endif
 #ifndef DEBUGRCFILE
 #define DEBUGRCFILE IGNORE
+#endif
+#ifndef DEBUGCMP
+#define DEBUGCMP IGNORE
 #endif
 
 /* #define DPRINTF ci_log */
@@ -3836,18 +3841,28 @@ value_delete(value_t **ref_val)
 
 extern int /* <0 for less than, ==0 for equal, >0 for greater */
 value_cmp(const value_t *v1, const value_t *v2)
-{   if (v1 == NULL)
+{   if (v1 == NULL) {
+        DEBUGCMP(DPRINTF("cmp: v1 NULL v2 %sNULL\n", v2 == NULL? "":"not "););
         return v2 == NULL? 0: -1;
-    if (v2 == NULL)
+    } else if (v2 == NULL) {
+        DEBUGCMP(DPRINTF("cmp: v1 not NULL v2 NULL\n", v2 == NULL? "":"not "););
         return 1;
-    else if (v1->kind != v2->kind)
+    } else if (v1->kind != v2->kind) {
+        DEBUGCMP(DPRINTF("cmp: v1 (%s) v2 (%s) type differs\n",
+                         type_name(v1->kind), type_name(v2->kind)););
 	return v1->kind - v2->kind;
-    else if (v1 == v2)
+    } else if (v1 == v2) {
+        DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) v2 same address\n",
+                         v1, type_name(v1->kind)););
 	return 0;
-    else if (NULL == v1->compare)
+    } else if (NULL == v1->compare) {
+        DEBUGCMP(DPRINTF("cmp: v1 no comparison fn\n"););
 	return /* really we want "incomparable" value */-1;
-    else
+    } else {
+        DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) cmp v2 (%p:%s) using fn\n",
+                         v1, type_name(v1->kind), v2, type_name(v2->kind)););
         return (*v1->compare)(v1, v2);
+    }
 }
 
 
@@ -14251,7 +14266,8 @@ parse_closure(const char **ref_line, parser_state_t *state,
     if (!is_closure)
         *out_val = lhs;
     else
-    {
+    {   bool changed = FALSE;
+        
         while (ok &&
                parse_space(ref_line) &&
                (!(inherit = !parse_key(ref_line, "::")) ||
@@ -14284,6 +14300,8 @@ parse_closure(const char **ref_line, parser_state_t *state,
                                       code != NULL;
                 const value_t *rhs_code = NULL;
 
+                changed = TRUE;
+                
                 if (promote_to_env && lhs_is_dir_nonenv)
                 {
                     /* only an environment can have state added to it */
@@ -14355,7 +14373,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
             IGNORE(DPRINTF("env expr: %sDIR - env %sNULL code %sNULL\n",
                            lhs_is_dir_nonenv? "": "not ",
                            env == NULL? "": "not ", code == NULL? "": "not "););
-            if (lhs_is_dir_nonenv)
+            if (lhs_is_dir_nonenv || !changed)
                 *out_val = lhs;
             else if (env == NULL && code != NULL)
                 *out_val = code;
