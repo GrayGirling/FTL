@@ -19689,20 +19689,24 @@ fn_chop(const value_t *this_fn, parser_state_t *state)
     {
         const char *buf;
         const char *initbuf;
-    	size_t len = 0;
+    	size_t buflen = 0;
+        int len;
 	number_t stride = value_int_number(strideval);
 	dir_t *vec = dir_vec_new();
 	int veclen = 0;
 
-	(void)value_string_get(str, &initbuf, &len);
+	(void)value_string_get(str, &initbuf, &buflen);
+        len = buflen; /* make sure it's a signed variable */
 	buf = initbuf;
 
-        /*printf("stride %"F_NUMBER_T"\n", stride);/*/
+        /*printf("stride %"F_NUMBER_T"\n", stride);*/
         
 	if (stride > 0)
 	{   /* split into individual octet substrings forward */
 	    while (len > 0)
-	    {   if (len < stride)
+	    {   /*printf("vec[%d]=%p[%d,%d]\n",
+                         veclen,initbuf,buf-initbuf,len);*/
+                if (len < stride)
                     dir_int_set(vec, veclen++,
                                 value_substring_new(str, buf-initbuf, len));
                 else

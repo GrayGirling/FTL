@@ -1,50 +1,6 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html lang="en-gb">
-<head>
+<html lang="en-gb"><head>
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type">
 
 
 
@@ -89,6 +45,30 @@
   
   
   
+  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL User Guide</title>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   
   
   
@@ -110,7 +90,28 @@
   
   
   
-  <title>FTL User Guide</title>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   <meta content="Gray Girling" name="author">
 
 
@@ -172,11 +173,7 @@
   h1 { text-align: center;
     }
 
-  </style>
-</head>
-
-
-<body>
+  </style></head><body>
 
 
 
@@ -2537,7 +2534,10 @@ definition of the closure (see below).<br>
 
 
 
-There are two operators provided to create a <span style="font-family: monospace;">&lt;closure&gt;</span> both involving the specification of an environment and a <span style="font-family: monospace;">&lt;code&gt;</span> value. &nbsp;The first is the double-colon operator (<span style="font-family: monospace;">::</span>), which creates a closure whose environment is precisely what has been provided. &nbsp;The second is the colon operator (<span style="font-family: monospace;">:</span>),
+There are two operators provided to create a <span style="font-family: monospace;">&lt;closure&gt;</span> both involving the specification of arguments that are an environment or <span style="font-family: monospace;">&lt;code&gt;</span> values. &nbsp;The first is the double-colon operator (<span style="font-family: monospace;">::</span>),
+which creates a closure whose environment is precisely what has been
+specified by the environment(s) supplied. &nbsp;The second is the colon
+operator (<span style="font-family: monospace;">:</span>),
 which creates a closure whose environment is the provided value stacked
 on to the current environment (when the colon operator is executed).<br>
 
@@ -2713,44 +2713,8 @@ environment. &nbsp;When a name is used in an environment it refers to
 the value the name given in the most recently pushed directory,
 independently of whether it is constant or not (writing to a constant
 value will fail).<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 <br>
+The only visible value for 'a' in this environment<br>
 
 
 
@@ -2788,6 +2752,20 @@ value will fail).<br>
 
 
 
+<div style="text-align: center;">
+<pre>[a=X]::[a=Y]::[a=Z]<br></pre>
+
+
+
+
+
+
+
+
+
+</div>
+will be Z.<br>
+<br>
 If a value is being provided for a new name, without specifying a parent directory, and no name is found in the
 current environment then the directory used to store the new name in is the one most recently
 pushed, independently of whether it is locked or not (so
@@ -2974,7 +2952,7 @@ will be interpreted as names in X and will be replaced by their values
 in X. &nbsp;This applies recursively to any values in Y that are
 environments. &nbsp;Currently the convenience of using string values
 without a string denotation does not also apply to&nbsp;literal
-environments. &nbsp;<br>
+environments.&nbsp; <br>
 
 
 
@@ -5970,6 +5948,9 @@ The values available in the run time library include those in the following cate
 
 
     <li>typeof &lt;expr&gt; - returns the type of &lt;expr&gt;</li>
+    <li>typename &lt;expr&gt; - returns the name of the type of &lt;expr&gt;<br>
+    </li>
+
 
 
 
@@ -6517,6 +6498,10 @@ The values available in the run time library include those in the following cate
 
 
     <li>int &lt;integer expr&gt; - numeric value</li>
+    <li>intseq &lt;first&gt; &lt;inc&gt; &lt;last&gt; - vector of integers incrementing by &lt;inc&gt;</li>
+    <li>rndseq &lt;n&gt; - vector of integers containing 0..&lt;n&gt;-1 in a random order<br>
+    </li>
+
 
 
 
@@ -7078,46 +7063,10 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>range &lt;env&gt; - generate vector of values in &lt;env&gt;<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    <li>range &lt;env&gt; - generate vector of values in &lt;env&gt;</li>
+    <li>zip &lt;dom&gt; &lt;range&gt; - generate environment with given domain and range taken from &lt;range&gt;<br>
     </li>
+
 
 
 
@@ -7238,7 +7187,17 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>sortdomby &lt;cmpfn&gt; &lt;env&gt; - sorted vector of names in &lt;env&gt; using &lt;cmpfn&gt;</li>
+    <li>sortdomby &lt;cmpfn&gt; &lt;env&gt; - sorted vector of names in &lt;env&gt; using &lt;cmpfn&gt;</li></ul>
+  <li>Closures<br>
+  </li>
+  <ul>
+    <li>closure &lt;bool&gt; &lt;dir&gt; &lt;code&gt; - create closure from code and dir (inherrit call context if &lt;bool&gt;)</li>
+    <li>bind &lt;closure&gt; &lt;arg&gt; - bind argument to unbound closure argument</li>
+    <li>code &lt;closure&gt; - return code component of a closure</li>
+    <li>context &lt;closure&gt; - return environment component of a closure</li>
+    <li>argname &lt;closure&gt; - return name of 1st argument to be bound or NULL</li>
+    <li>argnames &lt;closure&gt; - return vector of arguments to be bound<br>
+    </li>
 
 
 
@@ -7277,6 +7236,8 @@ The values available in the run time library include those in the following cate
 
 
 
+
+  
   
   
   
@@ -7316,6 +7277,7 @@ The values available in the run time library include those in the following cate
   
   
   </ul>
+
 
 
 
@@ -7814,46 +7776,10 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>split &lt;delim&gt; &lt;str&gt; - make vector of strings separated by &lt;delim&gt;s<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    <li>split &lt;delim&gt; &lt;str&gt; - make vector of strings separated by &lt;delim&gt;s</li>
+    <li>chop &lt;stride&gt; &lt;str&gt; - make vector of strings each &lt;stride&gt; bytes or less<br>
     </li>
+
 
 
 
@@ -8254,7 +8180,7 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>fmt - updateable directory of formatting functions for io.fprintf</li>
+    <li>io fmt - updateable directory of formatting functions for io.fprintf</li>
 
 
 
@@ -8420,51 +8346,17 @@ The values available in the run time library include those in the following cate
 
 
     <li>io file &lt;filename&gt; &lt;rw&gt; - return stream for opened file</li>
-
-
-
-
-
-    <li>io filetostring &lt;filename&gt; [&lt;outfile&gt;] - write file out as a C string<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    <li>io binfile &lt;filename&gt; &lt;rw&gt; - return stream for opened binary file<br>
     </li>
+
+
+
+
+
+
+    <li>io filetostring &lt;filename&gt; [&lt;outfile&gt;] - write file out as a C string</li>
+    <li>io fprintf &lt;stream&gt; &lt;format&gt; &lt;env&gt; - write formatted string to stream</li>
+
 
 
 
@@ -8655,6 +8547,9 @@ The values available in the run time library include those in the following cate
 
 
     <li>io pathfile &lt;path&gt; &lt;filename&gt; &lt;rw&gt; - return stream for opened file on path</li>
+    <li>io pathbinfile &lt;path&gt; &lt;filename&gt; &lt;rw&gt; - return stream for opened binary file on path<br>
+    </li>
+
 
 
 
@@ -8708,7 +8603,7 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>io fprintf &lt;stream&gt; &lt;format&gt; &lt;env&gt; - write formatted string to stream</li>
+    
 
 
 
@@ -9361,6 +9256,12 @@ The values available in the run time library include those in the following cate
 
 
     <li>parse opset &lt;opdefs&gt; &lt;prec&gt; &lt;assoc&gt; &lt;name&gt; &lt;function&gt; - define an operator in opdefs</li>
+    <li>parse readline - read and expand a line from the command input</li>
+    <li>parse rdenv &lt;cmds&gt; &lt;stream&gt; - return env made executing initial &lt;cmds&gt; then stream<br>
+    </li>
+    <li>parse rdmod &lt;module&gt; - return env made executing module file on path<br>
+    </li>
+
 
 
 
@@ -9414,16 +9315,10 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>parse scanempty &lt;parseobj&gt; - parse empty line from string from parse object, update string<br>
-
-
-
-
-
-
-
-
+    <li>parse scanempty &lt;parseobj&gt; - parse empty line from string from parse object, update string</li>
+    <li>parse scancode &lt;@string&gt; &lt;parseobj&gt; - parse {code} block from parse object<br>
     </li>
+
 
 
 
@@ -9468,16 +9363,10 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>parse scanint &lt;@int&gt; &lt;parseobj&gt; - parse integer from string from parse object, update string<br>
-
-
-
-
-
-
-
-
+    <li>parse scanint &lt;@int&gt; &lt;parseobj&gt; - parse integer from string from parse object, update string</li>
+    <li>parse scanintval &lt;@int&gt; &lt;parseobj&gt; - parse signed based integer from parse object<br>
     </li>
+
 
 
 
@@ -9504,16 +9393,10 @@ The values available in the run time library include those in the following cate
 
 
 
-    <li>parse scanhexw &lt;width&gt; &lt;@int&gt; &lt;parseobj&gt; - parse hex in &lt;width&gt; chars from parse object, update string<br>
-
-
-
-
-
-
-
-
+    <li>parse scanhexw &lt;width&gt; &lt;@int&gt; &lt;parseobj&gt; - parse hex in &lt;width&gt; chars from parse object, update string</li>
+    <li>parse scanmatch &lt;dir&gt; &lt;@val&gt; &lt;parseobj&gt; - parse prefix in dir from parse object giving matching value<br>
     </li>
+
 
 
 
@@ -9783,46 +9666,15 @@ update string</li>
 
 
 
-    <li>sys env - system environment variable environment<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    <li>sys env - system environment variable environment</li>
+    <li>sys fs casematch - whether case must match in file system file names value</li>
+    <li>sys fs absname &lt;file&gt; - TRUE iff file has an absolute path name</li>
+    <li>sys fs nowhere - name of file available as empty source or sink<br>
     </li>
+    <li>sys fs sep - string separating path elements in a file name</li>
+    <li>sys fs thisdir - name of directory repersenting the current directory<br>
+    </li>
+
 
 
 
@@ -9939,46 +9791,12 @@ update string</li>
 
 
 
-    <li>sys run &lt;line&gt; - execute system &lt;line&gt;<br>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    <li>sys run &lt;line&gt; - execute system &lt;line&gt;</li>
+    <li>sys runrc &lt;command&gt; - execute system command &amp; return result code</li>
+    <li>sys shell path &lt;path&gt; &lt;file&gt; - return name of file on path</li>
+    <li>sys shell pathsep - character value separating directory elements in a path environment<br>
     </li>
+
 
 
 
@@ -18689,7 +18507,7 @@ and returns the integer representing the "exclusive or" of corresponding bits.</
 <br>
 
 
-<h3>chr &lt;int&gt;
+<h3>chop &lt;int&gt;
 
 
 
@@ -18727,6 +18545,1358 @@ and returns the integer representing the "exclusive or" of corresponding bits.</
 
 
 <table style="text-align: left;" border="0" cellpadding="2" cellspacing="2">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <tbody>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Name</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-family: monospace;">chop</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Kind</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>Function</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Arg syntax</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>&lt;str:string&gt; &lt;stride:int&gt;</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="text-align: right; vertical-align: top; font-weight: bold;">Description</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>Returns
+a vector of successive substrings from &lt;str&gt; each
+|&lt;stride&gt;| octets long except the last which may have
+fewer.&nbsp; The substrings are taken sequentially from <br>
+</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Returns</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>A vector of successive substrings taken from the string.<span style="font-family: monospace;"><br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      </span>See also: <span style="font-family: monospace;">zip</span><span style="font-family: monospace;"></span></td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="text-align: right; vertical-align: top; font-weight: bold;">Example</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <pre>&gt; chop 3 "abcdefghijk"<br>&lt;"abc", "def", "ghi", "jk"&gt;<br></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <pre>chop -3 "abcdefghijk"<br>&lt;"ijk", "fgh", "cde", "ab"&gt;</pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <pre>set rev[x]:{x.&lt;(len x!)-1..0&gt;}<br>join "," (rev (chop -3 (strf "%d" &lt;10000000&gt;!)!)!)<br>"10,000,000"</pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      </td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  </tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h3><span style="font-weight: bold;"></span></h3>
+<h3>chr &lt;int&gt;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table style="text-align: left;" border="0" cellpadding="2" cellspacing="2">
+
 
 
 
@@ -19703,7 +20873,7 @@ locale's character set.</td>
       
       
       
-      <pre>&gt; echo ${chr 163!}<br>&pound;</pre>
+      <pre>&gt; echo ${chr 163!}<br>£</pre>
 
 
 
@@ -20036,7 +21206,9 @@ locale's character set.</td>
 
 
 
-<h3><span style="font-weight: bold;"></span>chrcode &lt;char&gt;</h3>
+
+<h3>chrcode &lt;char&gt;</h3>
+
 
 
 
@@ -21084,7 +22256,7 @@ locale's character set.</td>
       
       
       
-      <pre>&gt; eval "&pound;"<br>"\xc2\xa3"<br>&gt; chrcode "\xc2\xa3"<br>163</pre>
+      <pre>&gt; eval "£"<br>"\xc2\xa3"<br>&gt; chrcode "\xc2\xa3"<br>163</pre>
 
 
 
@@ -21157,7 +22329,7 @@ locale's character set.</td>
       
       
       
-      <pre>&gt; eval chrcode "&euro;"!<br>8364</pre>
+      <pre>&gt; eval chrcode "&#8364;"!<br>8364</pre>
 
 
 
@@ -25481,7 +26653,7 @@ See also: <span style="font-family: monospace;">cmp</span></td>
       
       
       
-      <pre>&gt; sortby collate &lt;"fred", "&pound;", "FORMER", "104"&gt;<br>&lt;3, 2, 0, 1&gt;<br></pre>
+      <pre>&gt; sortby collate &lt;"fred", "£", "FORMER", "104"&gt;<br>&lt;3, 2, 0, 1&gt;<br></pre>
 
 
 
@@ -50891,7 +52063,7 @@ See also: <span style="font-family: monospace;">strf</span>, <span style="font-f
       
       
       
-      <pre>&gt; io fprintf io.out "&euro;1 = &pound;%[pounds]d.%[pennies]02d\n" [pennies=60, pounds=0]<br>&euro;1 = &pound;0.60<br>14<br></pre>
+      <pre>&gt; io fprintf io.out "&#8364;1 = £%[pounds]d.%[pennies]02d\n" [pennies=60, pounds=0]<br>&#8364;1 = £0.60<br>14<br></pre>
 
 
 
@@ -61240,7 +62412,7 @@ See also: <span style="font-family: monospace;">io.fprintf</span>, <span style="
       
       
       
-      <pre>&gt; set n io.stringify io.out "that's \"&pound;&pound;&pound;\"s\n"!<br>"that\'s \"\xc2\xa3\xc2\xa3\xc2\xa3\"s\n"&gt;<br>&gt; eval n<br>41<br></pre>
+      <pre>&gt; set n io.stringify io.out "that's \"£££\"s\n"!<br>"that\'s \"\xc2\xa3\xc2\xa3\xc2\xa3\"s\n"&gt;<br>&gt; eval n<br>41<br></pre>
 
 
 
@@ -62529,7 +63701,7 @@ The stream must have write access.<br>
       
       
       
-      <pre>&gt;io write io.out "&euro;1 = &pound;0.60\n"<br>&euro;1 = &pound;0.60<br>14<br></pre>
+      <pre>&gt;io write io.out "&#8364;1 = £0.60\n"<br>&#8364;1 = £0.60<br>14<br></pre>
 
 
 
@@ -62600,7 +63772,7 @@ The stream must have write access.<br>
       
       
       
-      <pre>&gt; set n io.write io.out "that's \"&pound;&pound;&pound;\"s\n"!<br>that's "&pound;&pound;&pound;"s<br>&gt; eval n<br>17</pre>
+      <pre>&gt; set n io.write io.out "that's \"£££\"s\n"!<br>that's "£££"s<br>&gt; eval n<br>17</pre>
 
 
 
@@ -63893,7 +65065,7 @@ See also: <span style="font-family: monospace;">join</span> and <span style="fon
       
       
       
-      <pre>&gt; eval echo (joinchr 167 &lt;"para1", "para2", "para3"&gt;!)!<br>para1&sect;para2&sect;para3</pre>
+      <pre>&gt; eval echo (joinchr 167 &lt;"para1", "para2", "para3"&gt;!)!<br>para1§para2§para3</pre>
 
 
 
@@ -63964,7 +65136,7 @@ See also: <span style="font-family: monospace;">join</span> and <span style="fon
       
       
       
-      <pre>&gt; eval echo (joinchr NULL &lt;915, 961, 945, 953&gt;!)!<br>&Gamma;&rho;&alpha;&iota;</pre>
+      <pre>&gt; eval echo (joinchr NULL &lt;915, 961, 945, 953&gt;!)!<br>&#915;&#961;&#945;&#953;</pre>
 
 
 
@@ -64029,7 +65201,7 @@ See also: <span style="font-family: monospace;">join</span> and <span style="fon
       
       
       
-      <pre>&gt; set chshow [n]:{ echo (joinchr " " &lt;n .. 32+(n)&gt;!)! }<br>&gt; chshow 913<br>&Alpha; &Beta; &Gamma; &Delta; &Epsilon; &Zeta; &Eta; &Theta; &Iota; &Kappa; &Lambda; &Mu; &Nu; &Xi; &Omicron; &Pi; &Rho; &#930; &Sigma; &Tau; &Upsilon; &Phi; &Chi; &Psi; &Omega; &#938; &#939; &#940; &#941; &#942; &#943; &#944; &alpha;</pre>
+      <pre>&gt; set chshow [n]:{ echo (joinchr " " &lt;n .. 32+(n)&gt;!)! }<br>&gt; chshow 913<br>&#913; &#914; &#915; &#916; &#917; &#918; &#919; &#920; &#921; &#922; &#923; &#924; &#925; &#926; &#927; &#928; &#929; &#930; &#931; &#932; &#933; &#934; &#935; &#936; &#937; &#938; &#939; &#940; &#941; &#942; &#943; &#944; &#945;</pre>
 
 
 
@@ -66946,7 +68118,7 @@ See also: <span style="font-family: monospace;">strlen</span>.<br>
       
       
       
-      <pre>&gt; len "&pound;"<br>2<br></pre>
+      <pre>&gt; len "£"<br>2<br></pre>
 
 
 
@@ -85203,7 +86375,7 @@ locale's character set.</td>
       
       
       
-      <pre>&gt; eval "&pound;"<br>"\xc2\xa3"<br>&gt; octetcode "\xc2\xa3"<br>164</pre>
+      <pre>&gt; eval "£"<br>"\xc2\xa3"<br>&gt; octetcode "\xc2\xa3"<br>164</pre>
 
 
 
@@ -122667,7 +123839,7 @@ See also: <span style="font-family: monospace;">domain</span><br>
       
       
       
-      <pre>&gt; echo ${join " == " (range [a="&pound;3", b="&euro;4.5", "c"="$$4"]!)!}<br>&pound;3 == &euro;4.5 == $4<br></pre>
+      <pre>&gt; echo ${join " == " (range [a="£3", b="&#8364;4.5", "c"="$$4"]!)!}<br>£3 == &#8364;4.5 == $4<br></pre>
 
 
 
@@ -138405,7 +139577,7 @@ to those with a larger index according to the comparison function provided<span 
       
       
       
-      <pre>&gt; sortdomby collate ["fred"=7, "&pound;"=99, "FORMER"=2, "104"=77]<br>&lt;"104", "FORMER", "fred", "\xc2\xa3"&gt;</pre>
+      <pre>&gt; sortdomby collate ["fred"=7, "£"=99, "FORMER"=2, "104"=77]<br>&lt;"104", "FORMER", "fred", "\xc2\xa3"&gt;</pre>
 
 
 
@@ -142463,7 +143635,7 @@ See also: <span style="font-family: monospace;">join</span>, <span style="font-f
       
       
       
-      <pre>&gt; split "" "&pound;&euro;&cent;"<br>&lt;"\xc2\xa3", "\xe2\x82\xac", "\xc2\xa2"&gt;<br></pre>
+      <pre>&gt; split "" "£&#8364;¢"<br>&lt;"\xc2\xa3", "\xe2\x82\xac", "\xc2\xa2"&gt;<br></pre>
 
 
 
@@ -142510,7 +143682,7 @@ See also: <span style="font-family: monospace;">join</span>, <span style="font-f
       
       
       
-      <pre>&gt; split NULL "&pound;&euro;&cent;"<br>&lt;"\xc2", "\xa3", "\xe2", "\x82", "\xac", "\xc2", "\xa2"&gt;<br></pre>
+      <pre>&gt; split NULL "£&#8364;¢"<br>&lt;"\xc2", "\xa3", "\xe2", "\x82", "\xac", "\xc2", "\xa2"&gt;<br></pre>
 
 
 
@@ -142604,7 +143776,7 @@ See also: <span style="font-family: monospace;">join</span>, <span style="font-f
       
       
       
-      <pre>&gt; set spaceout[s]: { join " - " (split "" s!)! }<br>&gt; echo ${spaceout "&pound;&euro;&cent;"!}<br>&pound; - &euro; - &cent;<br></pre>
+      <pre>&gt; set spaceout[s]: { join " - " (split "" s!)! }<br>&gt; echo ${spaceout "£&#8364;¢"!}<br>£ - &#8364; - ¢<br></pre>
 
 
 
@@ -143921,7 +145093,7 @@ See also: <span style="font-family: monospace;">io.stringify</span>, <span style
       
       
       
-      <pre>&gt; set s str "that's \"&pound;&pound;&pound;\"s\n"!<br>&gt; echo $s<br>"that\'s \"\xc2\xa3\xc2\xa3\xc2\xa3\"s\n"<br>&gt; eval s<br>"\"that\\\'s \\\"\\xc2\\xa3\\xc2\\xa3\\xc2\\xa3\\\"s\\n\""<br></pre>
+      <pre>&gt; set s str "that's \"£££\"s\n"!<br>&gt; echo $s<br>"that\'s \"\xc2\xa3\xc2\xa3\xc2\xa3\"s\n"<br>&gt; eval s<br>"\"that\\\'s \\\"\\xc2\\xa3\\xc2\\xa3\\xc2\\xa3\\\"s\\n\""<br></pre>
 
 
 
@@ -148515,7 +149687,7 @@ See also: <span style="font-family: monospace;">len</span>, <span style="font-fa
       
       
       
-      <pre>&gt; len "&pound;&euro;&cent;"<br>7<br>&gt; strlen "&pound;&euro;&cent;"<br>3<br>&gt; strlen "ascii"<br>5<br></pre>
+      <pre>&gt; len "£&#8364;¢"<br>7<br>&gt; strlen "£&#8364;¢"<br>3<br>&gt; strlen "ascii"<br>5<br></pre>
 
 
 
@@ -153514,7 +154686,7 @@ fields:<br>
 
 
 
-        <li>%a is replaced by the locale&rsquo;s abbreviated weekday name</li>
+        <li>%a is replaced by the locale&#8217;s abbreviated weekday name</li>
 
 
 
@@ -153540,7 +154712,7 @@ fields:<br>
 
 
 
-        <li>%A is replaced by the locale&rsquo;s full weekday name</li>
+        <li>%A is replaced by the locale&#8217;s full weekday name</li>
 
 
 
@@ -153566,7 +154738,7 @@ fields:<br>
 
 
 
-        <li>%b is replaced by the locale&rsquo;s abbreviated month name</li>
+        <li>%b is replaced by the locale&#8217;s abbreviated month name</li>
 
 
 
@@ -153592,7 +154764,7 @@ fields:<br>
 
 
 
-        <li>%B is replaced by the locale&rsquo;s full month name</li>
+        <li>%B is replaced by the locale&#8217;s full month name</li>
 
 
 
@@ -153618,7 +154790,7 @@ fields:<br>
 
 
 
-        <li>%c is replaced by the locale&rsquo;s appropriate date and time representation</li>
+        <li>%c is replaced by the locale&#8217;s appropriate date and time representation</li>
 
 
 
@@ -153644,7 +154816,7 @@ fields:<br>
 
 
 
-        <li>%C is replaced by the year divided by 100 and truncated to an integer, as a decimal number (00&minus;99)</li>
+        <li>%C is replaced by the year divided by 100 and truncated to an integer, as a decimal number (00&#8722;99)</li>
 
 
 
@@ -153670,7 +154842,7 @@ fields:<br>
 
 
 
-        <li>%d is replaced by the day of the month as a decimal number (01&minus;31)</li>
+        <li>%d is replaced by the day of the month as a decimal number (01&#8722;31)</li>
 
 
 
@@ -153696,7 +154868,7 @@ fields:<br>
 
 
 
-        <li>%D is equivalent to &lsquo;&lsquo;%m/%d/%y&rsquo;&rsquo;</li>
+        <li>%D is equivalent to &#8216;&#8216;%m/%d/%y&#8217;&#8217;</li>
 
 
 
@@ -153722,7 +154894,7 @@ fields:<br>
 
 
 
-        <li>%e is replaced by the day of the month as a decimal number (1&minus;31); a single digit is preceded by a space</li>
+        <li>%e is replaced by the day of the month as a decimal number (1&#8722;31); a single digit is preceded by a space</li>
 
 
 
@@ -153748,7 +154920,7 @@ fields:<br>
 
 
 
-        <li>%F is equivalent to &lsquo;&lsquo;%Y&minus;%m&minus;%d&rsquo;&rsquo; (the ISO 8601 date format)</li>
+        <li>%F is equivalent to &#8216;&#8216;%Y&#8722;%m&#8722;%d&#8217;&#8217; (the ISO 8601 date format)</li>
 
 
 
@@ -153774,7 +154946,7 @@ fields:<br>
 
 
 
-        <li>%g is replaced by the last 2 digits of the week-based year (see below) as a decimal number (00&minus;99)</li>
+        <li>%g is replaced by the last 2 digits of the week-based year (see below) as a decimal number (00&#8722;99)</li>
 
 
 
@@ -153826,7 +154998,7 @@ fields:<br>
 
 
 
-        <li>%h is equivalent to &lsquo;&lsquo;%b&rsquo;&rsquo;</li>
+        <li>%h is equivalent to &#8216;&#8216;%b&#8217;&#8217;</li>
 
 
 
@@ -153852,7 +155024,7 @@ fields:<br>
 
 
 
-        <li>%H is replaced by the hour (24-hour clock) as a decimal number (00&minus;23)</li>
+        <li>%H is replaced by the hour (24-hour clock) as a decimal number (00&#8722;23)</li>
 
 
 
@@ -153878,7 +155050,7 @@ fields:<br>
 
 
 
-        <li>%I is replaced by the hour (12-hour clock) as a decimal number (01&minus;12)</li>
+        <li>%I is replaced by the hour (12-hour clock) as a decimal number (01&#8722;12)</li>
 
 
 
@@ -153904,7 +155076,7 @@ fields:<br>
 
 
 
-        <li>%j is replaced by the day of the year as a decimal number (001&minus;366)</li>
+        <li>%j is replaced by the day of the year as a decimal number (001&#8722;366)</li>
 
 
 
@@ -153930,7 +155102,7 @@ fields:<br>
 
 
 
-        <li>%m is replaced by the month as a decimal number (01&minus;12)</li>
+        <li>%m is replaced by the month as a decimal number (01&#8722;12)</li>
 
 
 
@@ -153956,7 +155128,7 @@ fields:<br>
 
 
 
-        <li>%M is replaced by the minute as a decimal number (00&minus;59)</li>
+        <li>%M is replaced by the minute as a decimal number (00&#8722;59)</li>
 
 
 
@@ -154008,7 +155180,7 @@ fields:<br>
 
 
 
-        <li>%p is replaced by the locale&rsquo;s equivalent of the AM/PM designations associated</li>
+        <li>%p is replaced by the locale&#8217;s equivalent of the AM/PM designations associated</li>
 
 
 
@@ -154060,7 +155232,7 @@ fields:<br>
 
 
 
-        <li>%r is replaced by the locale&rsquo;s 12-hour clock time</li>
+        <li>%r is replaced by the locale&#8217;s 12-hour clock time</li>
 
 
 
@@ -154086,7 +155258,7 @@ fields:<br>
 
 
 
-        <li>%R is equivalent to &lsquo;&lsquo;%H:%M&rsquo;&rsquo;</li>
+        <li>%R is equivalent to &#8216;&#8216;%H:%M&#8217;&#8217;</li>
 
 
 
@@ -154112,7 +155284,7 @@ fields:<br>
 
 
 
-        <li>%S is replaced by the second as a decimal number (00&minus;60)</li>
+        <li>%S is replaced by the second as a decimal number (00&#8722;60)</li>
 
 
 
@@ -154164,7 +155336,7 @@ fields:<br>
 
 
 
-        <li>%T is equivalent to &lsquo;&lsquo;%H:%M:%S&rsquo;&rsquo; (the ISO 8601 time format)</li>
+        <li>%T is equivalent to &#8216;&#8216;%H:%M:%S&#8217;&#8217; (the ISO 8601 time format)</li>
 
 
 
@@ -154190,7 +155362,7 @@ fields:<br>
 
 
 
-        <li>%u is replaced by the ISO 8601 weekday as a decimal number (1&minus;7), where Monday is 1</li>
+        <li>%u is replaced by the ISO 8601 weekday as a decimal number (1&#8722;7), where Monday is 1</li>
 
 
 
@@ -154216,7 +155388,7 @@ fields:<br>
 
 
 
-        <li>%U is replaced by the week number of the year (the first Sunday as the first day of week 1) as a decimal number (00&minus;53)</li>
+        <li>%U is replaced by the week number of the year (the first Sunday as the first day of week 1) as a decimal number (00&#8722;53)</li>
 
 
 
@@ -154242,7 +155414,7 @@ fields:<br>
 
 
 
-        <li>%V is replaced by the ISO 8601 week number (see below) as a decimal number (01&minus;53)</li>
+        <li>%V is replaced by the ISO 8601 week number (see below) as a decimal number (01&#8722;53)</li>
 
 
 
@@ -154268,7 +155440,7 @@ fields:<br>
 
 
 
-        <li>%w is replaced by the weekday as a decimal number (0&minus;6), where Sunday is 0</li>
+        <li>%w is replaced by the weekday as a decimal number (0&#8722;6), where Sunday is 0</li>
 
 
 
@@ -154294,7 +155466,7 @@ fields:<br>
 
 
 
-        <li>%W is replaced by the week number of the year (the first Monday as the first day of week 1) as a decimal number (00&minus;53)</li>
+        <li>%W is replaced by the week number of the year (the first Monday as the first day of week 1) as a decimal number (00&#8722;53)</li>
 
 
 
@@ -154320,7 +155492,7 @@ fields:<br>
 
 
 
-        <li>%x is replaced by the locale&rsquo;s appropriate date representation</li>
+        <li>%x is replaced by the locale&#8217;s appropriate date representation</li>
 
 
 
@@ -154346,7 +155518,7 @@ fields:<br>
 
 
 
-        <li>%X is replaced by the locale&rsquo;s appropriate time representation</li>
+        <li>%X is replaced by the locale&#8217;s appropriate time representation</li>
 
 
 
@@ -154372,7 +155544,7 @@ fields:<br>
 
 
 
-        <li>%y is replaced by the last 2 digits of the year as a decimal number (00&minus;99)</li>
+        <li>%y is replaced by the last 2 digits of the year as a decimal number (00&#8722;99)</li>
 
 
 
@@ -154425,7 +155597,7 @@ fields:<br>
 
 
         <li>%z is replaced by the offset from UTC in the ISO 8601
-format &lsquo;&lsquo;&minus;0430&rsquo;&rsquo; (meaning 4 hours 30
+format &#8216;&#8216;&#8722;0430&#8217;&#8217; (meaning 4 hours 30
 minutes behind UTC, west of Greenwich), or by no characters if no time
 zone is determinable</li>
 
@@ -154453,7 +155625,7 @@ zone is determinable</li>
 
 
 
-        <li>%Z is replaced by the locale&rsquo;s time zone name or abbreviation, or by no characters if no time zone is determinable</li>
+        <li>%Z is replaced by the locale&#8217;s time zone name or abbreviation, or by no characters if no time zone is determinable</li>
 
 
 
@@ -164866,7 +166038,7 @@ See also: <span style="font-family: monospace;">TRUE</span>, the section about B
 
 
 
-See also: <span style="font-family: monospace;">typeof</span><span style="font-family: monospace;"></span> </td>
+See also: <span style="font-family: monospace;">typeof</span>, <span style="font-family: monospace;">typename</span> </td>
 
 
 
@@ -165526,7 +166698,1325 @@ See also: <span style="font-family: monospace;">typeof</span><span style="font-f
 
 
 
+<h3>typename &lt;expr&gt;</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table style="text-align: left;" border="0" cellpadding="2" cellspacing="2">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <tbody>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Name</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td style="font-family: monospace;">typename</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Kind</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>Command</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="font-weight: bold; width: 100px; text-align: right;">Arg syntax</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>&lt;expr:any&gt;</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="text-align: right; vertical-align: top;">Description</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>Returns a string representing the type of the expression when it has been evaluated.<br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+See also: <span style="font-family: monospace;">type</span>, <span style="font-family: monospace;">typeof</span><span style="font-family: monospace;"></span> </td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="font-weight: bold; width: 100px; text-align: right; vertical-align: top;">Returns</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>A type value</td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <th style="text-align: right; vertical-align: top;">Example</th>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      <td>
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <pre>&gt; typeof "string"<br>string<br></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      <pre>&gt; set isdir[x]: { 0 == (cmp "dir" (typename x!)!) }<br></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+
+
+
+
+
+
+
+
+
+      </td>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    </tr>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  </tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<h3><br>
+</h3>
 <h3>typeof &lt;expr&gt;</h3>
+
 
 
 
@@ -168697,7 +171187,7 @@ See also: <span style="font-family: monospace;">tolower</span> </td>
       
       
       
-      <pre>&gt; echo ${toupper "&aelig;gis - ProtechT10N"!}<br>&AElig;GIS - PROTECHT10N<br></pre>
+      <pre>&gt; echo ${toupper "ægis - ProtechT10N"!}<br>ÆGIS - PROTECHT10N<br></pre>
 
 
 
@@ -169969,7 +172459,7 @@ See also: <span style="font-family: monospace;">tolower</span> </td>
       
       
       
-      <pre>&gt; echo ${tolower "&AElig;GIS - ProTechT10N"!}<br>&aelig;gis - protecht10n<br></pre>
+      <pre>&gt; echo ${tolower "ÆGIS - ProTechT10N"!}<br>ægis - protecht10n<br></pre>
 
 
 
@@ -171746,5 +174236,5 @@ expressions can currently generate garbage without limit.<br>
 
 
 
-</body>
-</html>
+
+</body></html>
