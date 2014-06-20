@@ -4401,6 +4401,8 @@ parse_int_val(const char **ref_line, number_t *out_int)
 	ok = parse_hex(&line, (unumber_t *)&val);
     else if (parse_key(&line, "0o") || parse_key(&line, "0O") )
 	ok = parse_octal(&line, (unumber_t *)&val);
+    /* else if (parse_key(&line, "0b") || parse_key(&line, "0B") ) */
+    /*	ok = parse_binary(&line, (unumber_t *)&val); */
     else 
 	ok = parse_int(&line, &val);
 
@@ -13143,16 +13145,20 @@ value_func_lhv_new(const value_t *lv_name)
 
 
 
-/* Standard operator precidences - NB: these must used and be consecutive */
+/* Standard operator precidences - NB: these must be used and be consecutive */
 
-#define OP_PREC_OR    0
-#define OP_PREC_AND   1
-#define OP_PREC_NOT   2
-#define OP_PREC_CMP   3
-#define OP_PREC_SHIFT 4
-#define OP_PREC_SIGN  5
-#define OP_PREC_SUM   6
-#define OP_PREC_PROD  7
+#define OP_PREC_OR     0
+#define OP_PREC_AND    1
+#define OP_PREC_NOT    2
+#define OP_PREC_BITOR  3
+#define OP_PREC_BITXOR 4
+#define OP_PREC_BITAND 5
+#define OP_PREC_BITNOT 6
+#define OP_PREC_CMP    7
+#define OP_PREC_SHIFT  8
+#define OP_PREC_SIGN   9
+#define OP_PREC_SUM    10
+#define OP_PREC_PROD   11
 
 
 
@@ -14228,7 +14234,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 	      const value_t **out_val)
 {   /* [[<base>|<code>]:[:]]*[<base>|<code>] | <base> */
     bool ok;
-    bool is_closure = TRUE;
+    bool is_closure = TRUE;   /* value (so far) can be represented as closure */
     bool lhs_is_env = FALSE;  /* i.e. lhs was '['...']' & value_env_t */
     bool inherit = TRUE; /* ':' not '::' */
     /* if we can express the result as a directory we use these: */
@@ -14237,7 +14243,6 @@ parse_closure(const char **ref_line, parser_state_t *state,
     /* otherwise if lhs_is_dir_nonenv is FALSE we use these */
         value_env_t *env = NULL; /* we are constructing this */
         const value_t *code = NULL; /* we construct this too */
-        
 
     DEBUGTRACE(DPRINTF("env expr: %s\n", *ref_line);)
     
@@ -14256,17 +14261,19 @@ parse_closure(const char **ref_line, parser_state_t *state,
             const value_closure_t *closure = (const value_closure_t *)lhs;
             code = closure->code;
             env = closure->env;
-        } else if (lhs_is_env)
+        } else if (lhs_is_env) {
             env = (value_env_t *)lhs;
-        else {
+        } else {
             is_closure = lhs_is_dir_nonenv = value_type_equal(lhs, type_dir);
         }
     }        
 
+    IGNORE(printf("is%s closure\n", is_closure?"":" not"););
     if (!is_closure)
+    {        
         *out_val = lhs;
-    else
-    {   bool changed = FALSE;
+    } else
+    {   bool changed = lhs_is_env;  /* we want to change to a closure */
         
         while (ok &&
                parse_space(ref_line) &&
@@ -14296,7 +14303,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
                 bool rhs_is_closure = value_type_equal(rhs, type_closure);
                 bool rhs_is_dir     = value_type_equal(rhs, type_dir);
                 bool promote_to_env = inherit || rhs_is_closure ||
-                                      rhs_is_dir ||
+                                      rhs_is_code || rhs_is_dir ||
                                       code != NULL;
                 const value_t *rhs_code = NULL;
 
@@ -14319,9 +14326,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
                 if (rhs_is_code)
                     rhs_code = rhs;
-                else
-
-                if (rhs_is_closure || rhs_is_dir)
+                else if (rhs_is_closure || rhs_is_dir)
                 {   /* we have always promoted to lhs_is_env */
                     value_env_t *rhs_env = NULL;
                     dir_t *rhs_dir = NULL;
@@ -14357,6 +14362,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
                 if (ok && rhs_code != NULL)
                 {   if (code == NULL)
+                        /* no code value accumulated yet */
                         code = rhs_code;
                     else
                     {   parser_error(state, "can't create a closure with "
@@ -17604,7 +17610,7 @@ fn_gmtime(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_timef_gen(const value_t *this_cmd, parser_state_t *state,
-	    struct tm *(*fn)(const time_t *))
+  	     struct tm *(*fn)(const time_t *))
 {   const value_t *fmtval = parser_builtin_arg(state, 1);
     const value_t *timeval = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
@@ -17612,16 +17618,31 @@ fn_timef_gen(const value_t *this_cmd, parser_state_t *state,
     if (value_istype(fmtval, type_string) && value_istype(timeval, type_int))
     {   const char *fmtbuf;
 	size_t fmtlen;
-	if (value_string_get(fmtval, &fmtbuf, &fmtlen))
+        if (fn == NULL)
+            parser_error(state, "internal error - time function NULL\n");
+        else if (value_string_get(fmtval, &fmtbuf, &fmtlen))
 	{   time_t dat = (time_t)value_int_number(timeval);
 	    struct tm *tinfo = (*fn)(&dat);
-	    char fmtstr[128];
-	    size_t len = strftime(&fmtstr[0], sizeof(fmtstr),
-				  fmtbuf, tinfo);
-	    if (0 != len)
-	        val = value_string_new(&fmtstr[0], len);
+            if (tinfo == NULL) {
+               parser_error(state, "internal error - time function "
+                            "returns NULL\n");
+               assert(tinfo != NULL);
+            } else {
+               char fmtstr[128];
+               size_t len;
+               /* Warning: Win 7 64-bit strftime "%s" causes abort! */
+               IGNORE(printf("tm %p format '%s' buflen %d\n",
+                              tinfo, fmtbuf, sizeof(fmtstr));
+                      printf("tm year %d hour %d\n",
+                             1900+tinfo->tm_year, tinfo->tm_hour););
+               len = strftime(&fmtstr[0], sizeof(fmtstr), fmtbuf, tinfo);
+               IGNORE(printf("len %d\n", len););
+               if (0 != len)
+                   val = value_string_new(&fmtstr[0], len);
+            }
 	}
-    }
+    } else
+        parser_report_help(state, this_cmd);
     
     return val;
 }
@@ -18654,7 +18675,6 @@ cmds_generic_bool(parser_state_t *state, dir_t *cmds)
     value_t *op_ge = mod_addfn(cmds, "moreeq",
 	      "<val> <val> - TRUE if first <val> more than or equal to second",
 	      &fn_moreequal, 2);
-
     value_t *op_not = mod_addfn(cmds, "invert",
 	      "<val> - TRUE if <val> is FALSE, FALSE otherwise",
 	      &fn_not, 1);
@@ -18668,13 +18688,20 @@ cmds_generic_bool(parser_state_t *state, dir_t *cmds)
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "==", op_eq);
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "!=", op_ne);
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "lt", op_lt);
+    mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "_lt_", op_lt);
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "le", op_le);
+    mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "_le_", op_le);
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "gt", op_gt);
+    mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "_gt_", op_gt);
     mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "ge", op_ge);
+    mod_add_op(parser_opdefs(state), OP_PREC_CMP, assoc_xfx, "_ge_", op_ge);
     
     mod_add_op(parser_opdefs(state), OP_PREC_NOT, assoc_fy,  "not", op_not);
+    mod_add_op(parser_opdefs(state), OP_PREC_NOT, assoc_fy,  "_not_", op_not);
     mod_add_op(parser_opdefs(state), OP_PREC_AND, assoc_xfy, "and", op_and);
+    mod_add_op(parser_opdefs(state), OP_PREC_AND, assoc_xfy, "_and_", op_and);
     mod_add_op(parser_opdefs(state), OP_PREC_OR,  assoc_xfy, "or",  op_or);
+    mod_add_op(parser_opdefs(state), OP_PREC_OR,  assoc_xfy, "_or_",  op_or);
     
     mod_add_val(cmds, "TRUE", value_true);
     mod_add_val(cmds, "FALSE", value_false);
@@ -18788,6 +18815,26 @@ fn_int_div(const value_t *this_fn, parser_state_t *state)
     {   number_t n1 = value_int_number(n1val);
 	number_t n2 = value_int_number(n2val);
 	val = value_int_new(n1/n2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_int_mod(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+    
+    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
+    {   number_t n1 = value_int_number(n1val);
+	number_t n2 = value_int_number(n2val);
+	val = value_int_new(n1%n2);
     } else
         parser_report_help(state, this_fn);
 
@@ -18982,6 +19029,8 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
 	      "<n1> <n2> - return n1 multiplied by n2",  &fn_int_mul, 2);
     value_t *op_div = mod_addfn(cmds, "div",
 	      "<n1> <n2> - return n1 divided by n2",  &fn_int_div, 2);
+    value_t *op_mod = mod_addfn(cmds, "mod",
+	      "<n1> <n2> - return n1 modulus n2",  &fn_int_mod, 2);
     value_t *op_shl = mod_addfn(cmds, "shiftl",
 	      "<n1> <n2> - return n1 left shifted by n2 bits",
 				&fn_int_shl, 2);
@@ -18990,18 +19039,19 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
 				&fn_int_shr, 2);
     value_t *op_neg = mod_addfn(cmds, "neg",
 	      "<n> - return negated <n>",  &fn_int_neg, 1);
-    mod_addfn(cmds, "bitand",
+    value_t *op_bitand = mod_addfn(cmds, "bitand",
 	      "<n1> <n2> - return bit values of <n1> anded with <n2>",
-	      &fn_int_bitand, 2);
-    mod_addfn(cmds, "bitor",
+                      	      &fn_int_bitand, 2);
+    value_t *op_bitor = mod_addfn(cmds, "bitor",
 	      "<n1> <n2> - return bit values of <n1> ored with <n2>",
-	      &fn_int_bitor, 2);
-    mod_addfn(cmds, "bitxor",
+                 	      &fn_int_bitor, 2);
+    value_t *op_bitxor = mod_addfn(cmds, "bitxor",
 	      "<n1> <n2> - return bit values of <n1> exclusive ored with <n2>",
-	      &fn_int_bitxor, 2);
-    mod_addfn(cmds, "bitnot",
+                 	      &fn_int_bitxor, 2);
+    value_t *op_bitnot = mod_addfn(cmds, "bitnot",
 	      "<n> - invert each bit in <n>",
-              &fn_int_bitnot, 1);
+                              &fn_int_bitnot, 1);
+    
     mod_addfn(cmds, "rnd",
 	      "<n> - return random number less than <n>",
               &fn_rnd, 1);
@@ -19015,11 +19065,23 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
     mod_add_op(parser_opdefs(state), OP_PREC_SIGN,   assoc_fy,  "-",   op_neg);
     mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "*",   op_mul);
     mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "/",   op_div);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "rem", op_mod);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "_rem_",op_mod);
     mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "+",   op_add);
     mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "-",   op_sub);
     mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "shl", op_shl);
+    mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "_shl_",op_shl);
     mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "shr", op_shr);
+    mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "_shr_",op_shr);
 
+    mod_add_op(parser_opdefs(state), OP_PREC_BITNOT, assoc_fy,  "_bitnot_",
+               op_bitnot);
+    mod_add_op(parser_opdefs(state), OP_PREC_BITAND, assoc_xfy, "_bitand_",
+               op_bitand);
+    mod_add_op(parser_opdefs(state), OP_PREC_BITXOR, assoc_xfy, "_bitxor_",
+               op_bitxor);
+    mod_add_op(parser_opdefs(state), OP_PREC_BITOR,  assoc_xfy, "_bitor_",
+               op_bitor);
 }
 
 
@@ -20624,13 +20686,13 @@ select_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   select_exec_args_t *selectval = (select_exec_args_t *)arg;
     dir_t *codeargs = parser_env(selectval->state);
     
-    if (NULL != codeargs)
+    if (NULL != codeargs && value != NULL)
     {   const value_t *code = selectval->code;
 	const value_t *include;
 	
 	if (value_type_equal(code, type_closure))
 	{   code = substitute(code, value, selectval->state, /*try*/TRUE);
-	    if (NULL != code)
+	    if (NULL != code && value != NULL)
 		code = substitute(code, name, selectval->state, /*try*/TRUE);
 	}
         include = invoke(code, selectval->state);
