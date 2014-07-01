@@ -19665,7 +19665,7 @@ my_memmem(const char *buf, size_t len, const char *find, size_t findlen)
 
 
 
-
+/* find a C-NULL-terminated string in a buffer */
 static char *strnstr(const char *buf, size_t len, const char *find)
 {
     /* No nulls in sought string - so if it occurs it must always occur
@@ -19673,13 +19673,13 @@ static char *strnstr(const char *buf, size_t len, const char *find)
        Note that, commonly, len is < strlen(buf).
     */
     size_t findlen = strlen(find);
-    size_t buflen = strlen(buf); /* first section, at least */
+    size_t buflen0 = strlen(buf); /* first section, at least */
     const char *end = buf + len;
     const char *last = end - findlen;
     /*< last pos where a search for find makes sense */
     char *p = NULL;
 
-    if (buflen > len + 256)
+    if (buflen0 > len + 256)
         /* buf is just the first part of a fairly big null-teminated area
            don't use strstr */
         return my_memmem(buf, len, find, findlen);
@@ -19713,19 +19713,20 @@ static char *strnstrn(const char *buf, size_t len,
 
    if (findlen0 == findlen) {
        if (len0 == len)
+           /* both strings are 'c' string terminated */
            return strstr(buf, find);
        else
            return strnstr(buf, len, find);
-   } else {
+   } else if (findlen0 < findlen) {
+       /* There's a NULL in the find string */
        if (len0 == len)
            /* if the sought string has a NULL in it, and the string we're
-              searching in doesn't it stands to reason that you won't find the
-              sought string there */
+              searching in doesn't it stands to reason that you won't find
+              the sought string there */
            return NULL;
-       else if (findlen < findlen0) {
-           /* oh dear - there's no fast C library routine that can help here */
-           return my_memmem(buf, len, find, findlen);
-       } else {
+       else {
+           /* There's a NULL in the find string and the string to be
+              searched may or may not contain a NULL*/
            /* the null-terminated strings in the sought string must occur
               in sequence as the last, the whole... and the first
               null-terminated parts of buf */
@@ -19753,7 +19754,12 @@ static char *strnstrn(const char *buf, size_t len,
            }
            return p;
        }
-    }
+   } else {
+       /* findlen0 is meaningless - the nearest NULL is past the end */
+       
+       /* oh dear - there's no fast C library routine that can help here */
+       return my_memmem(buf, len, find, findlen);
+   } 
 }
 
 
