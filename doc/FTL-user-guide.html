@@ -1,6 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html lang="en-gb"><head>
 
+
   <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL User Guide</title>
   <meta content="Gray Girling" name="author">
   <style type="text/css">
@@ -1298,7 +1299,11 @@ See also: <span style="font-family: monospace;">parse.scan*</span> functions<br>
         <li>value of arg1 is equivalent to the value of arg2: zero</li>
         <li>value of arg1 is less than the value of arg2: a negative integer</li>
         <li>value of arg1 is greater than the value of arg2: a strictly positive value</li>
-      </ul>
+      </ul>This
+function does not compare the content of directories or closures.&nbsp;
+Equality in this case is based on identity (that is a directory or
+closure is equal only to itself, not another of the same type with
+identical value).<br>
 See also: <span style="font-family: monospace;">equal</span>, <span style="font-family: monospace;">notequal</span>, <span style="font-family: monospace;">more</span>, <span style="font-family: monospace;">less</span>, <span style="font-family: monospace;">moreeq</span>, <span style="font-family: monospace;">lesseq</span>, <span style="font-family: monospace;">collate</span>
       </td>
     </tr>
@@ -1311,7 +1316,9 @@ See also: <span style="font-family: monospace;">equal</span>, <span style="font-
       <td>
       <pre>&gt; cmp 9 1<br>1</pre>
       <pre>&gt; cmp "Astring" "Bstring"<br>-1</pre>
-      <pre>&gt; cmp "string\0_B" "string\0_A"<br>1</pre>
+      <pre>&gt; cmp "string\0_B" "string\0_A"<br>1<br></pre>
+      <pre>&gt; cmp &lt;1&gt; &lt;1&gt;<br>-1<br>&gt; set dir &lt;1&gt;<br>&gt; cmp dir dir<br>0<br></pre>
+
       <pre>cmp NULL ({}!)!</pre>
       </td>
     </tr>

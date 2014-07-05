@@ -1075,8 +1075,8 @@ value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end);
 extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name);
 
-extern dir_t *
-value_env_newpushdir(dir_t *newdir, bool env_end);
+extern value_env_t *
+value_env_newpushdir(dir_t *newdir, bool env_end, value_t *unbound);
 
 extern bool
 value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end);

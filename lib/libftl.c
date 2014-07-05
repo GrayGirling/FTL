@@ -10563,15 +10563,20 @@ value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
 
 
 
-/* make a value_env dir_t with only one directory on it - e.g. valuable in
-   providing a dir_t with a spare link field albeit with the same values as
-   the pushed directory
-*/
-extern dir_t *
-value_env_newpushdir(dir_t *newdir, bool env_end)
+/* make a new value_env dir_t with only one directory on it
+ *
+ *  e.g. valuable in providing a dir_t with a spare link field albeit with the
+ *  same values as the pushed directory
+ *
+ *  Mark directory as last visible directory at the top of the list if env_end
+ *  is TRUE
+ */
+extern value_env_t *
+value_env_newpushdir(dir_t *newdir, bool env_end, value_t *unbound)
 {   value_env_t *env = value_env_new();
+    env->unbound = unbound;
     value_env_pushdir(env, newdir, env_end);
-    return value_env_dir(env);
+    return env;
 }
 
 
@@ -10597,6 +10602,10 @@ value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
 
 
 
+/* Add a new unbound variable to environment or to end of environment
+   queue (returned by a previous invocation)
+   Return position where new variables should be added
+ */
 extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
 {   if (NULL != name && env != NULL)
@@ -11142,14 +11151,16 @@ value_as_dir(const value_t *val, dir_t **out_dir)
 
 
 struct value_coroutine_s
-{   value_t value;
-    linesource_t source;
-    dir_stack_t *env;
-    dir_t *root;
-    dir_t *opdefs;
-    suspend_fn_t *sleep;
-    int errors;
-    bool echo_cmds;
+{   value_t value;              /* This can be a value */
+    linesource_t source;        /* current input stream of lines to interpret */
+    dir_stack_t *env;           /* stack of enclosing directories defining the
+                                   current environment in which values should
+                                   be looked up */
+    dir_t *root;                /* a directory containing main namespace */
+    dir_t *opdefs;              /* operator definitions in force */
+    suspend_fn_t *sleep;        /* function used to sleep for n ms */
+    int errors;                 /* count of errors */
+    bool echo_cmds;             /* whether commands should be echoed */
 } /* value_coroutine_t, parser_state_t */;
 
 
@@ -11336,7 +11347,8 @@ parser_env(parser_state_t *parser_state)
 
 extern dir_t *
 parser_env_copy(parser_state_t *parser_state)
-{   return dir_stack_dir(dir_stack_copy((parser_state)->env));
+{   dir_stack_t *newstack = dir_stack_copy((parser_state)->env);
+    return dir_stack_dir(newstack);
 }
 
 extern dir_t *
@@ -14203,7 +14215,7 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         if (inherit) {
             dir_t *def_env = parser_env_copy(state);
             if (NULL != def_env)
-                (void)value_env_pushdir(*ref_env, def_env, /*env_end*/FALSE);
+                value_env_pushdir(*ref_env, def_env, /*env_end*/FALSE);
         }
         if (new_is_env_t)
             /* we know the new_env is a value_env_t */
@@ -14213,8 +14225,10 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         {   /* new_env is a dir_t */
             dir_t *new_dir = (dir_t *)new_env;
             /* need a "copy" of dir to get a free link ptr */
-            (void)value_env_pushdir(*ref_env,
-                                    value_env_newpushdir(new_dir, FALSE),
+            value_env_pushdir(*ref_env,
+                                    value_env_dir(value_env_newpushdir(new_dir,
+                                                                       FALSE,
+                                                                       NULL)),
                                     /*env_end*/FALSE);
         }
     }
@@ -14309,19 +14323,39 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
                 changed = TRUE;
                 
-                if (promote_to_env && lhs_is_dir_nonenv)
-                {
-                    /* only an environment can have state added to it */
-                    env = (value_env_t *)value_env_newpushdir((dir_t *)lhs,
-                                                              /*env_end*/FALSE);
-                    lhs_is_dir_nonenv = FALSE;
-                    lhs_is_env = TRUE;
-                }
 
                 if (inherit)
                 {   dir_t *def_env = parser_env_copy(state);
-                    if (NULL != def_env)
-                        (void)value_env_pushdir(env, def_env, /*env_end*/FALSE);
+                    
+                    if (NULL != def_env) {
+                        value_env_t *newenv;
+                        value_t *existing_unbound = NULL;
+                        dir_t *argdir;
+                        
+                        if (promote_to_env && lhs_is_dir_nonenv)
+                        {
+                            argdir = (dir_t *)lhs;
+                            lhs_is_dir_nonenv = FALSE;
+                            lhs_is_env = TRUE;
+                        } else {
+                            argdir = value_env_dir(env);
+                            existing_unbound = env->unbound;
+                        }
+                        
+                        newenv = value_env_newpushdir(def_env, /*env_end*/FALSE,
+                                                      existing_unbound);
+                        /* must push to a value_env_t */
+                        value_env_pushdir(newenv, argdir, /*env_end*/FALSE);
+                        env = newenv;
+                    }
+                } else
+                if (promote_to_env && lhs_is_dir_nonenv)
+                {
+                    /* only an environment can have state added to it */
+                    env = value_env_newpushdir((dir_t *)lhs, /*env_end*/FALSE,
+                                               /*unbound*/NULL);
+                    lhs_is_dir_nonenv = FALSE;
+                    lhs_is_env = TRUE;
                 }
 
                 if (rhs_is_code)
@@ -14485,7 +14519,7 @@ parse_index_lhvalue(const char **ref_line, parser_state_t *state,
 	    IGNORE(DIR_SHOW_ST("@parent: ", state, parent);
 	           printf("at %p\n", parent);)
 	    (void)value_closure_pushunbound(closure, NULL,
-					   value_string_new_measured(argname));
+					    value_string_new_measured(argname));
 	    *out_val = closure;
 	    ok = TRUE;
 	}
@@ -16363,7 +16397,7 @@ fn_argnames(const value_t *this_fn, parser_state_t *state)
 static void
 cmds_generic_closure(parser_state_t *state, dir_t *cmds)
 {   mod_addfn(cmds, "closure",
-	      "<bool> <dir> <code> - create closure from code and dir (inherrit call context if <bool>)",
+	      "<bool> <dir> <code> - create closure from code and dir (inherit call context if <bool>)",
 	      &fn_closure, 3);
     mod_addfn(cmds, "bind",
 	      "<closure> <arg> - bind argument to unbound closure argument",
