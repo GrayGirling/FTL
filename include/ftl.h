@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
+ * Copyright (c) 2014, Broadcom Inc.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -40,6 +41,8 @@
 #ifndef _FTL_H
 #define _FTL_H
 
+#include <stdarg.h> /* for va_list */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -67,13 +70,6 @@ typedef PVOID HANDLE;
 typedef HANDLE thread_os_t;
 #define THREAD_OS_BAD 0
     
-#define OS_PATH_SEP ';'
-#define OS_FS_SEP '\\';
-#define OS_FS_CASE_EQ TRUE
-#define OS_FS_NOWHERE "nul:"
-#define OS_FS_DIR_HERE "."
-#define OS_FS_ABSPATH(path) ((path)[0]!='\0' && (path)[1]==':')
-
 /*          Numbers 					                     */
 
 #ifdef __GNUC__ /* mingw */
@@ -98,13 +94,6 @@ typedef unsigned __int64 unumber_t;
 #include <pthread.h> /* for threads */
 typedef pthread_t thread_os_t;
 #define THREAD_OS_BAD 0
-
-#define OS_PATH_SEP ':'
-#define OS_FS_SEP '/';
-#define OS_FS_CASE_EQ FALSE
-#define OS_FS_NOWHERE "/dev/null"
-#define OS_FS_DIR_HERE "."
-#define OS_FS_ABSPATH(path) ((path)[0]=='/')
 
 #if defined(__ia64__) || defined(__x86_64__)
 #define _SIZEOF_LONG 8
@@ -531,6 +520,9 @@ extern value_t *
 value_cstring_new(const char *string, size_t len);
 /* uncopied const string */
 
+#define value_cstring_new_measured(_string) \
+        value_cstring_new(_string, strlen(_string))
+
 extern value_t *
 value_substring_new(const value_t *string, size_t offset, size_t len);
 
@@ -637,8 +629,13 @@ dir_get(dir_t *dir, const value_t *name);
 extern bool
 dir_int_set(dir_t *dir, int index, const value_t *value);
 
+/* Set copied name to value in directory */
 extern bool
 dir_string_set(dir_t *dir, const char *name, const value_t *value);
+
+/* Set statically allocated name to value in directory */
+extern bool
+dir_cstring_set(dir_t *dir, const char *name, const value_t *value);
 
 extern const value_t *
 dir_int_get(dir_t *dir, int n);

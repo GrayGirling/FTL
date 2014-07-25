@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
- * (C) 2011, Gray Girling
+ * Copyright (C) 2011, Gray Girling
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -76,13 +76,9 @@
 
 #define ENV_PATH "PENV_PATH"
 
-/* #define TEST_FTLSTRUCT */
-/* #define USE_READLINE */
-
 #define APP_ARGC_MAX 64
 
 #define STATIC_INLINE static inline
-#define cplane_assert assert
 
 #define CATDELIM(a, delim, b) #a  delim  #b
 #define VERSIONSTR(max, min) CATDELIM(max, ".", min)
@@ -174,8 +170,8 @@ usage(const char* msg)
 
 
 static const char *
-parse_args(int argc, char **argv,
-	   int *out_argc, char **out_argv, size_t out_argv_len,
+parse_args(int argc, const char **argv,
+	   int *out_argc, const char **out_argv, size_t out_argv_len,
 	   const char **ref_cmd, const char **ref_input, bool* out_doprofile,
 	   bool *out_echo, bool *out_quiet)
 {   int argn = 1;
@@ -298,13 +294,6 @@ typedef struct file_rep_s {
    repn_out_binding_fn *out_binding;
    repn_out_end_fn *out_end;
 } file_rep_t;
-
-
-
-
-
-
-
 
 
 
@@ -1495,11 +1484,11 @@ const char penv_text[] =  /* ends with 'text end - penv_text' comment */
 
 
 extern int
-main(int argc, char **argv)
+main(int argc, const char **argv)
 {   const char *err;
     const char *init_cmds = NULL;
     const char *cmd_file = NULL;
-    char *app_argv[APP_ARGC_MAX];
+    const char *app_argv[APP_ARGC_MAX];
     int app_argc;
     bool echo_lines = FALSE;
     bool quiet = FALSE;

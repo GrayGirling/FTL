@@ -241,6 +241,7 @@
 
 #include "ftl.h"
 #include "ftl_internal.h"
+#include "filenames.h"
 
 
 
@@ -7070,14 +7071,22 @@ dir_string_set(dir_t *dir, const char *name, const value_t *value)
 
 
 
+extern bool
+dir_cstring_set(dir_t *dir, const char *name, const value_t *value)
+{   value_t *nameval = value_cstring_new_measured(name);
+    return NULL == nameval? FALSE: dir_set(dir, nameval, value);
+}
+
+
+
+
+
 extern const value_t *
 dir_int_get(dir_t *dir, int n)
 {   value_int_t nameval;
     value_int_init(&nameval, n, /*delete*/NULL);
     return dir_get(dir, &nameval.value);
 }
-
-
 
 
 
@@ -9088,6 +9097,203 @@ dir_sysenv_new(void)
 
 /*****************************************************************************
  *                                                                           *
+ *          Filesystem Directories			                     *
+ *          ======================			                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+#if 0
+
+
+
+typedef struct 
+{   dir_t dir;
+    const value_t *dirnameval;
+    const char *dirname;
+    size_t dirnamelen;
+} dir_fs_t;
+
+
+
+
+
+
+#define dir_fs_value(dirid) dir_value(&((dirid)->dir))
+
+
+
+
+
+
+static bool
+dir_fs_add(dir_t *dir, const value_t *name, const value_t *value)
+{   /*dir_fs_t *sysdir = (dir_fs_t *)dir;*/
+    bool ok = FALSE;
+    const char *namestr;
+    size_t namestrl;
+    const char *valstr;
+    size_t valstrl;
+    
+    if (value_string_get(name, &namestr, &namestrl))
+    {
+	if (value == &value_null)
+#ifdef HAS_UNSETENV
+        {   unsetenv(namestr);
+	    ok = TRUE;
+	} 
+#else
+	{   char envbuf[FTL_ID_MAX+2];
+	    if (namestrl+2 < sizeof(envbuf))
+	    {   memcpy(&envbuf[0], namestr, namestrl);
+		envbuf[namestrl] = '=';
+	        envbuf[namestrl+1] = '\0';
+	        ok = (0 == putenv(&envbuf[0]));
+	    } else
+		ok = FALSE; 
+	} 
+#endif
+        else
+	if (value_string_get(value, &valstr, &valstrl))
+	{
+#ifdef HAS_SETENV
+	    int rc = setenv(namestr, valstr, /*overwrite*/TRUE);
+	    ok = (rc == 0);
+#else
+	    char envbuf[FTL_ID_MAX + FTL_fs_VAL_MAX + 2];
+	    if (namestrl+2+valstrl < sizeof(envbuf))
+	    {   memcpy(&envbuf[0], namestr, namestrl);
+		envbuf[namestrl] = '=';
+		memcpy(&envbuf[namestrl+1], valstr, valstrl);
+	        envbuf[namestrl+valstrl+1] = '\0';
+	        ok = (0 == putenv(&envbuf[0]));
+	    } else
+		ok = FALSE;
+#endif
+	} 
+    }	
+    return ok;
+}
+
+
+
+
+
+
+static const value_t *
+dir_fs_get(dir_t *dir, const value_t *name)
+{   const char *namestr = NULL;
+    size_t namestrl;
+    const value_t *val = (const value_t *)NULL;
+    
+    if (value_type_equal(name, type_string) &&
+        value_string_get(name, &namestr, &namestrl))
+    {   char *strval = getenv(namestr);
+	if (NULL != strval)
+            val = value_string_new_measured(strval);
+        IGNORE(else printf("%s: fs get '%s' not in env\n",
+			   codeid(), namestr);)
+    }
+    return val;
+}
+
+
+
+
+
+
+
+typedef struct {
+    dir_t *dir;
+    dir_enum_fn_t *enumfn;
+    void *arg;
+} dir_fs_enum_args_t;
+
+
+
+
+static bool
+dir_fs_entry(void *enum_arg, const char *entry, const char *subdir,
+             bool examinable, bool is_dir)
+{   
+    dir_fs_t *fsdir = (dir_fs_t *)args->dir;
+    value_t *val;/*?*/
+
+    result = (*args->enumfn)(args->dir, entry, value, args->arg);
+}
+
+
+
+static void *
+dir_fs_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
+{   dir_fs_t *fsdir = (dir_fs_t *)value;
+    void *result = NULL;
+    dir_fs_enum_args_t arg;
+    bool ok;
+
+    arg.dir = dir;
+    arg.enumfn = enumfn;
+    arg.arg = arg;
+    
+    ok = fs_enum_dir(fsdir->dirname, &dir_fs_entry, &arg);
+
+    return result;
+}
+
+
+
+
+
+static void
+dir_fs_markver(const value_t *value, int heap_version)
+{   dir_fs_t *fsdir = (dir_fs_t *)value;
+    value_mark_version((value_t *)fsdur->dirnameval, heap_version);
+}
+
+
+
+
+
+static void
+dir_fs_init(dir_fs_t *fsdir, const value_t *dirnameval)
+{   dir_init(&fsdir->dir, &dir_fs_add, /*lookup*/ NULL,
+	     /*get*/&dir_fs_get, &dir_fs_forall,
+	     /*print*/ NULL, /*delete*/NULL, &dir_fs_markver);
+    fsdir->dirnameval = value_string_get_terminated(dirnameval,
+                                                    &fsdir->dirname,
+                                                    &fsdir->dirnamelen);
+}
+
+
+
+
+
+
+extern dir_t *
+dir_fs_new(const char *dirname)
+{   dir_fs_t *fsdir = (dir_fs_t *)FTL_MALLOC(sizeof(dir_fs_t));
+
+    if (NULL != fsdir)
+	dir_fs_init(fsdir, dirname);
+
+    return &fsdir->dir;
+}
+
+
+
+
+
+#endif
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Registry Directories			                     *
  *          ====================			                     *
  *                                                                           *
@@ -9439,19 +9645,19 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
     
     if (NULL != dir)
     {   unumber_t n;
-	dir_string_set(dir, "type", value_int_new(key_type));
+	dir_cstring_set(dir, "type", value_int_new(key_type));
 	switch (key_type)
 	{
 	    case REG_DWORD_LITTLE_ENDIAN:
 		n = (unumber_t)data[0]       | ((unumber_t)data[1]<<8) |
 		    ((unumber_t)data[2]<<16) | ((unumber_t)data[3]<<24);
-		dir_string_set(dir, "data", value_int_new(n));
+		dir_cstring_set(dir, "data", value_int_new(n));
 		break;
 
 	    case REG_DWORD_BIG_ENDIAN:
 		n = (unumber_t)data[3]       | ((unumber_t)data[2]<<8) |
 		    ((unumber_t)data[1]<<16) | ((unumber_t)data[0]<<24);
-		dir_string_set(dir, "data", value_int_new(n));
+		dir_cstring_set(dir, "data", value_int_new(n));
 		break;
 
 	    case REG_QWORD_LITTLE_ENDIAN:
@@ -9459,7 +9665,7 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
 		    ((unumber_t)data[2]<<16) | ((unumber_t)data[3]<<24) |
 		    ((unumber_t)data[4]<<32) | ((unumber_t)data[5]<<40) |
 		    ((unumber_t)data[6]<<48) | ((unumber_t)data[7]<<56);
-		dir_string_set(dir, "data", value_int_new(n));
+		dir_cstring_set(dir, "data", value_int_new(n));
 		break;
 
 	    case REG_EXPAND_SZ:
@@ -9470,21 +9676,21 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
 		const wchar_t data_wc = (const wchar_t *)data;
 		if (data_wc[charlen-1] == '\0')
 		    charlen--;
-		dir_string_set(dir, "data",
-			       value_wcstring_new(data_wc, charlen);
+		dir_cstring_set(dir, "data",
+			        value_wcstring_new(data_wc, charlen);
 #else
 		if (data[datalen-1] == '\0')
 		    datalen--;
-		dir_string_set(dir, "data",
-			       value_string_new((const char *)data, datalen));
+		dir_cstring_set(dir, "data",
+			        value_string_new((const char *)data, datalen));
 #endif
 		break;
 
 	    case REG_MULTI_SZ:
 		/* actually an array of zero terminated strings,
 		   terminated by another zero - could do better */
-		dir_string_set(dir, "data",
-			       value_string_new((const char *)data, datalen));
+		dir_cstring_set(dir, "data",
+		    	        value_string_new((const char *)data, datalen));
 		break;
 
 	    case REG_RESOURCE_LIST:
@@ -9498,8 +9704,8 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
 	    case REG_NONE:
 	    case REG_BINARY:
 	    default:
-		dir_string_set(dir, "data",
-			       value_string_new((const char *)data, datalen));
+		dir_cstring_set(dir, "data",
+		 	        value_string_new((const char *)data, datalen));
 		break;
 
 	}
@@ -13181,7 +13387,7 @@ value_mod_cmd_create(const value_t *helpstrval, value_t *closure, int args)
     int i;
     value_t *argnext = NULL;
 
-    dir_string_set(helpenv, BUILTIN_HELP, helpstrval);
+    dir_cstring_set(helpenv, BUILTIN_HELP, helpstrval);
 
     /* is this safe? it uses the root's next pointer ... again */
     (void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
@@ -13256,8 +13462,8 @@ mod_add_op(dir_t *opdefs, op_prec_t prec, op_assoc_t assoc, const char *opname,
 	{   dir_t *precfns = (dir_t *)precfnsval;
 	    dir_t *opdefn = dir_id_new();
 	    value_t *opnameval = value_string_new_measured(opname);
-	    dir_string_set(opdefn, OP_FN, fn);
-	    dir_string_set(opdefn, OP_ASSOC, value_int_new(assoc));
+	    dir_cstring_set(opdefn, OP_FN, fn);
+	    dir_cstring_set(opdefn, OP_ASSOC, value_int_new(assoc));
 	    dir_set(precfns, opnameval, dir_value(opdefn));
 	} else
 	    fprintf(stderr, "%s: invalid operator definitions at "
@@ -17308,8 +17514,8 @@ fn_opset(const value_t *this_fn, parser_state_t *state)
 	    if (value_type_equal(precfnsval, type_dir))
 	    {   dir_t *precfns = (dir_t *)precfnsval;
 		dir_t *opdefn = dir_id_new();
-		dir_string_set(opdefn, OP_FN, fn);
-		dir_string_set(opdefn, OP_ASSOC, assocval);
+		dir_cstring_set(opdefn, OP_FN, fn);
+		dir_cstring_set(opdefn, OP_ASSOC, assocval);
 		dir_set(precfns, nameval, dir_value(opdefn));
 	    } else
 	       parser_report(state, "invalid operator definitions at "
@@ -17521,6 +17727,63 @@ cmd_uid(const char **ref_line, const value_t *this_cmd,
 
 
 
+typedef struct {
+    const value_t *dirnameval;
+    dir_t *content;
+} fs_ls_args_t;
+
+
+
+
+static bool
+fn_fs_ls_enum(void *enum_arg, const char *entry, const char *subdir,
+              bool examinable, bool is_dir)
+{   fs_ls_args_t *args = (fs_ls_args_t *)enum_arg;
+
+    if (examinable) {
+       dir_t *valdir = dir_id_new();
+       (void)dir_cstring_set(valdir, "dir", is_dir? value_true: value_false);
+       (void)dir_string_set(args->content, entry, dir_value(valdir));
+    } else
+       (void)dir_string_set(args->content, entry, &value_null);
+    
+    return TRUE; /* continue */
+}
+
+
+
+static const value_t *
+fn_fs_ls(const value_t *this_fn, parser_state_t *state)
+{   const value_t *result = NULL;
+    
+    const value_t *dirnameval = parser_builtin_arg(state, 1);
+
+    if (value_istype(dirnameval, type_string))
+    {   const char *dirname = NULL;
+        size_t dirnamelen;
+        const value_t *d = value_string_get_terminated(dirnameval, &dirname,
+                                                       &dirnamelen);
+        fs_ls_args_t arg;
+
+        arg.dirnameval = d;
+        arg.content = dir_id_new();
+
+        if (arg.content != NULL &&
+            fs_enum_dir(dirname, &fn_fs_ls_enum, &arg))
+            result = dir_value(arg.content);
+        else
+            result = &value_null;
+    } else
+        parser_report_help(state, this_fn);
+        
+    return result;
+}
+
+
+
+
+
+
 static const value_t *
 fn_fs_absname(const value_t *this_fn, parser_state_t *state)
 {
@@ -17610,16 +17873,16 @@ fn_time_gen(const value_t *this_cmd, parser_state_t *state,
     {   time_t dat = (time_t)value_int_number(timeval);
 	struct tm *tinfo = (*fn)(&dat);
 	dir_t *tm = dir_id_new();
-	dir_string_set(tm, "sec",   value_int_new(tinfo->tm_sec));
-	dir_string_set(tm, "min",   value_int_new(tinfo->tm_min));
-	dir_string_set(tm, "hour",  value_int_new(tinfo->tm_hour));
-	dir_string_set(tm, "mday",  value_int_new(tinfo->tm_mday));
-	dir_string_set(tm, "mon",   value_int_new(tinfo->tm_mon));
-	dir_string_set(tm, "year",  value_int_new(SYS_EPOCH_YEAR +
-						  tinfo->tm_year));
-	dir_string_set(tm, "wday",  value_int_new(tinfo->tm_wday));
-	dir_string_set(tm, "yday",  value_int_new(tinfo->tm_yday));
-	dir_string_set(tm, "isdst", value_int_new(tinfo->tm_isdst));
+	dir_cstring_set(tm, "sec",   value_int_new(tinfo->tm_sec));
+	dir_cstring_set(tm, "min",   value_int_new(tinfo->tm_min));
+	dir_cstring_set(tm, "hour",  value_int_new(tinfo->tm_hour));
+	dir_cstring_set(tm, "mday",  value_int_new(tinfo->tm_mday));
+	dir_cstring_set(tm, "mon",   value_int_new(tinfo->tm_mon));
+	dir_cstring_set(tm, "year",  value_int_new(SYS_EPOCH_YEAR +
+						   tinfo->tm_year));
+	dir_cstring_set(tm, "wday",  value_int_new(tinfo->tm_wday));
+	dir_cstring_set(tm, "yday",  value_int_new(tinfo->tm_yday));
+	dir_cstring_set(tm, "isdst", value_int_new(tinfo->tm_isdst));
 	val = dir_value(tm);
     }
     
@@ -17732,7 +17995,9 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     dir_t *fscmds = dir_id_new();
     dir_t *shcmds = dir_id_new();
     const char *osfamily = "unknown";
-    char sep[2];
+    static char sep[2];
+    static char exec_buf[PATHNAME_MAX];
+    const char *executable = file_executable(&exec_buf[0], sizeof(exec_buf));
 
 #ifdef _WIN32
     osfamily = "windows";
@@ -17753,10 +18018,15 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     mod_addfn(fscmds, "absname",
               "<file> - TRUE iff file has an absolute path name",
 	      &fn_fs_absname, 1);
+    mod_addfn(fscmds, "ls",
+              "<dir> - directory content as name=[dir=<bool>] pairs",
+	      &fn_fs_ls, 1);
     (void)dir_lock(fscmds, NULL); /* prevents additions to this directory */
     
     sep[0] = OS_PATH_SEP;
     sep[1] = '\0';
+    mod_add_val(shcmds, "self", executable == NULL? &value_null:
+                                value_string_new_measured(executable));
     mod_add_val(shcmds, "pathsep", value_string_new_measured(sep));
     mod_addfn(shcmds, "path", "<path> <file> - return name of file on path",
 	      &fn_path, 2);
@@ -21751,7 +22021,7 @@ fn_cmd(const value_t *this_fn, parser_state_t *state)
 					     env);
 	if (NULL != helpval && helpval != &value_null)
 	    if (value_istype(helpval, type_string))
-	        dir_string_set(helpenv, BUILTIN_HELP, helpval);
+	        dir_cstring_set(helpenv, BUILTIN_HELP, helpval);
 	(void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
 	sprintf(&argname[0], "%s%d", BUILTIN_ARG, 1);
 	/*argnext =*/(void)value_closure_pushunbound(closure, NULL,

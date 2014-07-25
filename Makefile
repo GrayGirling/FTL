@@ -4,7 +4,9 @@ DEFINES=-DSTANDALONE -DUSE_READLINE
 INCLUDES=-I include -I /usr/include/readline
 CFLAGS=-g $(DEFINES) $(INCLUDES)
 
-FTL_OBJS = ftl.o libftl.o 
+FTLLIB_OBJS = libftl.o filenames.o
+FTL_OBJS = ftl.o $(FTLLIB_OBJS)
+PENV_OBJS = penv.o $(FTLLIB_OBJS)
 
 vpath %.c tools:lib
 vpath %.h include
@@ -17,8 +19,11 @@ install: ftl
 ftl: $(FTL_OBJS) ftl.h ftl_internal.h
 	$(CC) $(CFLAGS) -o $@ $(FTL_OBJS) $(LIBS)
 
+penv: $(PENV_OBJS) ftl.h ftl_internal.h
+	$(CC) $(CFLAGS) -o $@ $(PENV_OBJS) $(LIBS)
+
 cscope:
 	cscope -b -R -p3 lib/*.c include/*.h tools/*.c </dev/null
 
 clean:
-	rm -f ftl $(FTL_OBJS)
+	rm -f ftl penv $(FTL_OBJS)
