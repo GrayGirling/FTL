@@ -1,0 +1,43 @@
+
+# these files are text (and should be normalized)
+
+*.c             text
+*.cc            text
+*.cpp           text
+*.s             text
+*.h             text
+*Makefile*      text
+*.mk            text
+*.txt           text
+*.html          text
+*.xml           text
+*.css           text
+*.py            text
+*.js            text
+*.map           text
+*.rvc           text
+*.vdc           text
+*.csd           text
+*.ftl           text
+*.opt           text
+
+# let git do what it likes with
+# *.vspscc *.user *.filters *.dsp *.vcproj
+
+# these files have O/S-specific line endings
+*.sh            eol=lf
+*.ksh           eol=lf
+*.bat           eol=crlf
+
+# these files are always binary
+
+*.exe           binary
+*.dll           binary
+*.a             binary
+*.so            binary
+*.lib           binary
+*.jpg           binary
+*.pdf           binary
+
+
+* text=auto
