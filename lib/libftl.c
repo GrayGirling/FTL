@@ -242,6 +242,7 @@
 #include "ftl.h"
 #include "ftl_internal.h"
 #include "filenames.h"
+#include "libdyn.h"
 
 
 
@@ -17984,6 +17985,65 @@ cmd_getenv(const char **ref_line, const value_t *this_cmd,
 
 
 
+typedef struct {
+    parser_state_t *state;
+    dir_t *valdir;
+    dll_t lib;
+} libsym_enum_args_t;
+
+
+
+/* called for each entry in a vector of strings */
+static void *
+libsym_enum(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{
+    libsym_enum_args_t *args = (libsym_enum_args_t *)arg;
+    const char *sym;
+    size_t symlen;
+
+    if (value_string_get(value, &sym, &symlen))
+    {   libfn_t fn = lib_sym(args->lib, sym);
+        dir_set(args->valdir, value, value_int_new((unumber_t)fn));
+    }
+    return NULL; /* continue enumeration */
+}
+
+
+
+
+static const value_t *
+fn_lib_load(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *filenameval = parser_builtin_arg(state, 1);
+    const value_t *symsval = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+    bool ok = TRUE;
+    const char *filename;
+    size_t filenamelen;
+    
+    if (value_string_get_terminated(filenameval, &filename, &filenamelen) &&
+	value_istype(symsval, type_dir))
+    {   libsym_enum_args_t arg;
+
+        arg.lib = load_library(filename);
+
+        if (arg.lib != DLL_NONE) {
+            dir_t *syms = (dir_t *)symsval;
+            
+            arg.valdir = dir_id_new();
+            arg.state = state;
+
+            (void)dir_forall(syms, &libsym_enum, &arg);
+
+            val = dir_value(arg.valdir);
+            free_library(arg.lib);
+        }
+    } else
+        parser_report_help(state, this_fn);
+    
+    return val;
+}
+
 
 
 
@@ -17993,6 +18053,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
 {   dir_t *scmds = dir_id_new();
     dir_t *sysenv = dir_sysenv_new();
     dir_t *fscmds = dir_id_new();
+    dir_t *libcmds = dir_id_new();
     dir_t *shcmds = dir_id_new();
     const char *osfamily = "unknown";
     static char sep[2];
@@ -18023,6 +18084,11 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
 	      &fn_fs_ls, 1);
     (void)dir_lock(fscmds, NULL); /* prevents additions to this directory */
     
+    mod_addfn(libcmds, "load",
+              "<lib> <sym_vec> - load dynamic lib giving directory of symbol values",
+	      &fn_lib_load, 2);
+    (void)dir_lock(libcmds, NULL); /* prevents additions to this directory */
+    
     sep[0] = OS_PATH_SEP;
     sep[1] = '\0';
     mod_add_val(shcmds, "self", executable == NULL? &value_null:
@@ -18035,6 +18101,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     mod_add_dir(cmds, "sys", scmds);
     mod_add_dir(scmds, "fs", fscmds);
     mod_add_dir(scmds, "shell", shcmds);
+    mod_add_dir(scmds, "lib", libcmds);
     mod_add_val(scmds, "osfamily",
 		value_string_new_measured(osfamily));
     mod_add(scmds, "run", "<line> - execute system <line>",

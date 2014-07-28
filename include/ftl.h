@@ -608,6 +608,10 @@ typedef struct dir_s dir_t;
 
 typedef const void *dir_lock_state_t;
 
+/*! function called when enumerating a directory - once for each entry
+ *  (enumeration will cease with the provided value if the return value is not
+ *   NULL)
+ */
 typedef void *dir_enum_fn_t(dir_t *dir, const value_t *name,
 			    const value_t *value, void *arg);
 
@@ -649,6 +653,7 @@ dir_stringl_get(dir_t *dir, const char *name, size_t namelen);
 extern bool
 dir_enumerable(dir_t *dir);
 
+/* invoke enumfn for each entry in dir providing given argument */
 extern void *
 dir_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg);
 
