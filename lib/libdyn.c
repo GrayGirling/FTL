@@ -12,8 +12,8 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "dynlib.h"
-#include "filename.h"
+#include "libdyn.h"
+#include "filenames.h"
 
 
 /******************************************************************************
@@ -24,6 +24,9 @@
 
 
 #ifdef WIN32
+
+#include "windows.h"
+
 extern unsigned get_errno(void)
 {
    return (unsigned)GetLastError();

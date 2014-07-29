@@ -6,8 +6,8 @@
  *   suffix .dll)
  */
 
-#ifndef _DRIVERS_LIBDYNLIB_H
-#define _DRIVERS_LIBDYNLIB_H
+#ifndef _FTL_LIBDYNLIB_H
+#define _FTL_LIBDYNLIB_H
 
 #ifdef WIN32
 
@@ -158,4 +158,4 @@ libfn_cache_get(libfn_cache_t *cache, const char *fn_name,
 extern void
 libfn_cache_forget(libfn_cache_t *cache);
 
-#endif /* _DRIVERS_LIBDYNLIB_H */
+#endif /* _FTL_LIBDYNLIB_H */

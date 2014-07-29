@@ -84,7 +84,7 @@
 
 #define APP_ARGC_MAX 64
 
-#ifdef STANDALONE
+#ifndef IN_CPLANE
 
 #define STATIC_INLINE static inline
 #define cplane_assert assert
@@ -98,7 +98,7 @@
 #define STATIC_INLINE ci_inline
 #define cplane_assert ci_assert
 
-#endif /* STANDALONE */
+#endif /* IN_CPLANE */
 
 
 #define CATDELIM(a, delim, b) #a  delim  #b

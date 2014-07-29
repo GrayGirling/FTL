@@ -42,6 +42,7 @@
 #define _FTL_H
 
 #include <stdarg.h> /* for va_list */
+#include <stdlib.h> /* for wchar_t */
 
 #ifdef __cplusplus
 extern "C" {
