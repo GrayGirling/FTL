@@ -14,11 +14,17 @@ dir_mk := $(dir $(this_mk))
 
 include $(dir_mk)make-type.mk
 
+host-is-64bit := false
+
 ifeq ($(OS),Windows_NT)
     # we may update this later in the makefile
     need-unix-shell := false
     ifeq ($(CC),cc)
        CC := cl
+    endif
+    host-type := $(PROCESSOR_ARCHITECTURE)
+    ifeq ($(host-type),)
+       host-type := $(shell arch)
     endif
     OS_DEFINES := -DWIN32=1
 endif
@@ -27,7 +33,18 @@ ifeq ($(OS),Linux)
     ifeq ($(CC),cc)
        CC := gcc
     endif
+    host-type := $(shell arch)
     OS_DEFINES := -DLINUX=1
+endif
+
+ifeq ($(host-type),AMD64)
+   host-is-64-bit := true
+endif
+ifeq ($(host-type),x86_64)
+   host-is-64-bit := true
+endif
+ifeq ($(host-type),armv8)
+   host-is-64-bit := true
 endif
 
 # $(info OS is $(OS), filename-style is $(filename-style), CC is $(CC))
@@ -109,7 +126,9 @@ ifeq ($(findstring gcc,$(CC)),gcc)
     ifeq ($(NATIVEWORD),yes)
         CC-32-bit := 
     else
-        CC-32-bit := -m32
+        ifeq ($(host-is-64bit),true)
+            CC-32-bit := -m32
+        endif
     endif
     lib-dll := -ldl
 
@@ -143,7 +162,9 @@ ifeq ($(CC),cl)
         endif
     else
         # no flags used in windows - just use the correct compiler!
-        CC-32-bit := -m32
+        ifeq ($(host-is-64bit),true)
+            CC-32-bit := -m32
+        endif
     endif
     lib-dll := 
 
