@@ -12,8 +12,8 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "dynlib.h"
-#include "filename.h"
+#include "libdyn.h"
+#include "filenames.h"
 
 
 /******************************************************************************
@@ -110,7 +110,9 @@ extern void liberror_free(const char *errmsg)
 
 #include <dlfcn.h>
 
+#ifndef __stdcall
 #define __stdcall
+#endif
 
 typedef void *dll_t;
 
