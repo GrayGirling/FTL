@@ -222,6 +222,7 @@
 #include <time.h>
 #include <limits.h> /* for MB_LEN_MAX */
 #include <wctype.h>
+#include <stddef.h> /* for ptrdiff_t */
 
 #ifdef _WIN32
 
@@ -18003,7 +18004,7 @@ libsym_enum(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 
     if (value_string_get(value, &sym, &symlen))
     {   libfn_t fn = lib_sym(args->lib, sym);
-        dir_set(args->valdir, value, value_int_new((unumber_t)fn));
+        dir_set(args->valdir, value, value_int_new((unumber_t)(ptrdiff_t)fn));
     }
     return NULL; /* continue enumeration */
 }
@@ -18017,7 +18018,6 @@ fn_lib_load(const value_t *this_fn, parser_state_t *state)
     const value_t *filenameval = parser_builtin_arg(state, 1);
     const value_t *symsval = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
-    bool ok = TRUE;
     const char *filename;
     size_t filenamelen;
     

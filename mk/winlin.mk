@@ -38,16 +38,16 @@ ifeq ($(OS),Linux)
 endif
 
 ifeq ($(host-type),AMD64)
-   host-is-64-bit := true
+   host-is-64bit := true
 endif
 ifeq ($(host-type),x86_64)
-   host-is-64-bit := true
+   host-is-64bit := true
 endif
 ifeq ($(host-type),armv8)
-   host-is-64-bit := true
+   host-is-64bit := true
 endif
 
-# $(info OS is $(OS), filename-style is $(filename-style), CC is $(CC))
+#$(info OS is $(OS), filename-style is $(filename-style), CC is $(CC), type $(host-type) 64-bit '$(host-is-64bit)')
 empty:=
 space:= $(empty) $(empty)
 
@@ -97,7 +97,6 @@ winlin_tmps := $(dir_mk)vcvars.mk $(dir_mk)vcvars.sh
 
 $(info Make for $(OS) with $(filename-style)-style filenames & an $(shell-escapes) $(shell-style)-style shell)
 # $(info ...shell redirection $(shell-redir-escapes) and shell quotes escaped with $(call shell-escquote,"))
-
 
 # Setup:
 #
