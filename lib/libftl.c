@@ -244,8 +244,8 @@
 #include "ftl_internal.h"
 #include "filenames.h"
 #include "libdyn.h"
-
-
+#include "ftlext.h"
+#define STRING(_x) #_x
 
 
 
@@ -3628,11 +3628,11 @@ static value_printstack_t prtstk;
 
 extern /*internal*/ value_t *
 (value_init)(value_t *val, type_t kind, value_print_fn_t *print,
-	     value_cmp_fn_t *compare, value_delete_fn_t *delete,
+	     value_cmp_fn_t *compare, value_delete_fn_t *delete_fn,
 	     value_markver_fn_t *mark_version)
 {   val->kind = kind;
     val->link = NULL;
-    val->delete = delete;
+    val->delete = delete_fn;
     val->print = print;
     val->compare = compare;
     val->mark_version = mark_version;
@@ -3640,7 +3640,7 @@ extern /*internal*/ value_t *
     val->local = (mark_version != NULL);
     /* all non-constant values are initially local */
 
-    if (NULL != delete)
+    if (NULL != delete_fn)
     {   /* place on value heap */
         val->heap_next = value_heap.heap;
         value_heap.heap = val;
@@ -3648,7 +3648,7 @@ extern /*internal*/ value_t *
 	val->heap_next = NULL;
 
     DEBUGGC(DPRINTF("New %s value %p %sdeleteable\n",
-		    type_name(kind), val,  NULL==delete? "not ":"");)
+		    type_name(kind), val,  NULL==delete_fn? "not ":"");)
     return val;
 }
 
@@ -7021,7 +7021,7 @@ dir_compare(const value_t *v1, const value_t *v2)
 extern /*internal*/ value_t *
 dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
 	 dir_get_fn_t *get, dir_forall_fn_t *forall,
-	 value_print_fn_t *print, value_delete_fn_t *delete,
+	 value_print_fn_t *print, value_delete_fn_t *delete_fn,
 	 value_markver_fn_t *mark)
 {   dir->add = add;
     dir->lookup = lookup;
@@ -7035,7 +7035,7 @@ dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
     
     return value_init(&dir->value, type_dir,
 		      NULL != print? print: &dir_print,
-		      &dir_compare, delete, mark);
+		      &dir_compare, delete_fn, mark);
 }
 
 
@@ -9288,6 +9288,150 @@ dir_fs_new(const char *dirname)
 
 
 #endif
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Shared Library Directories			                     *
+ *          ==========================			                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+typedef struct 
+{   dir_id_t dir;
+    dll_t lib;
+    bool fixed;
+    const value_t *libnameval;
+    const char *libname;  /* redundantly implied by dirnameval */
+    size_t libnamelen;    /* redundantly implied by dirnameval */
+} dir_lib_t;
+
+
+
+
+
+
+#define dir_lib_dir(dirid)   dir_id_dir(&((dirid)->dir))
+#define dir_lib_value(dirid) dir_id_value(&((dirid)->dir))
+
+
+
+static void dir_lib_delete(value_t *value)
+{   if (value_istype(value, type_dir))
+    {   dir_lib_t *libdir = (dir_lib_t *)value;
+        if (!libdir->fixed) {
+           free_library(libdir->lib);
+        }
+        dir_id_delete(value);
+    }
+}
+
+
+
+
+static void dir_lib_markver(const value_t *value, int heap_version)
+{   dir_lib_t *libdir = (dir_lib_t *)value;
+    value_mark_version((value_t *)libdir->libnameval, heap_version);
+    dir_id_markver(dir_lib_value(libdir), heap_version);
+}
+
+
+
+typedef struct {
+    dir_t *valdir;
+    dll_t lib;
+} libsym_enum_args_t;
+
+
+
+
+/* called for each entry in a vector of strings */
+static void *
+libsym_enum(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{
+    libsym_enum_args_t *args = (libsym_enum_args_t *)arg;
+    const char *sym;
+    size_t symlen;
+
+    if (value_string_get(value, &sym, &symlen))
+    {   libfn_t fn = lib_sym(args->lib, sym);
+        if (fn != NULL)
+           dir_set(args->valdir, value,
+                   value_int_new((unumber_t)(ptrdiff_t)fn));
+    }
+    return NULL; /* continue enumeration */
+}
+
+
+
+
+/* Initialize a directory of symbol values held in the given dynamic library
+ *   @param  libdir       - empty library directory structure to initialize
+ *   @param  libfilename  - 0-terminated string containing the name of the lib
+ *   @param  symbs        - vector of symbol names to be provided
+ *   @param  fixed        - TRUE iff the library is not to be unloaded
+ */
+static dir_t *
+dir_lib_init(dir_lib_t *libdir,
+             const value_t *libnameval, dir_t *syms, bool fixed)
+{
+    libdir->lib = load_library(libdir->libname);
+
+    if (libdir->lib != DLL_NONE) {
+        libsym_enum_args_t arg;
+        dir_t *dir = dir_id_dir(&libdir->dir);
+        value_t *val = dir_value(dir);
+
+        dir_id_init(&libdir->dir);
+        
+        dir->add = NULL;
+        val->mark_version = &dir_lib_markver;
+        val->delete = &dir_lib_delete;
+        
+        libdir->libnameval = value_string_get_terminated(libnameval,
+                                                         &libdir->libname,
+                                                         &libdir->libnamelen);
+        libdir->fixed = fixed;
+
+        arg.valdir = dir;
+        arg.lib = libdir->lib;
+        (void)dir_forall(syms, &libsym_enum, &arg);
+
+        return dir;
+    } else
+        return NULL;
+}
+
+
+
+
+
+/* Create a directory of symbol values held in the given dynamic library
+ *   @param  libfilename  - 0-terminated string containing the name of the lib
+ *   @param  symbs        - vector of symbol names to be provided
+ *   @param  fix          - TRUE iff the library is not to be unloaded
+ *
+ *   If \c fix is not set the library will be unloaded when the directory is
+ *   garbage collected.
+ */
+extern dir_t *
+dir_lib_new(const value_t *libfilename, dir_t *syms, bool fix)
+{   dir_lib_t *libdir = (dir_lib_t *)FTL_MALLOC(sizeof(dir_lib_t));
+
+    if (NULL != libdir)
+	dir_lib_init(libdir, libfilename, syms, fix);
+
+    return dir_lib_dir(libdir);
+}
+
 
 
 
@@ -17986,32 +18130,6 @@ cmd_getenv(const char **ref_line, const value_t *this_cmd,
 
 
 
-typedef struct {
-    parser_state_t *state;
-    dir_t *valdir;
-    dll_t lib;
-} libsym_enum_args_t;
-
-
-
-/* called for each entry in a vector of strings */
-static void *
-libsym_enum(dir_t *dir, const value_t *name, const value_t *value, void *arg)
-{
-    libsym_enum_args_t *args = (libsym_enum_args_t *)arg;
-    const char *sym;
-    size_t symlen;
-
-    if (value_string_get(value, &sym, &symlen))
-    {   libfn_t fn = lib_sym(args->lib, sym);
-        dir_set(args->valdir, value, value_int_new((unumber_t)(ptrdiff_t)fn));
-    }
-    return NULL; /* continue enumeration */
-}
-
-
-
-
 static const value_t *
 fn_lib_load(const value_t *this_fn, parser_state_t *state)
 {
@@ -18023,20 +18141,62 @@ fn_lib_load(const value_t *this_fn, parser_state_t *state)
     
     if (value_string_get_terminated(filenameval, &filename, &filenamelen) &&
 	value_istype(symsval, type_dir))
-    {   libsym_enum_args_t arg;
+    {   dir_t *dir = dir_lib_new(filenameval, (dir_t *)symsval, /*fix*/FALSE);
+        if (dir != NULL)
+            val = dir_value(dir);
+    } else
+        parser_report_help(state, this_fn);
+    
+    return val;
+}
 
-        arg.lib = load_library(filename);
 
-        if (arg.lib != DLL_NONE) {
-            dir_t *syms = (dir_t *)symsval;
-            
-            arg.valdir = dir_id_new();
-            arg.state = state;
 
-            (void)dir_forall(syms, &libsym_enum, &arg);
 
-            val = dir_value(arg.valdir);
-            free_library(arg.lib);
+
+static const value_t *
+fn_lib_extend(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *filenameval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    const char *filename;
+    size_t filenamelen;
+    
+    if (value_string_get_terminated(filenameval, &filename, &filenamelen))
+    {   dir_t *syms = dir_vec_new();
+        dir_t *dir;
+        const char *main_fn_name = STRING(FTL_EXTENSION_MAIN);
+        const value_t *main_fnval = value_string_new_measured(main_fn_name);
+
+        dir_int_set(syms, 0, main_fnval);
+        dir = dir_lib_new(filenameval, syms, /*fix*/TRUE);
+        if (dir != NULL) {
+            const value_t *mainval = dir_get(dir, main_fnval);
+            if (mainval == NULL)
+                parser_error(state, "library symbol '%s' absent\n",
+                             main_fn_name);
+            else if (value_type_equal(mainval, type_null))
+                parser_error(state, "library symbol '%s' undefined\n",
+                             main_fn_name);
+            else if (!value_type_equal(mainval, type_int))
+                parser_error(state, "library symbol '%s' does not have "
+                             "integer value\n",
+                             main_fn_name);
+            else
+            {   number_t main_addr = value_int_number(mainval);
+                if (main_addr == 0)
+                    parser_error(state, "library symbol '%s' is NULL\n",
+                             main_fn_name);
+                else {
+                    ftl_extension_fn *ftl_main = (ftl_extension_fn *)main_addr;
+                    dir_t *mod = dir_id_new();
+                    
+                    bool ok = (*ftl_main)(state, mod);
+                    
+                    if (ok)
+                        val = dir_value(mod);
+                }
+            }
         }
     } else
         parser_report_help(state, this_fn);
@@ -18087,6 +18247,9 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     mod_addfn(libcmds, "load",
               "<lib> <sym_vec> - load dynamic lib giving directory of symbol values",
 	      &fn_lib_load, 2);
+    mod_addfn(libcmds, "extend",
+              "<ftlext> - load FTL extension returning directory of functions",
+	      &fn_lib_extend, 1);
     (void)dir_lock(libcmds, NULL); /* prevents additions to this directory */
     
     sep[0] = OS_PATH_SEP;
@@ -18531,7 +18694,7 @@ fn_stringify(const value_t *this_fn, parser_state_t *state)
 	if (!value_stream_sink(stream, &sink))
 	    parser_error(state, "stream not open for output\n");
 	else
-	    val = value_int_new(value_print(sink,dir_value(parser_root(state)),
+	    val = value_int_new(value_print(sink, dir_value(parser_root(state)),
 					    obj));
     } else
         parser_report_help(state, this_fn);
