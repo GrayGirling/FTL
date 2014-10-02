@@ -190,7 +190,7 @@ usage(const char* msg)
 
 static const char *
 parse_args(int argc, char **argv,
-	   int *out_argc, char **out_argv, size_t out_argv_len,
+	   int *out_argc, const char **out_argv, size_t out_argv_len,
 	   const char **ref_cmd, const char **ref_input,
 	   bool *out_echo, bool *out_quiet)
 {   int argn = 1;
@@ -439,7 +439,7 @@ main(int argc, char **argv)
 {   const char *err;
     const char *init = NULL;
     const char *cmd_file = NULL;
-    char *app_argv[APP_ARGC_MAX];
+    const char *app_argv[APP_ARGC_MAX];
     int app_argc;
     bool echo_lines = FALSE;
     bool quiet = FALSE;

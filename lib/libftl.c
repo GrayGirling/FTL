@@ -18188,7 +18188,8 @@ fn_lib_extend(const value_t *this_fn, parser_state_t *state)
                     parser_error(state, "library symbol '%s' is NULL\n",
                              main_fn_name);
                 else {
-                    ftl_extension_fn *ftl_main = (ftl_extension_fn *)main_addr;
+                    ftl_extension_fn *ftl_main = (ftl_extension_fn *)
+                                                 (ptrdiff_t)main_addr;
                     dir_t *mod = dir_id_new();
                     
                     bool ok = (*ftl_main)(state, mod);
