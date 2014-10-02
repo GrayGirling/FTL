@@ -1,8 +1,29 @@
 CC=gcc
-LIBS=-lreadline -lhistory -ldl
-DEFINES=-DUSE_READLINE
-INCLUDES=-I include -I /usr/include/readline
-CFLAGS=-g $(DEFINES) $(INCLUDES)
+
+$(info Building for OSARCH $(OSARCH))
+
+ifeq ($(OSARCH),Darwin)
+    LIBS_READLINE=
+    DEFS_READLINE=
+    INCS_READLINE=
+    #LIBS_READLINE=-lreadline -lhistory
+    #DEFS_READLINE=-DUSE_READLINE
+    #INCS_READLINE=-I /opt/local/include/readline -I /opt/local/include
+
+    CFLAGS_CC=-Wno-tautological-compare
+else
+    LIBS_READLINE=-lreadline -lhistory
+    DEFS_READLINE=-DUSE_READLINE
+    INCS_READLINE=-I /usr/include/readline
+
+    CFLAGS_CC=
+endif
+
+DEFINES=$(DEFS_READLINE)
+LIBS=$(LIBS_READLINE) -ldl
+INCLUDES=-I include $(INCS_READLINE)
+
+CFLAGS=$(CFLAGS_CC) -g $(DEFINES) $(INCLUDES)
 
 FTLEXTS = ftlext-test.so
 

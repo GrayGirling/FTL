@@ -12,18 +12,20 @@
 #ifdef WIN32
 
 #include "windows.h"
-typedef HINSTANCE dll_t;
+typedef HINSTANCE dllib_t;
 #define DLL_NONE 0
 #define ERRNL    /* characters needed to follow error with a new line */
 
 #else /* assume Linux */
 
 #include <dlfcn.h>
-typedef void *dll_t;
+typedef void *dllib_t;
 #define DLL_NONE NULL
 #define ERRNL "\n" /* characters needed to follow error with a new line */
 
 #endif
+
+
 
 typedef void *libfn_t;
 
@@ -35,13 +37,13 @@ typedef void *libfn_t;
  *  \return DLL_NONE iff the library failed to load
  *  On failure \c liberror_alloc() can be used to return an error string
  */
-extern dll_t load_library(const char *filepath);
+extern dllib_t load_library(const char *filepath);
 
 /*! Unload the library */
-extern int /*rc*/ free_library(dll_t lib);
+extern int /*rc*/ free_library(dllib_t lib);
 
 /*! Find the value of a symbol exported by a loaded library */
-extern libfn_t lib_sym(dll_t lib, const char *sym);
+extern libfn_t lib_sym(dllib_t lib, const char *sym);
 
 /*******************/
 /* Library Locking */
@@ -113,7 +115,7 @@ typedef struct libfn_ref_s {
 
 /* Treat the following as an opaque data type */
 typedef struct {
-   dll_t lib;                         /* loaded library */
+   dllib_t lib;                         /* loaded library */
    struct libfn_ref_s *known_dll_fns; /* list of cached functions */
    char path[256];                    /* name of library file */
 } libfn_cache_t;
@@ -137,7 +139,7 @@ libfn_cache_init(libfn_cache_t *cache, const char *path, const char *libleaf);
 /*! Attempt to load the library
  *  \return DLL_NONE iff the library failed to load
  */
-extern dll_t
+extern dllib_t
 libfn_cache_load(libfn_cache_t *cache);
 
 /*! Attempt to unload the library
