@@ -9,7 +9,6 @@
 *Makefile*      text
 *.mk            text
 *.txt           text
-*.html          text
 *.xml           text
 *.css           text
 *.py            text
@@ -38,6 +37,10 @@
 *.lib           binary
 *.jpg           binary
 *.pdf           binary
+
+
+# prevent unwanted changes
+*.html          binary
 
 
 * text=auto
