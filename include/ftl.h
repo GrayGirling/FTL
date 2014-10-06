@@ -53,11 +53,14 @@ extern "C" {
 #define bool  int
 #define true  1
 #define false 0
-#define __bool_true_false_are_defined
+#define __bool_true_false_are_defined 1
 #endif
 
 #ifndef TRUE
 #define TRUE  true
+#endif
+
+#ifndef FALSE
 #define FALSE false
 #endif
 
@@ -151,9 +154,11 @@ thread_new(thread_main_fn_t *main, thread_work_t *work, size_t stacksize);
 
 extern int /* rc */
 thread_rc(thread_os_t thread);
-    
+
 extern bool
 thread_active(thread_os_t thread);
+
+  
 
 extern thread_os_t
 thread_self(void);
@@ -885,6 +890,7 @@ dir_struct_update(const value_t **ref_value,
 
 
 
+
 /*          Array Directories			                     */
 
 typedef struct 
@@ -1425,10 +1431,12 @@ ftl_init(void);
 extern void
 ftl_end(void);
 
+  
 
 #ifdef __cplusplus
 }
 #endif
+
 
 
 #endif /* _FTL_H */

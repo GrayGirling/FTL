@@ -240,10 +240,10 @@
 #endif
 
 
+#include "libdyn.h"
+#include "filenames.h"
 #include "ftl.h"
 #include "ftl_internal.h"
-#include "filenames.h"
-#include "libdyn.h"
 #include "ftlext.h"
 #define STRING(_x) #_x
 
@@ -507,6 +507,8 @@
 
 
 
+
+
 #ifndef HAS_VSNPRINTF
 
 
@@ -584,7 +586,6 @@ static wint_t ftl_towlower(wint_t wc)
 
 
 #ifdef _WIN32
-
 
 
 
@@ -9307,7 +9308,7 @@ dir_fs_new(const char *dirname)
 
 typedef struct 
 {   dir_id_t dir;
-    dll_t lib;
+    dllib_t lib;
     bool fixed;
     const value_t *libnameval;
     const char *libname;  /* redundantly implied by dirnameval */
@@ -9347,7 +9348,7 @@ static void dir_lib_markver(const value_t *value, int heap_version)
 
 typedef struct {
     dir_t *valdir;
-    dll_t lib;
+    dllib_t lib;
 } libsym_enum_args_t;
 
 
@@ -10483,7 +10484,7 @@ dir_stack_get(dir_t *basedir, const value_t *name)
     if (NULL != dirstack && NULL != dirstack->stack)
     {   dir_t *dir = dirstack->stack;
 
-	if (dir != basedir);
+	if (dir != basedir)
 	{   DEBUGDIR(DPRINTF("dir_stack: first get name %p in dir %p\n",
 			     name, dir);)
 	    while (dir != NULL && 
@@ -20201,7 +20202,7 @@ my_memmem(const char *buf, size_t len, const char *find, size_t findlen)
 
 
 /* find a C-NULL-terminated string in a buffer */
-static char *strnstr(const char *buf, size_t len, const char *find)
+static char *my_strnstr(const char *buf, size_t len, const char *find)
 {
     /* No nulls in sought string - so if it occurs it must always occur
        in a null-terminated section of buf.
@@ -20251,7 +20252,7 @@ static char *strnstrn(const char *buf, size_t len,
            /* both strings are 'c' string terminated */
            return strstr(buf, find);
        else
-           return strnstr(buf, len, find);
+           return my_strnstr(buf, len, find);
    } else if (findlen0 < findlen) {
        /* There's a NULL in the find string */
        if (len0 == len)
@@ -20273,7 +20274,7 @@ static char *strnstrn(const char *buf, size_t len,
 
            while (NULL == p &&
                   buf < last &&
-                  NULL != (sp = strnstr(buf, end-buf, find)) &&
+                  NULL != (sp = my_strnstr(buf, end-buf, find)) &&
                   sp <= last &&
                   findlen0 == strlen(sp))
            {

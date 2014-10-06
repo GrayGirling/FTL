@@ -78,20 +78,18 @@ extern void strerror_free(const char *errmsg)
 
 #ifdef WIN32
 
-typedef HINSTANCE dll_t;
-
 /* Basic library loading and lookup */
 
-extern dll_t load_library(const char *path)
+extern dllib_t load_library(const char *path)
 {  return LoadLibraryEx(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 }
-extern int /*rc*/free_library(dll_t h)
+extern int /*rc*/free_library(dllib_t h)
 {  if (FreeLibrary(h))
       return 0;
    else
       return 1;
 }
-extern libfn_t lib_sym(dll_t lib, const char *sym)
+extern libfn_t lib_sym(dllib_t lib, const char *sym)
 {   return (libfn_t)GetProcAddress(lib, sym);
 }
 
@@ -114,18 +112,16 @@ extern void liberror_free(const char *errmsg)
 #define __stdcall
 #endif
 
-typedef void *dll_t;
-
 /* Basic library loading and lookup */
 
-extern dll_t load_library(const char *path)
+extern dllib_t load_library(const char *path)
 {  //return dlopen(path, RTLD_NOW);
    return dlopen(path,RTLD_LAZY);
 }
-extern int/*rc*/ free_library(dll_t lib)
+extern int/*rc*/ free_library(dllib_t lib)
 {  return dlclose(lib);
 }
-extern libfn_t lib_sym(dll_t lib, const char *sym)
+extern libfn_t lib_sym(dllib_t lib, const char *sym)
 {  return dlsym(lib, sym);
 }
 
@@ -235,8 +231,8 @@ libfn_cache_init(libfn_cache_t *cache, const char *path, const char *libleaf)
 }
 
 
-extern dll_t libfn_cache_load(libfn_cache_t *cache)
-{  dll_t lib = load_library(&cache->path[0]);
+extern dllib_t libfn_cache_load(libfn_cache_t *cache)
+{  dllib_t lib = load_library(&cache->path[0]);
    cache->lib = lib;
    return lib;
 }

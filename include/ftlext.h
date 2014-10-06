@@ -38,8 +38,8 @@
 #ifndef _FTLEXT_H
 #define _FTLEXT_H
 
-#include "ftl.h"
 #include "sharedlib.h"
+#include "ftl.h"
 
 #define FTL_EXTENSION_MAIN _ftl_main
 
