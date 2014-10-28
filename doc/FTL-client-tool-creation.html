@@ -1,0 +1,254 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html><head><meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL Client Tool Creation</title>
+  <meta content="Gray Girling" name="author">
+</head><body>
+<h1><span dir="ltr">Writing New FTL Client Tools<br>
+</span></h1>
+<h3 align="left">
+</h3>
+
+
+<p>A llibrary, called "libftl", is available that can be used to extend
+existing, or create new, interactive command line interfaces. </p>
+
+<p>It can be embedded into any number of command line utilities. The
+'ftl' tool is available for testing (just) the library itself. </p>
+<h2>Overview</h2>
+
+<p>This library provides a framework for the execution of textual commands.  It's main features are </p>
+
+<ul>
+<li> command lines can be read from many sources including the terminal and files 
+</li><li> command lines from the terminal have history and "readline" support on Linux 
+</li><li> macro substitution and long-line processing are dealt with 
+</li><li> will read initial lines from a ".rc" file 
+</li><li> C functions that implement new commands are easily written and include help text 
+</li><li> provides a number of built-in commands, including "help", "set", "source" 
+</li><li> a small language, <a href="https://sites.google.com/site/graygirling/ftl">FTL</a>, is available for extending the set of
+commands, manipulating values returned by commands, obtaining values
+from the system etc. </li>
+</ul>
+
+<p>Below there are sections describing </p>
+
+<ul>
+<li> Simple Use - all you need to read in order to make use of the library 
+</li><li> Built-in Commands - some "free" commands you can give your user 
+</li>
+</ul>
+<a href="https://sites.google.com/site/graygirling/ftl/command-line-tutorial">Elsewhere</a> you can find more information about:<br>
+<ul>
+<li> FTL expressions - how values are generated in the built-in language 
+</li><li> Scripting - ways that you and your user can extend the functionality of your interpreter 
+</li><li> Control information available to scripts - command line, environment, file and windows registry access 
+</li><li> The FTL script-testing utility: ftl </li>
+</ul>
+
+
+<h2>Simple Use</h2>
+
+<p>This example code defines a small number of commands including a "sleep" command. 
+</p>
+
+<pre style="margin-left: 40px;"> <br>#include &lt;unistd.h&gt; /* for sleep() */ <br> <br>#include "ci/efabcfg/ftl.h" <br> <br>: <br>: <br> <br>static const value_t * <br>cmd_sleep(const char **ref_line, const value_t *this_cmd, parser_state_t *state) <br>{   number_t duration_s; <br>     <br>    if (parse_int_expr(ref_line, state, &amp;duration_s) &amp;&amp;  <br>        parse_empty(ref_line)) <br>    {   sleep(duration_s); <br>    } else <br>        parser_report_help(state, this_cmd); <br> <br>    return &amp;value_null; <br>} <br> <br> <br> <br>static void <br>cmds_mine(dir_t *cmds) <br>{   mod_add(cmds, "dothis", "&lt;syntax&gt; - do this", &amp;cmd_dothis); <br>    mod_add(cmds, "dothat", "&lt;thatstuff&gt; - do that", &amp;cmd_dothat); <br>    : <br>    mod_add(cmds, "sleep", "&lt;number&gt; - sleeps for &lt;number&gt; seconds", &amp;cmd_sleep); <br>    --       cmd name ^    help ^           function implementing command ^ <br>} <br> <br>: <br>: <br> <br>extern int <br>main(int argc, char **argv) <br>{   const char *init = NULL;               -- pre-execution string <br>    char *app_argv[APP_ARGC_MAX]; <br>    int app_argc = 0; <br>     <br>    ftl_init();                            -- initialize library <br> <br>    if (parse_args(argc, argv, .. &amp;init, &amp;app_argc, &amp;app_argv, APP_ARGC_MAX)) <br>    {   parser_state_t *state = parser_state_new(dir_id_new()); <br>                                           -- create a place to put commands etc. <br>        if (NULL != state) <br>        {   cmds_generic(state, app_argc, app_argv); <br>                                           -- add pre-defined generic commands <br>  <br>            cli(state, init, "mytester");  -- run the command line interpreter <br>            -- commands ^     ^ name of utility <br>            parser_state_free(state);      -- discard state <br>        } <br>    } else <br>        usage(); <br>     <br>   ftl_end();                              -- finalize library <br>   return 0; <br>} <br> <br></pre>
+
+<p>In the above <tt>init</tt> can be set to a string (such
+as "sleep; echo done; exit") which will be executed before commands are
+taken from the terminal. The <tt>app_argc</tt> and <tt>app_argv</tt> values optionally give scripts access to command line arguments.  (The function <tt>parse_args</tt> is not provided as part of the library.) 
+The string <tt>"mytester"</tt> provides a name for the utility that will be used when providing error messages etc. 
+</p>
+
+
+<h3>Parsing Support</h3>
+
+<p>Each command function has the form: 
+</p>
+
+<pre style="margin-left: 40px;">static value_t * <br>cmd_sleep(const char **ref_line, value_t *this_cmd, parser_state_t *state) <br></pre>
+
+ 
+in which: 
+<ul>
+<li> <i>ref_line</i> is a pointer to a pointer to a zero terminated string of arguments 
+</li><li> <i>this_cmd</i> represents the command that is being executed 
+</li><li> <i>state</i> indirects to various pieces of information such as the execution stack and the list of commands currently in scope </li>
+</ul>
+
+<p>The argument line has already been assembled from input text -
+splitting at each ";", combining lines ending "\", and expanding any
+macros (specified as "$&lt;name&gt;" or "${&lt;name&gt;}") etc. </p>
+
+<p>The command must update ref_line to point to the end of the
+string, otherwise the interpreter will warn that there was unparsed
+input. </p>
+
+<p>A number of functions are available to help with this with the general format: 
+</p>
+
+<pre>bool parse_&lt;something&gt;(const char **ref_line, &lt;output args&gt;) <br></pre>
+
+ which can conveniently be combined (for simple command lines)
+into a single if condition that checks the correctness of the syntax.
+In general each function will parse a &lt;something&gt;, updating
+ref_line to skip over it if successful. 
+<p>These functions include: 
+</p>
+
+<table border="1" cellpadding="3" cellspacing="0">
+
+<tbody>
+<tr>
+<td>parse_empty(ref_line);                      </td>
+<td> succeeds only if the line contains no more characters - this should always be called as a final parse function </td>
+</tr>
+<tr>
+<td>parse_white(ref_line);                      </td>
+<td> true iff there is leading white space on the line (and fails if there is not) </td>
+</tr>
+<tr>
+<td>parse_space(ref_line);                      </td>
+<td> always true - this function simply skips over any white space </td>
+</tr>
+<tr>
+<td>parse_key(ref_line, "keyword");             </td>
+<td> true iff the text "keyword" is next on the line </td>
+</tr>
+<tr>
+<td>parse_int(ref_line, &amp;longint);              </td>
+<td> true iff the next characters specify a decimal number </td>
+</tr>
+<tr>
+<td>parse_hex(ref_line, &amp;usigned_longint);      </td>
+<td> true iff the next character specify a hexadecimal number </td>
+</tr>
+<tr>
+<td>parse_hex_width(ref_line, width, &amp;unsigned_longint); </td>
+<td> true iff the next &lt;width&gt; characters specify a hexadecimal number </td>
+</tr>
+<tr>
+<td>parse_int_val(ref_line, &amp;longint);          </td>
+<td> true iff the next characters are a number specified [-]0x&lt;hex&gt; or [-]&lt;decimal&gt; </td>
+</tr>
+<tr>
+<td>parse_int_expr(ref_line, state, &amp;longint)   </td>
+<td>
+true iff the next characters can be parsed as a numeric expression
+potentially involving brackets, +, -, *, /, rsh, lsh, ge, le, gt, lt,
+==, != with the normal priorities (rsh &amp; lsh are shifts) - an ftl
+expression can occur (only) within brackets </td>
+</tr>
+<tr>
+<td>parse_item(ref_line, delims, ndelims, buf, len); </td>
+<td> true iff there is a non-empty item of non-delimiter characters - which are placed in the buffer provided </td>
+</tr>
+<tr>
+<td>parse_id(ref_line, buf, len);               </td>
+<td> true iff there is an identifier (alphabetic or '_' followed by alphanumerics or '_') which is written to the buffer provided </td>
+</tr>
+<tr>
+<td>parse_string(ref_line, buf, len);           </td>
+<td> true iff there is a string beginning " or ' - written to the buffer </td>
+</tr>
+<tr>
+<td>parse_string_expr(ref_line, state, buf, len, &amp;string_value) </td>
+<td>
+true iff the next characters can be parsed as a numeric expression
+potentially involving brackets and + (concatenation) - an ftl
+expression can occur (only) within brackets </td>
+</tr>
+<tr>
+<td>parse_itemstr(ref_line, buf, len);          </td>
+<td> true iff there is either an item or a string on the command line </td>
+</tr>
+<tr>
+<td>parse_ipaddr(ref_line, &amp;ipaddr);            </td>
+<td> true iff there is a dotted quad (n.n.n.n) on the command line </td>
+</tr>
+<tr>
+<td>parse_macaddr(ref_line, &amp;macaddr);          </td>
+<td> true iff there is a mac address (h:h:h:h:h:h) on the command line </td>
+</tr>
+</tbody>
+</table>
+
+<p>For example to parse the syntax "&lt;integer&gt; [name
+&lt;string&gt;] &lt;possibly-quoted-item&gt;" the following could be
+used </p>
+
+<pre>    char **ref_line = ... /* position in string to be parsed */ <br>    int i; <br>    bool name_is_set; <br>    char name[32]; <br>    char item[32]; <br>     <br>    if (parse_int_val(ref_line, &amp;i) &amp;&amp;  <br>        parse_space(ref_line) &amp;&amp; <br> <br>        (!(name_is_set = parse_key(ref_line, "name")) ||  <br>         (parse_space(ref_line) &amp;&amp;  <br>          parse_string(ref_line, &amp;name[0], sizeof(name)) &amp;&amp;  <br>          parse_space(ref_line)) <br>        ) &amp;&amp; <br> <br>        parse_itemstr(ref_line, &amp;item[0], sizeof(item)) &amp;&amp; <br>        parse_empty(ref_line)) <br>    { <br>        /* function using i, name_is_set, name and item */ <br>    }  <br>    else <br>        /* syntax error */ <br>        ... <br></pre>
+
+
+<h3>Subcommands</h3>
+
+<p>It is possible to specify a set of commands as a kind of command itself.  For example if the <i>cmds_mine</i> function above had been written as follows: 
+</p>
+
+<pre style="margin-left: 40px;">static void <br>cmds_mine(mod_t *cmds) <br>{   dir_t *mycmds = dir_id_new(); <br> <br>    if (NULL != mycmds) <br>    {   mod_add(mycmds, "dothis", "&lt;syntax&gt; - do this", &amp;cmd_dothis); <br>        mod_add(mycmds, "dothat", "&lt;thatstuff&gt; - do that", &amp;cmd_dothat); <br>        : <br>        mod_add(mycmds, "sleep", "&lt;number&gt; - sleeps for &lt;number&gt; seconds", &amp;cmd_sleep); <br> <br>        mod_add_dir(cmds, "my", mycmds); <br>    } <br>} <br></pre>
+
+<p>then commands "my dothis", "my dothat", ... "my sleep", "my help"
+would be available in place of "dothis", "dothat" ... "sleep". The
+command "help" is predefined by the library and will be able to be used
+as "my help" - showing help about only the "my" subcommands. </p>
+
+<p>There is also another way to add commands by adding new
+functions to the testing language - this is described "Adding built-in
+commands" below. </p>
+
+
+<h2>Built-in Commands</h2>
+
+<p>In the above example the line 
+</p>
+
+<pre>        cmds_generic(state); <br></pre>
+
+ 
+provides a number of commands (that may grow in the future).  They are divided into groups with prefixes 
+<ul>
+<li> &lt;none&gt; - language features 
+</li><li> io - input and output 
+</li><li> sys - operating system interface 
+</li><li> parse - language parsing library 
+</li><li> reg - Windows registry (Windows only) </li>
+</ul>
+
+<p>The language features can be divided into those for: </p>
+
+<ul>
+<li> Program control 
+</li><li> General features 
+</li><li> Types 
+</li><li> Booleans 
+</li><li> Integers 
+</li><li> Environments and directories 
+</li><li> Character handling 
+</li><li> Input and Output 
+</li><li> Parser interface 
+</li><li> Operating System interface 
+</li><li> Windows-only interface </li>
+</ul>
+These are described in more detail <a href="https://sites.google.com/site/graygirling/ftl/ftl-user-guide">elsewhere</a>.<br>
+<br>
+<h2>Adding FTL Functions</h2>
+<p>"Simple Use", above described how a command that parses its own arguments can be created. 
+</p>
+
+<p>It is also possible to add FTL functions - which are presented
+with a fixed number of FTL values to operate on. For example, the
+implementation of the "rnd" functions is: </p>
+
+<pre>    static const value_t * <br>    fn_rnd(const value_t *this_fn, parser_state_t *state) <br>    {   const value_t *upb = parser_builtin_arg(state, 1); /* get the first argument */ <br>        const value_t *val = &amp;value_null;                  /* default return value */ <br>     <br>        if (value_istype(upb, type_int)) <br>        {   number_t upbval = value_int_number(upb); <br>            val = value_int_new((int)(((float)upbval)*rand()/(RAND_MAX+1.0))); <br>        } else <br>            parser_report_help(state, this_fn); <br> <br>        return val; <br>    } <br></pre>
+
+ 
+and it was added to the functions in the library using 
+<pre>    mod_addfn(cmds, "rnd", <br>              "&lt;n&gt; - return random number less than &lt;n&gt;",  &amp;fn_rnd, /*no of args*/ 1); <br></pre>
+
+<p>Other functions can easily be added. FTL values can be of a number
+of types including: null values, type values, integer values, string
+values, FTL code values, environment values, closure values, and stream
+values. Each of these has their own support provided by functions
+declared in the header "ftl.h". </p>
+
+  
+
+</body></html>
