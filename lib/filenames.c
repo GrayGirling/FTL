@@ -188,14 +188,12 @@ extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
       WIN32_FIND_DATA FindFileData;
       DWORD dwAttrs;
       char subdir[256];
-      unsigned int item_count = 0;
-      int i = 0;
       bool cont = TRUE;
-      
+
       if (OS_FS_SEP == directory[dirnamelen-1])
          dirnamelen--;
       memcpy(subdir, directory, dirnamelen);
-      
+
       subdir[dirnamelen+0] = OS_FS_SEP;
       subdir[dirnamelen+1] = '*';
       subdir[dirnamelen+2] = '\0';
@@ -206,10 +204,10 @@ extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
       if (!success){
          error_printf("%s: can't open '%s' as a directory - (rc %d)\n",
                       codeid(), subdir, (int)GetLastError());
-      } else      
+      } else
       do {
          subdir[dirnamelen] = '\0';
-         
+
          if (hFind == INVALID_HANDLE_VALUE){
             error_printf("%s: can't get next file in '%s' - (rc %d)\n",
                          codeid(), subdir, (int)GetLastError());
@@ -260,13 +258,13 @@ extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
       int rc;
       DIR *dir_ptr;
       char subdir[256];
-      
+
       success = TRUE;
       if (OS_FS_SEP == directory[dirnamelen-1])
          dirnamelen--;
       memcpy(&subdir[0], directory, dirnamelen);
       subdir[dirnamelen] = '\0';
-         
+
       dir_ptr = opendir(directory); /* still valid even if ends OS_FS_SEP */
 
       if (dir_ptr == NULL)

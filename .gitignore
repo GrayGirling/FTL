@@ -42,6 +42,9 @@ TAGS
 # cscope files
 cscope.*
 
+# Build products
+/ftl
+
 # Temporary make files
 MetaWare/VideoCore/mk/vcvars.mk
 MetaWare/VideoCore/mk/vcvars.sh
@@ -75,3 +78,6 @@ MetaWare/VideoCore/driver/*.env
 
 # Eclipse settings
 /.settings
+
+# Mac meta files
+.DS_Store
