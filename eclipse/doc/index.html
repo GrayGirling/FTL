@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<html xmlns="http://www.w3.org/1999/xhtml"
+ xmlns:xlink="http://www.w3.org/1999/xlink">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+  <title>Setting up Eclipse</title>
+  <meta name="generator" content="Amaya, see http://www.w3.org/Amaya/" />
+</head>
+
+<body>
+<h1>Using Eclipse to Develop FTL Code</h1>
+
+<p>Eclipse is a powerful Integrated Development Environment that you can use to
+write, develop and debug C applications (among other things) on your Windows,
+Mac or Linux computer.</p>
+
+<p>Find out (much) more about it <a href="https://eclipse.org/">here</a> and
+download the 'lunar' release <a
+href="https://eclipse.org/downloads/packages/eclipse-ide-cc-developers/lunasr1a">here</a>.</p>
+
+<p>There are two ways in which Eclipse can be used:</p>
+<ol>
+  <li>To develop the FTL library</li>
+  <li>To develop a new FTL-using utility</li>
+</ol>
+
+<h1>Eclipse Workspace Location</h1>
+
+<p>The Eclipse projects provided are designed to be placed in a subdirectory
+held in the same directory as the Git source. (That is both the Eclipse
+workspace subdirectory and the git subdirectory should be in the same
+directory.)</p>
+
+<p>For example the following commands would create two directories 'FTL' and
+'ws' for the git sources and the Eclipse workspace respectively.</p>
+
+<p style="margin-left:2em">git clone https://github.com/GrayGirling/FTL.git</p>
+
+<p style="margin-left:2em">mkdir ws</p>
+
+<p>Once created you should select the sibling directory ('ws' above) as the
+workspace Eclipse normally asks for when it starts. (If your Eclipse does not
+use File &gt; Change Workspace... to select it after it starts.)</p>
+
+<h1>Developing a new FTL-using utility</h1>
+
+<p>Two Eclipse projects are available to import from the 'ecliipse'
+subdirectory of the FTL git repository. They are</p>
+<ul>
+  <li>ftl_bin_dev - this project contains pre-compiled versions of the FTL
+    library and their associated headers</li>
+  <li>ftl_cmd - this project contains a simple example project for creating the
+    FTL-using utility called 'ftl' - all it does is supports ftl commands. You
+    can use it as a proforma for developing your own utility.</li>
+</ul>
+
+<p>If you have a new workspace it will contain no projects. To import these
+projects in to the workspace use File &gt; Import ... then select the type of
+import you want to make under General &gt; Existing Projects into Workspace
+(Next&gt;). Use the 'select archive file' radio button and browse to
+FTL/eclipse where you can select the relevant project.</p>
+
+<p>Do this for both the above projects.</p>
+
+<p>After archive ftl_bin_dev.zip is imported the following projects will
+appear:</p>
+<ul>
+  <li>release_Debug - containing the binaries and headers to use when building
+    utilities for debug; and</li>
+  <li>release_Release - containing the non-debug binraries and headers.</li>
+</ul>
+
+<p>On importing the ftl_cmd-project.zip file this project will be created</p>
+<ul>
+  <li>ftl_cmd - containing the source of a simple utility 'ftl'. </li>
+</ul>
+
+<p>There are many versions of the utility that can be built depending on which
+operating system you use. To select the one you want to build select the
+ftl_lib project and right-click selecting Build Configurations &gt; Set
+Active.</p>
+
+<h1>Developing the FTL Library</h1>
+
+<p>Two Eclipse projects are available to import from the 'eclipse' subdirectory
+of the FTL git repository. They are</p>
+<ul>
+  <li>ftl_bin_dev - this project contains pre-compiled versions of the FTL
+    library and their associated headers.</li>
+  <li>ftl_lib-project - this project contains the FTL library source. When it
+    is built it copies new content into ftl_bin_dev.</li>
+</ul>
+
+<p>If you have a new workspace it will contain no projects. To import these
+projects in to the workspace use File &gt; Import ... then select the type of
+import you want to make under General &gt; Existing Projects into Workspace
+(Next&gt;). Use the 'select archive file' radio button and browse to
+FTL/eclipse where you can select the relevant project.</p>
+
+<p>Do this for both the above projects.</p>
+
+<p>After archive ftl_bin_dev.zip is imported the following projects will
+appear:</p>
+<ul>
+  <li>release_Debug - containing the binaries and headers to use when building
+    utilities for debug; and</li>
+  <li>release_Release - containing the non-debug binraries and headers.</li>
+</ul>
+
+<p>On importing archive ftl_lib-project.zip this project will appear:</p>
+
+<p>ftl_lib - containing the source of the FTL library.</p>
+
+<p>When ftl_lib is built binaries are copied into the relevant "release_'
+project (where it can be picked up by FTL-using utilities)</p>
+
+<p>As well as debug and non-debug releases the library can support the open
+source 'readline' library. When it does support this library and commands are
+typed to a FTL-using utility it is possible to access a line history and
+perform a fair amount of line editing. These features are not necessarily
+available when 'readline' is not provided.</p>
+
+<p>Your system must be able to provide 'readline' in order to build the
+readline versions of the libraries (e.g. Windows does not). Also, because
+readline is available through a GNU Public License (GPL) there are some
+restrictions about what you can do with the utility you build. (Essentially you
+may have to make its source publically available.)</p>
+
+<p>There are four versions of the library that can be built:</p>
+<ul>
+  <li>a debug version without any 'readline' support (libftln)</li>
+  <li>a debug version with 'readline' support (libftl)</li>
+  <li>a non-debug version without any "readline' support (libftln)</li>
+  <li>a non-debug version with 'readline' support (libftl)</li>
+</ul>
+
+<p>The one that is to be built can be selected by a debug configuration (select
+the ftl_lib project and right-click selecting Build Configurations &gt; Set
+Active).</p>
+
+<p></p>
+<svg:svg xmlns:svg="http://www.w3.org/2000/svg" width="1034" height="300"
+     style="margin-left: auto; margin-right: auto">
+  <svg:image xlink:href=""/>
+</svg:svg>
+</body>
+</html>
