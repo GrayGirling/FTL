@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+      "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=iso-8859-1" />
+  <title>FTL-build-setup</title>
+  <meta name="generator" content="Amaya, see http://www.w3.org/Amaya/" />
+</head>
+
+<body>
+<h2>Recommended Build Environments</h2>
+
+<p>This code can be built under Windows, Linux and Mac OSX. Each has a
+recommended tool set that may need to be installed before building is
+possible.</p>
+
+<p>In brief the tools are as follows:</p>
+<ul>
+  <li>Windows - MinGW (minmalist GNU for Windows)</li>
+  <li>Linux - standard gcc tools from the Linux distribution</li>
+  <li>Mac OS X - the MacPort tools</li>
+</ul>
+
+<h2>Windows Build Environment - MinGW</h2>
+
+<p>Install MinGW <a href="http://www.mingw.org/">http://www.mingw.org/</a> by
+downloading the installer 'mingw-get-setup.exe' from <a
+href="http://sourceforge.net/projects/mingw/files/">http://sourceforge.net/projects/mingw/files/</a>.</p>
+<ul>
+  <li>During installation (run and click on the 'Install' button)</li>
+  <li>(Keep the graphical interface.)</li>
+  <li>Wait for the download.</li>
+  <li>Click on 'Continue' button when it has finished.</li>
+  <li>Select 'mingw32-32-gcc-g++' and 'mingw32-base' and 'msys-base'</li>
+  <li>Click on menu Installation &gt; Apply Changes</li>
+  <li>Then on the Apply button in the next dialogue 'Schedule of Pending
+    Actions'</li>
+  <li>Wait for the download to complete, then click on 'Close'</li>
+</ul>
+
+<p>Normally this will normally install the tools at C:\MinGW</p>
+
+<p>Install Eclipse https://eclipse.org/ from its download page choosing
+'Eclipse IDE for C/C++ Developers' and either the 32- or 64-bit version as
+corresponding to your version of Windows.</p>
+
+<h2>Linux Build Environment - Local</h2>
+
+<p>Each Linux distribution has a 'package manager' using that you can easily
+install the tools you need as packages. The name of the appropriate package may
+varay from distribution to distribution.</p>
+
+<p>In general you should look for the package which provides you with the 'gcc'
+compiler. These are example commands that you may need to run</p>
+<ul>
+  <li>Redhat Enterprise or Centos Linux distribution: rpm -ivh gcc</li>
+  <li>Fedora Linux distribution: yum install gcc</li>
+  <li>Debian or Ubuntu Linux distribution: apt-get install gcc</li>
+</ul>
+
+<p>Note that you will usually need to be running as 'root' when installing new
+software. Often this can be achieved by putting the command 'sudo' in front of
+the relevant command.</p>
+
+<h2>Mac OS X Build Environment - MacPort</h2>
+
+<p></p>
+
+<p></p>
+
+<p></p>
+</body>
+</html>

@@ -24,6 +24,13 @@ href="https://eclipse.org/downloads/packages/eclipse-ide-cc-developers/lunasr1a"
   <li>To develop a new FTL-using utility</li>
 </ol>
 
+<p>Before you can build libraries or utilities in C or C++ you will need to
+ensure that your operating system has the appropriate tools installed. This
+process is described in the documentation at <a
+href="../../doc/FTL-build-setup.html">FTL-build-setup</a>.</p>
+
+<p></p>
+
 <h1>Eclipse Workspace Location</h1>
 
 <p>The Eclipse projects provided are designed to be placed in a subdirectory
@@ -77,8 +84,19 @@ appear:</p>
 
 <p>There are many versions of the utility that can be built depending on which
 operating system you use. To select the one you want to build select the
-ftl_lib project and right-click selecting Build Configurations &gt; Set
-Active.</p>
+ftl_lib project and right-click selecting Build Configurations &gt; Set Active.
+The name of each build configuration is made up of three parts:</p>
+<ol>
+  <li>Release_ or Debug_ depending on whether you need a debuggable version of
+    the utility</li>
+  <li>Linux, Mac or MinGW depending on which operating system you are using
+    (use MinGW for Windows)</li>
+  <li>Optionally '_norl' for versions that do not use the 'readline' library
+    (and are therefore not subject to its licensing conditions)</li>
+</ol>
+
+<p>For example a version for debugging on Linux with 'readline' support will be
+built with the build configuration 'Debug_Linux'.</p>
 
 <h1>Developing the FTL Library</h1>
 
@@ -137,6 +155,18 @@ may have to make its source publically available.)</p>
 <p>The one that is to be built can be selected by a debug configuration (select
 the ftl_lib project and right-click selecting Build Configurations &gt; Set
 Active).</p>
+
+<p>Before you can use Eclipse to build any of the above you will need to set
+the toolset appropriately. You can do this by selecting the ftl_lib project and
+right-click selecting Properties. Expand the C/C++ Build section and select
+Tool Chain Editor. In that dialogue under 'Current Toolchain' select the </p>
+
+<p>following from the dropdown list:</p>
+<ul>
+  <li>on Windows select 'MinGW GCC'</li>
+  <li>on Linux select 'Linux GCC'</li>
+  <li>on Mac OSX select 'MacOSX GCC'</li>
+</ul>
 
 <p></p>
 <svg:svg xmlns:svg="http://www.w3.org/2000/svg" width="1034" height="300"
