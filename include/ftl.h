@@ -389,6 +389,7 @@ typedef enum
     type_cmd,
     type_func,
     type_coroutine,
+    type_mem,
 } type_t;
 
 

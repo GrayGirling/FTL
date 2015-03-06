@@ -98,6 +98,20 @@ The name of each build configuration is made up of three parts:</p>
 <p>For example a version for debugging on Linux with 'readline' support will be
 built with the build configuration 'Debug_Linux'.</p>
 
+<p>Once you have set the active project you can clean and/or build it by
+selecting the relevant entry when right-clicking on the project.</p>
+
+<p>The utility created by the build will be copied in to your workspace
+directory
+'release_&lt;Release|Debug&gt;/&lt;operating_system&gt;_&lt;architecture&gt;/bin'.</p>
+
+<p>The code files in this project can be found in your workspace. They are a
+copy of those in the git repository, and updating them has no effect on the
+versions held by git. You may safely, for example, rename 'ftl.c' to the name
+of your own utility. You can also rename the project.</p>
+
+<p></p>
+
 <h1>Developing the FTL Library</h1>
 
 <p>Two Eclipse projects are available to import from the 'eclipse' subdirectory
@@ -167,6 +181,16 @@ Tool Chain Editor. In that dialogue under 'Current Toolchain' select the </p>
   <li>on Linux select 'Linux GCC'</li>
   <li>on Mac OSX select 'MacOSX GCC'</li>
 </ul>
+
+<p>Once you have set the active project you can clean and/or build it by
+selecting the relevant entry when right-clicking on the project.</p>
+
+<p>The library created by the build will be copied in to your workspace
+directory
+'release_&lt;Release|Debug&gt;/&lt;operating_system&gt;_&lt;architecture&gt;/lib'.</p>
+
+<p>If you have an Eclipse project to build your own utility project set up as
+above it will use the new library when it is cleaned and rebuilt.</p>
 
 <p></p>
 <svg:svg xmlns:svg="http://www.w3.org/2000/svg" width="1034" height="300"

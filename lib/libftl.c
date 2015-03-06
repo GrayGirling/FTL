@@ -3495,6 +3495,8 @@ type_name(type_t kind)
 	    return "macaddr";
 	case type_coroutine:
 	    return "coroutine";
+	case type_mem:
+	    return "mem";
 	default:
 	    return "<UnknownType>";
     }
@@ -3534,6 +3536,8 @@ parse_type(const char **ref_line, type_t *out_type_id)
 	*out_type_id = type_macaddr;
     else if (parse_key(ref_line, type_name(type_coroutine)))
 	*out_type_id = type_coroutine;
+    else if (parse_key(ref_line, type_name(type_mem)))
+	*out_type_id = type_mem;
     else
 	ok = FALSE;
 
@@ -13509,6 +13513,320 @@ value_func_lhv_new(const value_t *lv_name)
 
 /*****************************************************************************
  *                                                                           *
+ *          Memory                                                           *
+ *          ======					                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+typedef struct value_mem_s value_mem_t;
+
+typedef enum {
+    mem_can_write,  /* writeable */
+    mem_can_cache,  /* read - this program controls values uniquely   */
+    mem_can_read,   /* readable - without causing side effects */
+    mem_can_get     /* readable - even if side effect caused */
+} mem_attr_t;
+
+/*! bit map of attibutes - set of (1<<mem_attr_t) */
+typedef unsigned char mem_attr_map_t;
+
+
+
+/*! Read a block of memory
+ *  @param mem             memory object to read
+ *  @param byte_index      index of first byte to read
+ *  @param buf             buffer where result should be stored
+ *  @param buflen          number of bytes to read (and size of buffer)
+ *  @param force_volatile  read even if side effect will be caused
+ */
+typedef bool /*ok*/
+mem_read_fn_t(value_mem_t *mem, size_t byte_index,
+              void *buf, size_t buflen, bool force_volatile);
+
+
+/*! Write a block of memory
+ *  @param mem             memory object to read
+ *  @param byte_index      index of first byte to read
+ *  @param buf             buffer containing bytes to be written
+ *  @param buflen          number of bytes to write (and size of buffer)
+ */
+typedef bool /*ok*/
+mem_write_fn_t(value_mem_t *mem, size_t byte_index,
+               const void *buf, size_t buflen);
+
+
+/*! Return size of next area of memory with given attributes
+ *
+ *  @param mem             memory object to read
+ *  @param byte_index      index of first byte proposed
+ *  @param unable          size area without the given ability (not with)
+ *  @param ability         bitmap of memory attributes required
+ *
+ *  Returns a number of bytes that have the ability requested starting at the
+ *  given byte index.  If the proposed byte does not have the requested
+ *  ability return zero.
+ *
+ *  This function may return a number that is smaller than the whole following
+ *  consecutive area with the given ability, but must not return zero if bytes
+ *  with that attribute are available.  (This may result in some inefficiency
+ *  however.)
+ *
+ *  For a given unable/ability setting the function must imply a block of the
+ *  same size for all other byte indeces in that block.
+ *
+ *  Smaller-than-possible values will make larger accesses invalid.
+ */
+typedef size_t /*len*/
+mem_len_able_fn_t(value_mem_t *mem, size_t byte_index,
+                  bool unable, mem_attr_map_t ability);
+
+
+/*! Return base of an area of memory with given attributes ending at an index
+ *
+ *  @param mem             memory object to read
+ *  @param byte_index      index of first byte proposed
+ *  @param unable          base of area without the given ability (not with)
+ *  @param ability         bitmap of memory attributes required
+ *
+ *  Returns the byte index of the start of an area incorporating the byte_index
+ *  all the bytes of which have the ability requested.  If the proposed byte
+ *  does not have the requested ability return zero.
+ *
+ *  This function may return a number that is smaller than the whole previous
+ *  consecutive area with the given ability.  (This may result in some
+ *  inefficiency however.)
+ *
+ *  For a given unable/ability setting the function must imply a block of the
+ *  same size for all other byte indeces in that block.
+ */
+typedef size_t /*base*/
+mem_base_able_fn_t(value_mem_t *mem, size_t byte_index,
+                   bool unable, mem_attr_map_t ability);
+
+
+
+struct value_mem_s
+{   value_t value;           /* memory used as a value */
+    mem_read_fn_t *read;
+    mem_write_fn_t *write;
+    mem_len_able_fn_t *len_able;
+    mem_len_able_fn_t *base_able;
+} /* value_mem_t */;
+
+
+
+
+#define value_mem_value(mem) (&(mem)->value)
+
+
+
+
+
+static int
+value_mem_print(outchar_t *out, const value_t *root, const value_t *value)
+{   int n = 0;
+    (void)root;
+    if (value != NULL && value_istype(value, type_mem))
+    {   n += outchar_printf(out, "<:memory:>");
+    }
+    return n;
+}
+
+
+
+
+
+#if 0
+static void
+value_mem_markver(const value_t *value, int heap_version)
+{
+    value_mem_t *mem = (value_mem_t *)value;
+    value_mark_version((value_t *)mem->field, heap_version);
+}
+#endif
+
+
+
+
+STATIC_INLINE value_t *
+value_mem_init(value_mem_t *mem, value_delete_fn_t *delete_fn,
+   	       value_markver_fn_t *mark_version_fn,
+               mem_read_fn_t *read_fn, mem_write_fn_t *write_fn,
+               mem_len_able_fn_t *len_able_fn, mem_len_able_fn_t *base_able_fn)
+{   value_t *initval;
+    mem->read = read_fn;
+    mem->write = write_fn;
+    mem->len_able = len_able_fn;
+    mem->base_able = base_able_fn;
+    initval = value_init(&mem->value, type_mem, &value_mem_print,
+		         /*compare*/NULL, delete_fn, mark_version_fn);
+    return initval;
+}
+
+
+
+
+#if 0
+extern value_t *value_mem_new(const value_t *lv_name)
+{   value_mem_t *mem = (value_mem_t *)
+	                     FTL_MALLOC(sizeof(value_mem_t));
+
+    if (NULL != func)
+        return value_mem_init(func, &value_func_delete, lv_name);
+    else
+	return NULL;
+}
+#endif
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Binary String Memory                                             *
+ *          ====================                 	                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+typedef struct value_mem_bin_s value_mem_bin_t;
+
+
+struct value_mem_bin_s {
+    value_mem_t mem;
+    number_t base;
+    const value_t *binstr;
+};
+
+
+
+
+static void
+value_mem_bin_markver(const value_t *value, int heap_version)
+{
+    value_mem_bin_t *binmem = (value_mem_bin_t *)value;
+    value_mark_version((value_t *)binmem->binstr, heap_version);
+}
+
+
+
+static bool /*rc*/
+value_mem_bin_read(value_mem_t *mem, size_t byte_index,
+                   void *buf, size_t buflen, bool force_volatile)
+{
+    value_t *val = &value_null;
+    value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
+    const value_t *binstr = binmem->binstr;
+    number_t base = binmem->base;
+    const char *bin;
+    size_t binlen;
+    bool ok = value_string_get(binstr, &bin, &binlen) &&
+              byte_index >= base &&
+              byte_index + buflen <= base + binlen;
+
+    if (ok) {
+        val = value_substring_new(binstr, byte_index - base, buflen);
+    }
+    return ok;
+}
+
+
+
+
+static size_t /*len*/
+value_mem_bin_len_able(value_mem_t *mem, size_t byte_index,
+                       bool unable, mem_attr_map_t ability)
+{
+    value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
+    const char *bin;
+    size_t binlen;
+    bool ok = value_string_get(binmem->binstr, &bin, &binlen);
+    size_t len = 0;
+
+    if (ok) {
+        /* */printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd %sable\n",
+                    codeid(), binmem->base, byte_index, binlen, unable?"un":"");
+        if (unable) {
+            if (byte_index < binmem->base)
+                len = binmem->base - byte_index;
+            else if (byte_index >= binmem->base + binlen)
+                len = 0; /* there is no next area */
+        } else {
+            if (byte_index >= binmem->base &&
+                byte_index < binmem->base + binlen)
+                len = binmem->base + binlen - byte_index;
+        } 
+        if (0 != (ability | (1 << mem_can_write)))
+            len = 0; /* we can't write */
+    }
+    return len;
+}
+
+
+
+static size_t /*base*/
+value_mem_bin_base_able(value_mem_t *mem, size_t byte_index,
+                        bool unable, mem_attr_map_t ability)
+{
+    value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
+    const char *bin;
+    size_t binlen;
+    bool ok = value_string_get(binmem->binstr, &bin, &binlen);
+    size_t base = 0;
+
+    if (ok) {
+        if (unable) {
+            if (byte_index < binmem->base)
+                base = 0;
+            else if (byte_index >= binmem->base + binlen)
+                base = binmem->base + binlen;
+        } else {
+            if (byte_index >= binmem->base &&
+                byte_index < binmem->base + binlen)
+                base = binmem->base;
+        }
+        if (0 != (ability | (1 << mem_can_write)))
+            base = 0; /* we need something to indicate 'no base' */
+    }
+    return base;
+}
+
+
+
+
+extern value_t *
+value_mem_bin_new(const value_t *binstr, number_t base)
+{   value_mem_bin_t *binmem = (value_mem_bin_t *)
+                              FTL_MALLOC(sizeof(value_mem_bin_t));
+
+    if (binmem != NULL) {
+        binmem->binstr = binstr;
+        binmem->base = base;
+        return value_mem_init(&binmem->mem, /* delete_fn */NULL,
+                              &value_mem_bin_markver,
+                              &value_mem_bin_read,
+                              /*write*/NULL/*read-only*/,
+                              &value_mem_bin_len_able,
+                              &value_mem_bin_base_able);
+    } else
+	return NULL;
+}
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Modules 					                     *
  *          =======					                     *
  *                                                                           *
@@ -22154,6 +22472,315 @@ cmds_generic_registry(parser_state_t *state, dir_t *cmds)
 
 /*****************************************************************************
  *                                                                           *
+ *          Commands - Memory			                             *
+ *          ==================		                                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+
+static bool value_mem_cast(const value_t *val, value_mem_t **out_mem)
+{
+    bool ok = false;
+    if (value_type_equal(val, type_null))
+        fprintf(stderr, "%s: memory object is NULL\n", codeid());
+    else
+        ok =value_istype(val, type_mem);
+
+    if (ok)
+        *out_mem = (value_mem_t *)val;
+    else
+        *out_mem = NULL;
+    return ok;
+}
+
+
+
+
+
+static const value_t *
+fn_mem_write(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = value_false;
+    const value_t *memval = parser_builtin_arg(state, 1);
+    const value_t *ixval = parser_builtin_arg(state, 2);
+    const value_t *strval = parser_builtin_arg(state, 3);
+    const char *binstr;
+    size_t binstrlen;
+    value_mem_t *mem;
+
+    if (value_mem_cast(memval, &mem) && mem->write != NULL &&
+        value_istype(ixval, type_int) &&
+        value_string_get(strval, &binstr, &binstrlen))
+    {
+        size_t ix = (size_t)value_int_number(ixval);
+        size_t writeable =
+            (*mem->len_able)(mem, ix, /*unable*/false, 1 << mem_can_write);
+
+        if (writeable >= binstrlen) {
+            bool ok = (*mem->write)(mem, ix, binstr, binstrlen);
+            if (ok)
+                val = value_true;
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+genfn_mem_read(const value_t *this_fn, parser_state_t *state,
+               mem_attr_map_t abilities, bool force_volatile)
+
+{   const value_t *val = &value_null;
+    const value_t *memval = parser_builtin_arg(state, 1);
+    const value_t *ixval = parser_builtin_arg(state, 2);
+    const value_t *lenval = parser_builtin_arg(state, 3);
+    value_mem_t *mem;
+
+    if (value_mem_cast(memval, &mem) && mem->read != NULL &&
+        value_istype(ixval, type_int) &&
+        value_istype(lenval, type_int))
+    {
+        size_t ix = (size_t)value_int_number(ixval);
+        size_t len = (size_t)value_int_number(lenval);
+        size_t bytes_able =
+            (*mem->len_able)(mem, ix, /*unable*/false, abilities);
+
+        /* */printf("%s: need %zd got %zd bytes\n", codeid(), len, bytes_able);
+        if (bytes_able >= len) {
+            char *str = NULL;
+            value_t *strval = value_string_alloc_new(len, &str);
+            if (strval != NULL) {
+                bool ok = (*mem->read)(mem, ix, str, len, force_volatile);
+
+                if (ok)
+                    val = strval;
+                else
+                    value_delete(&strval);
+            }
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_mem_read(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_read(this_fn, state, 1 << mem_can_read,
+                          /*force_volatile*/FALSE);
+}
+
+
+
+
+static const value_t *
+fn_mem_get(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_read(this_fn, state, 1 << mem_can_get,
+                          /*force_volatile*/TRUE);
+}
+
+
+
+
+static bool
+parse_mem_attr(const char *attrstr, size_t len, mem_attr_map_t *out_abilities)
+{   mem_attr_map_t abilities = 0;
+    bool ok = TRUE;
+    while (ok && len-- > 0) {
+        switch (attrstr[0])
+        {   case 'R': case 'r': abilities |= 1 << mem_can_read; break;
+            case 'G': case 'g': abilities |= 1 << mem_can_get; break;
+            case 'W': case 'w': abilities |= 1 << mem_can_write; break;
+            case 'C': case 'c': abilities |= 1 << mem_can_write; break;
+            default: ok = FALSE; break;
+        }
+        attrstr++;
+    }
+    *out_abilities = abilities;
+    return ok;
+}
+
+
+
+
+static const value_t *
+genfn_mem_len_able(const value_t *this_fn, parser_state_t *state, bool unable)
+
+{   const value_t *val = NULL;
+    const value_t *memval = parser_builtin_arg(state, 1);
+    const value_t *ability = parser_builtin_arg(state, 3);
+    const value_t *ixval = parser_builtin_arg(state, 2);
+    value_mem_t *mem;
+    const char *attrstr;
+    size_t strlen;
+    mem_attr_map_t abilities = 0;
+
+    if (value_mem_cast(memval, &mem) &&
+        value_istype(ixval, type_int) &&
+        value_string_get(ability, &attrstr, &strlen) &&
+        parse_mem_attr(attrstr, strlen, &abilities))
+    {
+        size_t ix = (size_t)value_int_number(ixval);
+        size_t bytes_able =
+            (*mem->len_able)(mem, ix, unable, abilities);
+        val = value_int_new(bytes_able);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_mem_len_can(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_len_able(this_fn, state, /*able*/TRUE);
+}
+
+
+
+
+static const value_t *
+fn_mem_len_cant(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_len_able(this_fn, state, /*able*/FALSE);
+}
+
+
+
+
+static const value_t *
+genfn_mem_base_able(const value_t *this_fn, parser_state_t *state, bool unable)
+
+{   const value_t *val = value_false;
+    const value_t *memval = parser_builtin_arg(state, 1);
+    const value_t *ability = parser_builtin_arg(state, 3);
+    const value_t *ixval = parser_builtin_arg(state, 2);
+    value_mem_t *mem;
+    const char *attrstr;
+    size_t attrlen;
+    mem_attr_map_t abilities = 0;
+
+    if (value_mem_cast(memval, &mem) &&
+        value_istype(ixval, type_int) &&
+        value_string_get(ability, &attrstr, &attrlen) &&
+        parse_mem_attr(attrstr, attrlen, &abilities))
+    {
+        size_t ix = (size_t)value_int_number(ixval);
+        size_t baseix =
+            (*mem->base_able)(mem, ix, unable, abilities);
+        val = value_int_new(baseix);
+
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_mem_base_can(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_base_able(this_fn, state, /*able*/TRUE);
+}
+
+
+
+
+static const value_t *
+fn_mem_base_cant(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_base_able(this_fn, state, /*able*/FALSE);
+}
+
+
+
+
+static const value_t *
+fn_mem_bin(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = value_false;
+    const value_t *baseval = parser_builtin_arg(state, 1);
+    const value_t *binstrval = parser_builtin_arg(state, 2);
+
+    if (value_istype(baseval, type_int) &&
+        value_istype(binstrval, type_string))
+    {
+        number_t base = value_int_number(baseval);
+        val = value_mem_bin_new(binstrval, base);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static void
+cmds_generic_mem(parser_state_t *state, dir_t *cmds)
+{
+    dir_t *mem = dir_id_new();
+
+    mod_add_dir(cmds, "mem", mem);
+    mod_addfn(mem, "write",
+	      "<mem> <ix> <str> - write binary string at index to memory",
+	      &fn_mem_write, 3);
+    mod_addfn(mem, "read",
+	      "<mem> <ix> <len> - read <len> string at <ix> in memory",
+	      &fn_mem_read, 3);
+    mod_addfn(mem, "get",
+	      "<mem> <ix> <len> - force read <len> string at <ix> in memory",
+	      &fn_mem_get, 3);
+    mod_addfn(mem, "len_can",
+	      "<mem> [rwgc] <ix> - return length of area at <ix> that can do ops",
+	      &fn_mem_len_can, 3);
+    mod_addfn(mem, "len_cant",
+	      "<mem> [rwgc] <ix> - return length of area at <ix> that can not do ops",
+	      &fn_mem_len_cant, 3);
+
+    mod_addfn(mem, "base_can",
+	      "<mem> [rwgc] <ix> - return start of area ending at <ix> that can do ops",
+	      &fn_mem_base_can, 3);
+    mod_addfn(mem, "base_cant",
+	      "<mem> [rwgc] <ix> - return start of area ending at <ix> that can do ops",
+	      &fn_mem_base_cant, 3);
+    mod_addfn(mem, "bin",
+	      "<base> <string> - create mem with base index and read-only string",
+	      &fn_mem_bin, 2);
+#if 0
+    mod_addfn(mem, "dump",
+	      "<mem> <entrysz> <linen> <ixfmt> <fmt> <eolfmt> - dump content of memory)",
+	      &fn_mem_dump, 6);
+    mod_addfn(mem, "block",
+	      "@<string> - create mem from read-write string",
+	      &fn_mem_block, 1);
+    mod_addfn(mem, "seg",
+	      "<mem> <orig> <ix> <len> - create mem with start entries <orig> from memory)",
+	      &fn_mem_seg, 4);
+    mod_addfn(mem, "memobj",
+	      "<fns> - create mem from fns read,write,get,len_attr,base_attr",
+	      &fn_memobj, 1);
+#endif
+}
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Commands - Misc				                     *
  *          ===============						     *
  *                                                                           *
@@ -22350,6 +22977,7 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     cmds_generic_macaddr(state, cmds);
     cmds_generic_closure(state, cmds);
     cmds_generic_dir(state, cmds);
+    cmds_generic_mem(state, cmds);
 
     mod_add(cmds,
 	    "every", "<n> <command> - repeat command every <n> ms",

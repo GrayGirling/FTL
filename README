@@ -2,3 +2,11 @@ This is the FTL library written by Gray Girling while at Solarflare
 Communications Inc.
 
 Please see the LICENSE file in this directory.
+
+You can find (web format) documentation in directory 'doc' once you have cloned
+this repository.
+
+(Typically this command can be used to clone the repository into a new
+directory called 'FTL'):
+
+git clone https://github.com/GrayGirling/FTL.git
