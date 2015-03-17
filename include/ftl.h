@@ -370,7 +370,19 @@ extern int
 report_line(charsink_t *sink, linesource_t *source, const char *format, ...);
 
 
+/*          Memory Display				                     */
 
+    
+/*! Print out an area of memory in bytes, half-words or words */
+extern void
+mem_dump(const void *buf, unsigned addr, int entries, int sz_ln2,
+         const char *addr_format, int addr_unit_size, bool with_chars);
+
+/*! Print out an area of memory in bytes, half-words or words */
+extern unsigned /* no of units different */
+mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
+             int sz_ln2, const char *addr_format, int addr_unit_size,
+             bool with_chars);
     
 
 /*          Types 					                     */
@@ -538,6 +550,10 @@ value_string_update(const value_t **ref_value, const char *str);
 
 extern bool
 value_string_get(const value_t *value, const char **out_buf, size_t *out_len);
+
+extern const value_t *
+value_string_get_terminated(const value_t *value, const char **out_buf,
+                            size_t *out_len);
 
 extern const char *
 value_string_chars(const value_t *string);

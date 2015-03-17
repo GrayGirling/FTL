@@ -429,6 +429,7 @@
 /* #define DEBUGRCFILE DO */
 /* #define DEBUGEXECV DO */
 /* #define DEBUGCMP DO */
+/* #define DEBUGMEMDIFF DO */
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUGGC
@@ -445,6 +446,7 @@
 #undef DEBUGEXECV
 #undef DEBUGRCFILE
 #undef DEBUGCMP
+#undef DEBUGMEMDIFF
 #endif
 
 
@@ -490,6 +492,9 @@
 #endif
 #ifndef DEBUGCMP
 #define DEBUGCMP IGNORE
+#endif
+#ifndef DEBUGMEMDIFF
+#define DEBUGMEMDIFF IGNORE
 #endif
 
 /* #define DPRINTF ci_log */
@@ -5465,6 +5470,9 @@ typedef struct
 #define value_string_value(str) value_stringbase_value(&(str)->base)
 
 
+value_string_t value_string_empty_str;
+
+const value_t *value_string_empty = value_string_value(&value_string_empty_str);
 
 
 
@@ -5516,7 +5524,6 @@ value_cstring_init(value_string_t *str, const char *string, size_t len,
 #define value_cstring_init(str, string, len, delete) \
     value_info((value_cstring_init)(str, string, len, delete), __LINE__)
 #endif
-
 
 
 
@@ -5706,6 +5713,13 @@ value_string_get_terminated(const value_t *strval,
 }
 
 
+
+
+
+static void
+values_string_init(void)
+{   value_cstring_init(&value_string_empty_str,  "", 0, /*delete*/NULL);
+}
 
 
 
@@ -11204,12 +11218,12 @@ value_closure_compare(const value_t *v1, const value_t *v2)
 
 static value_t *
 value_closure_init(value_closure_t *closure, const value_t *code,
-		   value_env_t *env, value_delete_fn_t *delete)
+		   value_env_t *env, value_delete_fn_t *delete_fn)
 {   value_t *initval;
     closure->code = code;
     closure->env = env;
     initval = value_init(&closure->value, type_closure, &value_closure_print,
-		         &value_closure_compare, delete,
+		         &value_closure_compare, delete_fn,
 			 &value_closure_markver);
     value_unlocal(value_env_value(env));
     value_unlocal(code);
@@ -11607,10 +11621,10 @@ value_coroutine_print(outchar_t *out,
 
 
 static void
-value_coroutine_init(parser_state_t *state, value_delete_fn_t *delete,
+value_coroutine_init(parser_state_t *state, value_delete_fn_t *delete_fn,
 		     dir_stack_t *env, dir_t *root, dir_t *opdefs)
 {   value_init(&state->value, type_coroutine, &value_coroutine_print,
-	       /*compare*/NULL, delete, &value_coroutine_markver);
+	       /*compare*/NULL, delete_fn, &value_coroutine_markver);
     linesource_init(&state->source);
     state->env = env;
     state->echo_cmds = FALSE;
@@ -13179,13 +13193,13 @@ value_cmd_markver(const value_t *value, int heap_version)
 
 STATIC_INLINE value_t *
 value_cmd_init(value_cmd_t *cmd, cmd_fn_t *exec, const value_t *fn_exec,
-	       const char *help,  value_delete_fn_t *delete)
+	       const char *help,  value_delete_fn_t *delete_fn)
 {   value_t *initval;
     cmd->exec = exec;
     cmd->help = help;
     cmd->fn_exec = fn_exec;
     initval = value_init(&cmd->value, type_cmd, &value_cmd_print,
-		         /*compare*/NULL, delete, &value_cmd_markver);
+		         /*compare*/NULL, delete_fn, &value_cmd_markver);
     value_unlocal(fn_exec);
     return initval;
 }
@@ -13316,13 +13330,13 @@ value_func_print(outchar_t *out, const value_t *root, const value_t *value)
 
 STATIC_INLINE value_t *
 value_func_init(value_func_t *func, func_fn_t *exec, const char *help,
-		int args, void *implicit, value_delete_fn_t *delete)
+		int args, void *implicit, value_delete_fn_t *delete_fn)
 {   func->exec = exec;
     func->help = help;
     func->args = args;
     func->implicit = implicit;
     return value_init(&func->value, type_func, &value_func_print,
-		      /*compare*/NULL, delete, /*mark*/NULL);
+		      /*compare*/NULL, delete_fn, /*mark*/NULL);
 }
 
 
@@ -13477,7 +13491,7 @@ fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
 
 
 STATIC_INLINE value_t *
-value_func_lhv_init(value_func_lhv_t *func, value_delete_fn_t *delete,
+value_func_lhv_init(value_func_lhv_t *func, value_delete_fn_t *delete_fn,
 		    const value_t *lv_name)
 {   value_t *initval;
     func->lv_name = lv_name;
@@ -13485,7 +13499,7 @@ value_func_lhv_init(value_func_lhv_t *func, value_delete_fn_t *delete,
     func->fn.help = "- assign value to name";
     func->fn.args = 1;
     initval = value_init(&func->fn.value, type_func, &value_func_lhv_print,
-		         /*compare*/NULL, delete, &value_func_lhv_markver);
+		         /*compare*/NULL, delete_fn, &value_func_lhv_markver);
     value_unlocal(lv_name);
     return initval;
 }
@@ -13525,10 +13539,10 @@ value_func_lhv_new(const value_t *lv_name)
 typedef struct value_mem_s value_mem_t;
 
 typedef enum {
-    mem_can_write,  /* writeable */
-    mem_can_cache,  /* read - this program controls values uniquely   */
-    mem_can_read,   /* readable - without causing side effects */
-    mem_can_get     /* readable - even if side effect caused */
+    mem_can_cache = 1, /* any access this program controls values uniquely   */
+    mem_can_write,     /* writeable */
+    mem_can_read,      /* readable - without causing side effects */
+    mem_can_get        /* readable - even if side effect caused */
 } mem_attr_t;
 
 /*! bit map of attibutes - set of (1<<mem_attr_t) */
@@ -13672,11 +13686,10 @@ value_mem_init(value_mem_t *mem, value_delete_fn_t *delete_fn,
 
 #if 0
 extern value_t *value_mem_new(const value_t *lv_name)
-{   value_mem_t *mem = (value_mem_t *)
-	                     FTL_MALLOC(sizeof(value_mem_t));
+{   value_mem_t *mem = (value_mem_t *)FTL_MALLOC(sizeof(value_mem_t));
 
     if (NULL != func)
-        return value_mem_init(func, &value_func_delete, lv_name);
+        return value_mem_init(func, &value_delete_alloced, lv_name);
     else
 	return NULL;
 }
@@ -13719,11 +13732,22 @@ value_mem_bin_markver(const value_t *value, int heap_version)
 
 
 
+static void
+value_mem_bin_delete(value_t *value)
+{   if (value != (value_t *)NULL) {
+        value_mem_bin_t *binmem = (value_mem_bin_t *)value;
+        value_delete((value_t **)&binmem->binstr);
+    }
+    value_delete_alloced(value);
+}
+
+
+
+
 static bool /*rc*/
 value_mem_bin_read(value_mem_t *mem, size_t byte_index,
                    void *buf, size_t buflen, bool force_volatile)
 {
-    value_t *val = &value_null;
     value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
     const value_t *binstr = binmem->binstr;
     number_t base = binmem->base;
@@ -13733,8 +13757,34 @@ value_mem_bin_read(value_mem_t *mem, size_t byte_index,
               byte_index >= base &&
               byte_index + buflen <= base + binlen;
 
-    if (ok) {
-        val = value_substring_new(binstr, byte_index - base, buflen);
+    if (ok)
+        memcpy(buf, bin+byte_index-base, buflen);
+
+    return ok;
+}
+
+
+
+
+static bool
+value_mem_bin_write(value_mem_t *mem, size_t byte_index,
+                    const void *buf, size_t buflen)
+{
+    value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
+    const value_t *binstr = binmem->binstr;
+    number_t base = binmem->base;
+    const char *bin;
+    size_t binlen;
+    bool ok = value_string_get(binstr, &bin, &binlen) &&
+              byte_index >= base &&
+              byte_index + buflen <= base + binlen;
+
+    IGNORE(printf("%s: bin write %zd[%zd] in %"F_NUMBER_T"[%zd] %s\n", codeid(),
+                  byte_index, buflen, base, binlen, ok? "OK": "failed"););
+    if (ok)
+    {   char *writeable_bin = (char *)bin;
+        /* we will use this function only on writeable strings */
+        memcpy(writeable_bin+byte_index-base, buf, buflen);
     }
     return ok;
 }
@@ -13743,8 +13793,8 @@ value_mem_bin_read(value_mem_t *mem, size_t byte_index,
 
 
 static size_t /*len*/
-value_mem_bin_len_able(value_mem_t *mem, size_t byte_index,
-                       bool unable, mem_attr_map_t ability)
+value_mem_bin_len_able_ro(value_mem_t *mem, size_t byte_index,
+                          bool unable, mem_attr_map_t ability)
 {
     value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
     const char *bin;
@@ -13753,20 +13803,56 @@ value_mem_bin_len_able(value_mem_t *mem, size_t byte_index,
     size_t len = 0;
 
     if (ok) {
-        /* */printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd %sable\n",
-                    codeid(), binmem->base, byte_index, binlen, unable?"un":"");
+        number_t membase = binmem->base;
         if (unable) {
-            if (byte_index < binmem->base)
-                len = binmem->base - byte_index;
-            else if (byte_index >= binmem->base + binlen)
+            if (byte_index < membase)
+                len = membase - byte_index;
+            else if (byte_index >= membase + binlen)
                 len = 0; /* there is no next area */
         } else {
-            if (byte_index >= binmem->base &&
-                byte_index < binmem->base + binlen)
-                len = binmem->base + binlen - byte_index;
-        } 
-        if (0 != (ability | (1 << mem_can_write)))
+            if (byte_index >= membase &&
+                byte_index < membase + binlen)
+                len = membase + binlen - byte_index;
+        }
+        if (0 != (ability & (1 << mem_can_write)))
             len = 0; /* we can't write */
+
+        IGNORE(printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd "
+                      "%sable 0x%X - gives len %zd\n",
+                      codeid(), membase, byte_index, binlen, unable?"un":"",
+                      ability, len););
+    }
+    return len;
+}
+
+
+
+static size_t /*len*/
+value_mem_bin_len_able_rw(value_mem_t *mem, size_t byte_index,
+                          bool unable, mem_attr_map_t ability)
+{
+    value_mem_bin_t *binmem = (value_mem_bin_t *)mem;
+    const char *bin;
+    size_t binlen;
+    bool ok = value_string_get(binmem->binstr, &bin, &binlen);
+    size_t len = 0;
+
+    if (ok) {
+        number_t membase = binmem->base;
+        if (unable) {
+            if (byte_index < membase)
+                len = membase - byte_index;
+            else if (byte_index >= membase + binlen)
+                len = 0; /* there is no next area */
+        } else {
+            if (byte_index >= membase &&
+                byte_index < membase + binlen)
+                len = membase + binlen - byte_index;
+        }
+        IGNORE(printf("%s: mem bin base %"F_NUMBER_T" index %zd "
+                      "len %zd %sable 0x%X - gives len %zd\n",
+                      codeid(), membase, byte_index, binlen, unable?"un":"",
+                      ability, len););
     }
     return len;
 }
@@ -13784,17 +13870,18 @@ value_mem_bin_base_able(value_mem_t *mem, size_t byte_index,
     size_t base = 0;
 
     if (ok) {
+        number_t membase = binmem->base;
         if (unable) {
-            if (byte_index < binmem->base)
+            if (byte_index < membase)
                 base = 0;
-            else if (byte_index >= binmem->base + binlen)
-                base = binmem->base + binlen;
+            else if (byte_index >= membase + binlen)
+                base = membase + binlen;
         } else {
-            if (byte_index >= binmem->base &&
-                byte_index < binmem->base + binlen)
-                base = binmem->base;
+            if (byte_index >= membase &&
+                byte_index < membase + binlen)
+                base = membase;
         }
-        if (0 != (ability | (1 << mem_can_write)))
+        if (0 != (ability & (1 << mem_can_write)))
             base = 0; /* we need something to indicate 'no base' */
     }
     return base;
@@ -13804,22 +13891,207 @@ value_mem_bin_base_able(value_mem_t *mem, size_t byte_index,
 
 
 extern value_t *
-value_mem_bin_new(const value_t *binstr, number_t base)
+value_mem_bin_new(const value_t *binstr, number_t base,
+                  bool sole_user, bool readonly)
 {   value_mem_bin_t *binmem = (value_mem_bin_t *)
                               FTL_MALLOC(sizeof(value_mem_bin_t));
 
     if (binmem != NULL) {
         binmem->binstr = binstr;
         binmem->base = base;
-        return value_mem_init(&binmem->mem, /* delete_fn */NULL,
+        return value_mem_init(&binmem->mem,
+                              sole_user? &value_mem_bin_delete:
+                                         &value_delete_alloced,
                               &value_mem_bin_markver,
                               &value_mem_bin_read,
-                              /*write*/NULL/*read-only*/,
-                              &value_mem_bin_len_able,
+                              readonly? NULL: &value_mem_bin_write,
+                              readonly? &value_mem_bin_len_able_ro:
+                                        &value_mem_bin_len_able_rw,
                               &value_mem_bin_base_able);
     } else
 	return NULL;
 }
+
+
+
+
+
+extern value_t *
+value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
+                        char **out_block)
+{   value_t *val = NULL;
+    value_mem_bin_t *binmem = (value_mem_bin_t *)
+                              FTL_MALLOC(sizeof(value_mem_bin_t));
+
+    *out_block = NULL;
+
+    if (binmem != NULL) {
+        value_t *binstr = value_string_alloc_new(len, out_block);
+        IGNORE(printf("%s: binstr %p out_block %p\n", codeid(),
+                      binstr, out_block););
+        if (binstr == NULL || out_block == NULL)
+        {   FTL_FREE(binmem);
+        } else {
+            binmem->binstr = binstr;
+            binmem->base = base;
+            if (memset_val != EOF)
+                memset(*out_block, memset_val, len);
+            val = value_mem_init(&binmem->mem,
+                                 &value_delete_alloced,
+                                 /*&value_mem_bin_delete - if sole user,*/
+                                 &value_mem_bin_markver,
+                                 &value_mem_bin_read,
+                                 &value_mem_bin_write,
+                                 &value_mem_bin_len_able_rw,
+                                 &value_mem_bin_base_able);
+        }
+    }
+    return val;
+}
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Rebased Memory                                                   *
+ *          ==============                 	                             *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+typedef struct value_mem_rebase_s value_mem_rebase_t;
+
+
+struct value_mem_rebase_s {
+    value_mem_t mem;
+    number_t base;
+    value_mem_t *unbase_mem;
+};
+
+
+
+
+static void
+value_mem_rebase_markver(const value_t *value, int heap_version)
+{
+    value_mem_rebase_t *rbmem = (value_mem_rebase_t *)value;
+    value_mark_version((value_t *)rbmem->unbase_mem, heap_version);
+}
+
+
+
+static void
+value_mem_rebase_delete(value_t *value)
+{   if (value != (value_t *)NULL) {
+        value_mem_rebase_t *rbmem = (value_mem_rebase_t *)value;
+        value_delete((value_t **)&rbmem->unbase_mem);
+    }
+    value_delete_alloced(value);
+}
+
+
+
+
+static bool /*rc*/
+value_mem_rebase_read(value_mem_t *mem, size_t byte_index,
+                      void *buf, size_t buflen, bool force_volatile)
+{
+    value_mem_rebase_t *rbmem = (value_mem_rebase_t *)mem;
+    mem_read_fn_t *read_fn = mem->read;
+    bool ok = false;
+
+    if (read_fn != NULL)
+        ok = (*read_fn)(rbmem->unbase_mem, byte_index - rbmem->base,
+                        buf, buflen, force_volatile);
+
+    return ok;
+}
+
+
+
+
+static bool
+value_mem_rebase_write(value_mem_t *mem, size_t byte_index,
+                      const void *buf, size_t buflen)
+{
+    value_mem_rebase_t *rbmem = (value_mem_rebase_t *)mem;
+    mem_write_fn_t *write_fn = mem->write;
+    bool ok = false;
+
+    if (write_fn != NULL)
+        ok = (*write_fn)(rbmem->unbase_mem, byte_index - rbmem->base,
+                         buf, buflen);
+
+    return ok;
+}
+
+
+
+
+static size_t /*len*/
+value_mem_rebase_len_able(value_mem_t *mem, size_t byte_index,
+                          bool unable, mem_attr_map_t ability)
+{
+    value_mem_rebase_t *rbmem = (value_mem_rebase_t *)mem;
+    size_t len = 0;
+    mem_len_able_fn_t *len_able_fn = mem->len_able;
+
+    if (len_able_fn != NULL)
+        len = (*len_able_fn)(rbmem->unbase_mem, byte_index - rbmem->base,
+                              unable, ability);
+
+    return len;
+}
+
+
+
+static size_t /*base*/
+value_mem_rebase_base_able(value_mem_t *mem, size_t byte_index,
+                           bool unable, mem_attr_map_t ability)
+{
+    value_mem_rebase_t *rbmem = (value_mem_rebase_t *)mem;
+    size_t base = 0;
+    mem_base_able_fn_t *base_able_fn = mem->base_able;
+
+    if (base_able_fn != NULL)
+        base = (*base_able_fn)(rbmem->unbase_mem, byte_index - rbmem->base,
+                               unable, ability);
+
+    return base;
+}
+
+
+
+
+extern value_t *
+value_mem_rebase_new(const value_mem_t *unbase_mem,
+                     number_t base, bool readonly, bool sole_user)
+{   value_mem_rebase_t *rbmem = (value_mem_rebase_t *)
+                                FTL_MALLOC(sizeof(value_mem_rebase_t));
+
+    if (rbmem != NULL) {
+        rbmem->unbase_mem = (value_mem_t *)unbase_mem;
+        /* we won't update unbase_mem unless readonly is false */
+        rbmem->base = base;
+        return value_mem_init(&rbmem->mem,
+                              sole_user? &value_mem_rebase_delete:
+                                         &value_delete_alloced,
+                              &value_mem_rebase_markver,
+                              &value_mem_rebase_read,
+                              readonly? NULL: &value_mem_rebase_write,
+                              &value_mem_rebase_len_able,
+                              &value_mem_rebase_base_able);
+    } else
+	return NULL;
+}
+
+
+
 
 
 
@@ -14121,7 +14393,6 @@ static void
 values_bool_init(void)
 {   value_bool_init(&value_int_true,  TRUE, /* delete */NULL);
     value_bool_init(&value_int_false, FALSE, /* delete */NULL);
-
 }
 
 
@@ -19961,6 +20232,134 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
 
 /*****************************************************************************
  *                                                                           *
+ *          Dumping Memory                                                   *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+/*! Print out an area of memory in bytes, half-words or words */
+static int /* entries consumed */
+dumpline(FILE *out, const void *buffer, int entries, int sz_ln2,
+         int perline, bool with_chars)
+{  const unsigned char *buf = (const unsigned char *)buffer;
+   const unsigned char *bufend = &buf[entries<<sz_ln2];
+   int consumed = 0;
+   int i;
+   
+   for (i=0; i<perline; i++) {
+      if (&buf[i<<sz_ln2] < bufend) {
+         unsigned long val = 0;
+         memcpy(&val, &buf[i<<sz_ln2], 1<<sz_ln2);
+         fprintf(out, "%0*lx ", 2<<sz_ln2, val);
+         consumed++;
+      } else
+         fprintf(out, "%*s ", 2<<sz_ln2, "");
+   }
+   if (with_chars) {
+      const unsigned char *cbuf = (const unsigned char *)buffer;
+      fprintf(out,"   ");
+      for (i=0; i<(perline<<sz_ln2); i++) {
+         if (buf+i < bufend) {
+            unsigned char val = cbuf[i];
+            fprintf(out, "%c", isprint(val)? val: '.');
+         } else
+            fprintf(out, " ");
+      }
+   }
+   return consumed;
+}
+
+
+
+
+/*! Print out an area of memory in bytes, half-words or words */
+extern void
+mem_dump(const void *buf, unsigned addr, int entries, int sz_ln2,
+         const char *addr_format, int addr_unit_size, bool with_chars)
+{  int perline=16>>sz_ln2;
+   unsigned linebytes = perline << sz_ln2;
+   FILE *out = stdout;
+
+   while (entries > 0) {
+      int entused;
+      fprintf(out, addr_format, addr/addr_unit_size);
+      entused = dumpline(out, buf, entries, sz_ln2, perline, with_chars);
+      fprintf(out, "\n");
+      entries -= entused;
+      addr += linebytes;
+      buf = (const void *)((const char *)buf + linebytes);
+   }
+}
+
+
+
+
+/*! Print out an area of memory in bytes, half-words or words */
+extern unsigned /* no of units different */
+mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
+             int sz_ln2, const char *addr_format, int addr_unit_size,
+             bool with_chars)
+{  int perline = 8>>sz_ln2;   /* entries per line */
+   FILE *out = stdout;
+   unsigned diffunits = 0;
+   const char *b1 = (const char *)buf1;
+   const char *b2 = (const char *)buf2;
+   size_t totalbytes = units<<sz_ln2;
+   const char *b1end = b1 + totalbytes;
+
+   DEBUGMEMDIFF(printf("%s: diff %d bytes\n", codeid(), b1end - b1););
+   while (b1 < b1end) {
+      int entries = 0;
+      int n = 0;
+      
+      /* skip common prefix */
+      while (&b1[n] < b1end && b1[n] == b2[n])
+         n++;
+
+      DEBUGMEMDIFF(printf("%s: prefix %d bytes\n", codeid(), n););
+      n = n & ~((1<<sz_ln2) - 1);  /* align down */
+      b1 += n;
+      b2 += n;
+      addr += n;
+      n = 0;
+      while (&b1[n] < b1end &&
+             0 != memcmp(&b1[n], &b2[n], 1<<sz_ln2)) {
+         n += 1 <<sz_ln2;
+      }
+      entries = n >> sz_ln2;
+
+      DEBUGMEMDIFF(printf("%s: differ %d bytes %d units\n",
+                          codeid(), n, entries););
+      while (entries > 0) {
+         int entused;
+         int bytused;
+         
+         fprintf(out, addr_format, addr/addr_unit_size);
+         entused = dumpline(out, b1, entries, sz_ln2, perline, with_chars);
+         bytused = entused << sz_ln2;
+         fprintf(out, " | ");
+         (void)dumpline(out, b2, entries, sz_ln2, perline, with_chars);
+         fprintf(out, "\n");
+         entries -= entused;
+         diffunits += entused;
+         addr += bytused;
+         DEBUGMEMDIFF(printf("%s: consumed %d units %d bytes\n",
+                             codeid(), entused, bytused););
+         b1 += bytused;
+         b2 += bytused;
+      }
+   }
+   return diffunits;
+}
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Commands - String				                     *
  *          =================						     *
  *                                                                           *
@@ -20931,8 +21330,6 @@ static const value_t *
 fn_join(const value_t *this_fn, parser_state_t *state)
 {   return genfn_join(this_fn, state, /*as_bytes*/TRUE);
 }
-
-
 
 
 
@@ -22512,18 +22909,20 @@ fn_mem_write(const value_t *this_fn, parser_state_t *state)
     size_t binstrlen;
     value_mem_t *mem;
 
-    if (value_mem_cast(memval, &mem) && mem->write != NULL &&
+    if (value_mem_cast(memval, &mem) &&
         value_istype(ixval, type_int) &&
         value_string_get(strval, &binstr, &binstrlen))
     {
-        size_t ix = (size_t)value_int_number(ixval);
-        size_t writeable =
-            (*mem->len_able)(mem, ix, /*unable*/false, 1 << mem_can_write);
+        if (mem->write != NULL) {
+            size_t ix = (size_t)value_int_number(ixval);
+            size_t writeable =
+                (*mem->len_able)(mem, ix, /*unable*/FALSE, 1 << mem_can_write);
 
-        if (writeable >= binstrlen) {
-            bool ok = (*mem->write)(mem, ix, binstr, binstrlen);
-            if (ok)
-                val = value_true;
+            if (writeable >= binstrlen) {
+                bool ok = (*mem->write)(mem, ix, binstr, binstrlen);
+                if (ok)
+                    val = value_true;
+            }
         }
     } else
         parser_report_help(state, this_fn);
@@ -22544,27 +22943,31 @@ genfn_mem_read(const value_t *this_fn, parser_state_t *state,
     const value_t *lenval = parser_builtin_arg(state, 3);
     value_mem_t *mem;
 
-    if (value_mem_cast(memval, &mem) && mem->read != NULL &&
+    if (value_mem_cast(memval, &mem) &&
         value_istype(ixval, type_int) &&
         value_istype(lenval, type_int))
     {
-        size_t ix = (size_t)value_int_number(ixval);
-        size_t len = (size_t)value_int_number(lenval);
-        size_t bytes_able =
-            (*mem->len_able)(mem, ix, /*unable*/false, abilities);
+        if (mem->read != NULL) {
+            size_t ix = (size_t)value_int_number(ixval);
+            size_t len = (size_t)value_int_number(lenval);
+            size_t bytes_able =
+                (*mem->len_able)(mem, ix, /*unable*/FALSE, abilities);
 
-        /* */printf("%s: need %zd got %zd bytes\n", codeid(), len, bytes_able);
-        if (bytes_able >= len) {
-            char *str = NULL;
-            value_t *strval = value_string_alloc_new(len, &str);
-            if (strval != NULL) {
-                bool ok = (*mem->read)(mem, ix, str, len, force_volatile);
+            IGNORE(printf("%s: need %zd got %zd bytes with ability %X\n",
+                          codeid(), len, bytes_able, abilities););
+            if (len > 0 && bytes_able >= len) {
+                char *str = NULL;
+                value_t *strval = value_string_alloc_new(len, &str);
+                if (strval != NULL) {
+                    bool ok = (*mem->read)(mem, ix, str, len, force_volatile);
 
-                if (ok)
-                    val = strval;
-                else
-                    value_delete(&strval);
-            }
+                    if (ok)
+                        val = strval;
+                    else
+                        value_delete(&strval);
+                }
+            } else if (len == 0 && bytes_able > 0)
+                val = value_string_empty;
         }
     } else
         parser_report_help(state, this_fn);
@@ -22602,7 +23005,7 @@ parse_mem_attr(const char *attrstr, size_t len, mem_attr_map_t *out_abilities)
         {   case 'R': case 'r': abilities |= 1 << mem_can_read; break;
             case 'G': case 'g': abilities |= 1 << mem_can_get; break;
             case 'W': case 'w': abilities |= 1 << mem_can_write; break;
-            case 'C': case 'c': abilities |= 1 << mem_can_write; break;
+            case 'C': case 'c': abilities |= 1 << mem_can_cache; break;
             default: ok = FALSE; break;
         }
         attrstr++;
@@ -22619,8 +23022,8 @@ genfn_mem_len_able(const value_t *this_fn, parser_state_t *state, bool unable)
 
 {   const value_t *val = NULL;
     const value_t *memval = parser_builtin_arg(state, 1);
-    const value_t *ability = parser_builtin_arg(state, 3);
-    const value_t *ixval = parser_builtin_arg(state, 2);
+    const value_t *ability = parser_builtin_arg(state, 2);
+    const value_t *ixval = parser_builtin_arg(state, 3);
     value_mem_t *mem;
     const char *attrstr;
     size_t strlen;
@@ -22646,7 +23049,7 @@ genfn_mem_len_able(const value_t *this_fn, parser_state_t *state, bool unable)
 
 static const value_t *
 fn_mem_len_can(const value_t *this_fn, parser_state_t *state)
-{   return genfn_mem_len_able(this_fn, state, /*able*/TRUE);
+{   return genfn_mem_len_able(this_fn, state, /*unable*/FALSE);
 }
 
 
@@ -22654,7 +23057,7 @@ fn_mem_len_can(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_mem_len_cant(const value_t *this_fn, parser_state_t *state)
-{   return genfn_mem_len_able(this_fn, state, /*able*/FALSE);
+{   return genfn_mem_len_able(this_fn, state, /*unable*/TRUE);
 }
 
 
@@ -22665,8 +23068,8 @@ genfn_mem_base_able(const value_t *this_fn, parser_state_t *state, bool unable)
 
 {   const value_t *val = value_false;
     const value_t *memval = parser_builtin_arg(state, 1);
-    const value_t *ability = parser_builtin_arg(state, 3);
-    const value_t *ixval = parser_builtin_arg(state, 2);
+    const value_t *ability = parser_builtin_arg(state, 2);
+    const value_t *ixval = parser_builtin_arg(state, 3);
     value_mem_t *mem;
     const char *attrstr;
     size_t attrlen;
@@ -22706,6 +23109,70 @@ fn_mem_base_cant(const value_t *this_fn, parser_state_t *state)
 
 
 
+static const value_t *
+genfn_mem_dump(const value_t *this_fn, parser_state_t *state,
+               mem_attr_map_t abilities, bool force_volatile)
+{   const value_t *val = &value_null;
+    const value_t *withchval = parser_builtin_arg(state, 1);
+    const value_t *szval = parser_builtin_arg(state, 2);
+    const value_t *memval = parser_builtin_arg(state, 3);
+    const value_t *ixval = parser_builtin_arg(state, 4);
+    const value_t *lenval = parser_builtin_arg(state, 5);
+    value_mem_t *mem;
+
+    if (value_istype(szval, type_int) &&
+        value_mem_cast(memval, &mem) &&
+        value_istype(ixval, type_int) &&
+        value_istype(lenval, type_int))
+    {
+        if (mem->read != NULL) {
+            unsigned sz_ln2 = (unsigned)value_int_number(szval);
+            if (sz_ln2 > 3)
+                parser_error(state, "ln2 entry size byte length must be "
+                             "less than 4 - but is %u", sz_ln2);
+            else {
+                bool with_chars = !value_bool_is_false(withchval);
+                size_t ix = (size_t)value_int_number(ixval);
+                size_t len = (size_t)value_int_number(lenval);
+                size_t bytes_able =
+                    (*mem->len_able)(mem, ix, /*unable*/FALSE, abilities);
+
+                IGNORE(printf("%s: need %zd got %zd bytes with ability %X\n",
+                              codeid(), len, bytes_able, abilities););
+                if (len > 0 && bytes_able >= len) {
+                    char *buf = malloc(len);
+                    if (buf != NULL) {
+                        bool ok = (*mem->read)(mem, ix, buf, len,
+                                               force_volatile);
+
+                        if (ok) {
+                            int entries = len >> sz_ln2;
+                            const char *addr_format = "%08X: ";
+                            mem_dump(buf, ix, entries, sz_ln2, addr_format,
+                                     /* addr_unit_size */1, with_chars);
+                        }
+
+                        free(buf);
+                    }
+                } 
+            }
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+    
+
+static const value_t *
+fn_mem_dump(const value_t *this_fn, parser_state_t *state)
+{   return genfn_mem_dump(this_fn, state, 1 << mem_can_read,
+                          /*force_volatile*/FALSE);
+}
+
+
 
 static const value_t *
 fn_mem_bin(const value_t *this_fn, parser_state_t *state)
@@ -22717,7 +23184,52 @@ fn_mem_bin(const value_t *this_fn, parser_state_t *state)
         value_istype(binstrval, type_string))
     {
         number_t base = value_int_number(baseval);
-        val = value_mem_bin_new(binstrval, base);
+        val = value_mem_bin_new(binstrval, base,
+                                /*readonly*/TRUE, /*sole_user*/FALSE);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_mem_block(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = value_false;
+    const value_t *baseval = parser_builtin_arg(state, 1);
+    const value_t *lenval = parser_builtin_arg(state, 2);
+
+    if (value_istype(baseval, type_int) &&
+        value_istype(lenval, type_int))
+    {
+        number_t base = value_int_number(baseval);
+        number_t len = value_int_number(lenval);
+        char *block = NULL;
+        val = value_mem_bin_alloc_new(base, len, /*memset_val*/0, &block);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_mem_rebase(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = value_false;
+    const value_t *memval = parser_builtin_arg(state, 1);
+    const value_t *baseval = parser_builtin_arg(state, 2);
+    value_mem_t *mem = NULL;
+
+    if (value_mem_cast(memval, &mem) &&
+        value_istype(baseval, type_int))
+    {
+        number_t base = value_int_number(baseval);
+        val = value_mem_rebase_new(mem, base,
+                                   /*readonly*/FALSE, /*sole_user*/FALSE);
     } else
         parser_report_help(state, this_fn);
 
@@ -22758,13 +23270,16 @@ cmds_generic_mem(parser_state_t *state, dir_t *cmds)
     mod_addfn(mem, "bin",
 	      "<base> <string> - create mem with base index and read-only string",
 	      &fn_mem_bin, 2);
-#if 0
-    mod_addfn(mem, "dump",
-	      "<mem> <entrysz> <linen> <ixfmt> <fmt> <eolfmt> - dump content of memory)",
-	      &fn_mem_dump, 6);
     mod_addfn(mem, "block",
-	      "@<string> - create mem from read-write string",
-	      &fn_mem_block, 1);
+	      "<base> <len> - create block of mem with len bytes and base index",
+	      &fn_mem_block, 2);
+    mod_addfn(mem, "rebase",
+	      "<mem> <base> - place <mem> at byte index <base>",
+	      &fn_mem_rebase, 2);
+    mod_addfn(mem, "dump",
+	      "<wchar> <ln2entryb> <mem> <ix> <len> - dump content of memory",
+	      &fn_mem_dump, 5);
+#if 0
     mod_addfn(mem, "seg",
 	      "<mem> <orig> <ix> <len> - create mem with start entries <orig> from memory)",
 	      &fn_mem_seg, 4);
@@ -23041,6 +23556,7 @@ ftl_init(void)
 {   value_heap_init();
     values_null_init();
     values_int_init();
+    values_string_init();
     values_string_argname_init();
     values_bool_init();
     fprint_init();
