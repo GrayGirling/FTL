@@ -519,8 +519,11 @@ value_int_number(const value_t *value);
 extern const value_t *value_true;
 extern const value_t *value_false;
 
+#define value_bool(val) ((val)?value_true: value_false)
+
 /*          String Values				                     */
 
+/* make a new string - taking a copy of the string area */
 extern value_t *
 value_string_new(const char *string, size_t len);
 
@@ -531,13 +534,15 @@ value_string_new(const char *string, size_t len);
 extern value_t *
 value_string_alloc_new(size_t len, char **out_string);
    
+/*! make a new string - converted from unicode string */
 extern value_t *
 value_wcstring_new(const wchar_t *wcstring, size_t string_wchars);
-/* convert from unicode string */
 
+/*! make new constant string - out of existing string storage
+ *  Use only when you know that the storage has static scope.
+ */
 extern value_t *
 value_cstring_new(const char *string, size_t len);
-/* uncopied const string */
 
 #define value_cstring_new_measured(_string) \
         value_cstring_new(_string, strlen(_string))
@@ -551,6 +556,7 @@ value_string_update(const value_t **ref_value, const char *str);
 extern bool
 value_string_get(const value_t *value, const char **out_buf, size_t *out_len);
 
+/* create a new string that will be followed by '\0' */    
 extern const value_t *
 value_string_get_terminated(const value_t *value, const char **out_buf,
                             size_t *out_len);
