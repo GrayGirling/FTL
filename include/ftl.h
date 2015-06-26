@@ -520,7 +520,11 @@ extern const value_t *value_true;
 extern const value_t *value_false;
 
 #define value_bool(val) ((val)?value_true: value_false)
+#define value_is_bool(val) ((val) == value_true || (val) == value_false)
 
+extern bool value_istype_bool(const value_t *val);
+    
+    
 /*          String Values				                     */
 
 /* make a new string - taking a copy of the string area */
@@ -711,6 +715,16 @@ dir_fprint(FILE *out, const value_t *root, dir_t *dir);
 
 extern dir_t *
 dir_id_new(void);
+
+/*          Integer vector Directories			                     */
+
+extern dir_t *
+dir_vec_new(void);
+
+/*          Composed Directories			                     */
+
+extern dir_t *
+dir_join_new(dir_t *index_dir, dir_t *value_dir);
 
 /*          Field of Array/Structure Definition		                     */
 
@@ -1051,11 +1065,6 @@ dir_array_update(const value_t **ref_value, array_spec_t *spec, bool is_const,
 extern dir_t *
 dir_argvec_new(int argc, const char **argv);
 
-/*          Integer vector Directories			                     */
-
-extern dir_t *
-dir_vec_new(void);
-
 /*          Integer Series Directories			                     */
 
 extern dir_t *
@@ -1351,6 +1360,22 @@ value_func_implicit(const value_t *func); /* deliver implicit arguments */
 extern const char *
 value_func_help(const value_t *func);
 
+/*          Memory 					                     */
+
+extern value_t *
+value_mem_bin_new(const value_t *binstr, number_t base,
+                  bool sole_user, bool readonly);
+
+extern value_t *
+value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
+                        char **out_block);
+
+extern value_t *
+value_mem_rebase_new(const value_t *unbase_mem_val,
+                     number_t base, bool readonly, bool sole_user);
+
+
+    
 /*          Modules 					                     */
 
 extern value_t *

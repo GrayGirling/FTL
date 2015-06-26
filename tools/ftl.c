@@ -298,6 +298,12 @@ parse_args(int argc, char **argv,
 #else
 
 
+
+/* Example use of the FTL_* macros provided in the header to create FTL type
+ * definitions that can be used to acccess specific C datastructures from FTL.
+ * These definitions include the embedding of one type inside another.
+ */
+
 typedef unsigned char mymac_t[6];
 
 typedef struct {
@@ -318,27 +324,38 @@ typedef struct {
 
 typedef test_t testarray_t[3];
 
+/* Definitions of the types above.
+ *
+ * Note: with a little more macro-magic you could make macro definitions
+ *       similar to those below that will expand either to what is below or
+ *       the C type declarations themselves.
+ *       This would eliminate the current redundancy in the type definitions.
+ */
 
+/* FTL definition for array [6] of given type (unsigned char) for mymac_t */
 #define ARRAY_MYMAC(ctx) \
     FTL_TARRAY_BEGIN(ctx, mymac_t)                      \
     FTL_TARRAY_INT(ctx, mymac_t, unsigned char, 6)	\
     FTL_TARRAY_END(ctx)                                 \
 
 
+/* FTL definition for struct type subtest_t with fields a and b and n[4] */
 #define STRUCT_SUBTEST(ctx)					\
     FTL_TSTRUCT_BEGIN(ctx, subtest_t,)				\
     FTL_TFIELD_INT(ctx, subtest_t, int, a)			\
     FTL_TFIELD_INT(ctx, subtest_t, int, b)			\
-	FTL_TFIELD_ARRAYOFINT(ctx, subtest_t, short, n, 4)	\
+    FTL_TFIELD_ARRAYOFINT(ctx, subtest_t, short, n, 4)	        \
     FTL_TSTRUCT_END(ctx)
 
 
+/* FTL definition for array [4] of given type (subtest_array_t) for subtest_t */
 #define ARRAY_SUBTEST(ctx) \
     FTL_TARRAY_BEGIN(ctx, subtest_array_t)                      \
     FTL_TARRAY_STRUCT(ctx, subtest_array_t, subtest_t, 4)	\
     FTL_TARRAY_END(ctx)						\
 
 
+/* FTL definition for struct type test_t with fields fa, fb, fc, fd and x[4] */
 #define STRUCT_TEST(ctx) \
     FTL_TSTRUCT_BEGIN(ctx, test_t, )				\
     FTL_TFIELD_INT(ctx, test_t, unsigned, fa)    		\
@@ -349,13 +366,16 @@ typedef test_t testarray_t[3];
     FTL_TSTRUCT_END(ctx)
 
 
+/* FTL definition for array [2] of given type (type_t) for testarray_t */
 #define ARRAY_TEST(ctx) \
     FTL_TARRAY_BEGIN(ctx, testarray_t)				\
     FTL_TARRAY_STRUCT(ctx, testarray_t, test_t, 2)		\
     FTL_TARRAY_END(ctx)						\
 
 
-
+/* Use the macros above to generate the structures and field access functions
+ * needed to create accessors for the types they describe.
+ */
 FTL_DECLARE(ARRAY_MYMAC)
 FTL_DECLARE(STRUCT_SUBTEST)
 FTL_DECLARE(ARRAY_SUBTEST)
@@ -363,7 +383,8 @@ FTL_DECLARE(STRUCT_TEST)
 FTL_DECLARE(ARRAY_TEST)
 
 static void data_init(void)
-{   FTL_DEFINE(ARRAY_MYMAC)
+{   /* allocate resources needed for the FTL structure definitions */
+    FTL_DEFINE(ARRAY_MYMAC)
     FTL_DEFINE(STRUCT_SUBTEST)
     FTL_DEFINE(ARRAY_SUBTEST)
     FTL_DEFINE(STRUCT_TEST)
@@ -371,13 +392,16 @@ static void data_init(void)
 }
 
 static void data_end(void)
-{   FTL_UNDEFINE(ARRAY_MYMAC)
+{   /* release resources allocated to the FTL structure definitions */
+    FTL_UNDEFINE(ARRAY_MYMAC)
     FTL_UNDEFINE(STRUCT_SUBTEST)
     FTL_UNDEFINE(ARRAY_SUBTEST)
     FTL_UNDEFINE(STRUCT_TEST)
     FTL_UNDEFINE(ARRAY_TEST)
 }
 
+
+/* example areas of memory we will create FTL values to acccess */
 static test_t       test_val;
 static mymac_t      mymac_val;
 static testarray_t  array_val;
@@ -391,14 +415,22 @@ cmds_ftl(parser_state_t *state)
     data_init();
 
     memset(&test_val, 0xff, sizeof(test_val));
-    IGNORE(printf("%s: test val at %p\n", codeid(), &test_val);)
+    IGNORE(printf("%s: test val at %p\n", codeid(), &test_val););
+    
+    /* create read-only variable for test_t test_val */
     mod_add_dir(cmds, "t1", dir_cstruct_new(&FTL_TSPEC(test_t),
 					    /*is_const*/TRUE, &test_val));
+    
+    /* create read-write variable for test_t test_val */
     mod_add_dir(cmds, "t2", dir_cstruct_new(&FTL_TSPEC(test_t),
 					    /*is_const*/FALSE, &test_val));
+
+    /* create variable to access array mymac_t mymac_val */
     mod_add_dir(cmds, "mac6", dir_carray_new(&FTL_TSPEC(mymac_t),
 					     /*is_const*/ FALSE, &mymac_val,
 					     FTL_ARRAY_STRIDE(mymac_val)));
+    
+    /* create variable to access array testarray_t array_val */
     mod_add_dir(cmds, "vec3", dir_carray_new(&FTL_TSPEC(testarray_t), 
 					     /*is_const*/ FALSE, &array_val,
 					     FTL_ARRAY_STRIDE(array_val)));
