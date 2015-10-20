@@ -55,6 +55,30 @@ extern "C" {
 #define FTL_MALLOC malloc
 #define FTL_FREE   free
 
+/*          Character Sinks              		                     */
+
+
+typedef bool /*full*/ putc_fn_t(charsink_t *sink, int ch);
+
+struct charsink_s
+{   putc_fn_t *putc;
+} /* charsink_t */;
+
+    
+typedef struct charsink_string_s
+{   charsink_t sink;
+    char *charvec;
+    size_t n;
+    size_t maxn;
+} charsink_string_t;
+
+extern charsink_t *
+charsink_string_init(charsink_string_t *charbuf);
+
+extern void
+charsink_string_close(charsink_t *sink);
+    
+  
 /*          Values 					                     */
   
 typedef void value_delete_fn_t(value_t *value);

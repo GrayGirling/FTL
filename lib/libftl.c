@@ -56,7 +56,7 @@
 
    Add value_free to remove a value (and its components) from the garbage
    collection list and do a value_delete(), so we can keep tidy as we go
-   
+
    (new class!)::instance to inherit features from class. (May work now.)
 
    More parsing functions to support the commands (e.g. generate ftl functions
@@ -88,7 +88,7 @@
    Note that this kind of value can currently be created with syntax such as
    <9=NULL>::<4=4>::<1="one">, which is displayed as containing no value for
    intermediate indeces.
-   
+
    Vector types should be given a base which is set to the first non-zero index.
 
    Support a stream read-line function (don't confuse with current parse
@@ -227,7 +227,6 @@
 #include <signal.h>
 #include <assert.h>
 #include <time.h>
-#include <limits.h> /* for MB_LEN_MAX */
 #include <wctype.h>
 #include <stddef.h> /* for ptrdiff_t */
 
@@ -254,6 +253,9 @@
 #include "ftlext.h"
 #define STRING(_x) #_x
 
+#ifdef USE_FTL_XML
+#include "ftl_xml.h"
+#endif
 
 
 /*****************************************************************************
@@ -265,11 +267,12 @@
 
 
 
+/* #define USE_FTL_XML */
 /* #define USE_READLINE */
 /* #define EXIT_ON_CTRL_C */
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 16
+#define VERSION_MIN 18
 
 /*#define LOCAL_GARBAGE*/ /* collect garbage only when it's marked non-local */
 
@@ -277,19 +280,11 @@
 
 #define FTL_ERROR_TRAIL_LINES 4
 
-#ifdef MB_LEN_MAX
-#define FTL_MB_LEN_MAX MB_LEN_MAX
-#endif
-
 #ifdef _WIN32
 
 #define OS_FILE_SEP "\\"
 #define snprintf _snprintf
 #define vsnprintf _vsnprintf
-#ifndef FTL_MB_LEN_MAX
-/* can't use MB_CUR_MAX because it is not constant */
-#define FTL_MB_LEN_MAX 10
-#endif
 #define HAS_REGISTRY
 
 #else
@@ -307,18 +302,6 @@
 
 #if defined(__MINGW32__) || defined(__MINGW64__)
 /* #error MINGW */
-#endif
-
-#ifdef __sun__
-#ifndef FTL_MB_LEN_MAX
-/* can't use MB_CUR_MAX because it is not constant */
-#define FTL_MB_LEN_MAX 10
-#endif
-#endif
-
-#ifndef FTL_MB_LEN_MAX
-/* let's hope this is a constant - if not define O/S specific defn above */
-#define FTL_MB_LEN_MAX MB_CUR_MAX
 #endif
 
 #define ENV_FTL_RCFILE_POST "_RC"
@@ -934,16 +917,7 @@ codeid_set(const char *codeid)
 
 
 
-
-
-
-typedef bool /*full*/ putc_fn_t(charsink_t *sink, int ch);
-
-
-
-struct charsink_s
-{   putc_fn_t *putc;
-} /* charsink_t */;
+/* typedef struct charsink_s {} charsink_t */;
 
 
 
@@ -1271,16 +1245,7 @@ charsink_socket_delete(charsink_t **ref_sink)
 
 
 
-typedef struct
-{   charsink_t sink;
-    char *charvec;
-    size_t n;
-    size_t maxn;
-} charsink_string_t;
-
-
-
-
+/* typedef struct {} charsink_string_t; */
 
 
 
@@ -1334,7 +1299,7 @@ charsink_string_putc(charsink_t *sink, int ch)
 
 
 
-static charsink_t *
+extern charsink_t *
 charsink_string_init(charsink_string_t *charbuf)
 {   charbuf->charvec = NULL;
     charbuf->n = 0;
@@ -1348,7 +1313,7 @@ charsink_string_init(charsink_string_t *charbuf)
 
 
 
-static void
+extern void
 charsink_string_close(charsink_t *sink)
 {   charsink_string_t *charbuf = (charsink_string_t *)sink;
     if (NULL != charbuf && NULL != charbuf->charvec)
@@ -4236,8 +4201,11 @@ value_int_setnumber(value_t *value, number_t number)
 static int value_int_print(outchar_t *out,
                            const value_t *root, const value_t *value)
 {   number_t n = value_int_number(value);
+    number_t absn = n;
+    if (absn < 0)
+        absn = -absn;
     (void)root;
-    if (0 != (n & ~int_format_bits_indec))
+    if (0 != (absn & ~int_format_bits_indec))
         return outchar_printf(out, "0x%"FX_UNUMBER_T"", n);
     else
         return outchar_printf(out, "%"F_NUMBER_T"", n);
@@ -4259,7 +4227,7 @@ value_int_compare(const value_t *v1, const value_t *v2)
 
 
 static value_t *
-value_int_init(value_int_t *no, number_t number, value_delete_fn_t *delete_fn)
+value_int_init(value_int_t *no, unumber_t number, value_delete_fn_t *delete_fn)
 {   no->number = number;
     return value_init(&no->value, type_int, &value_int_print,
                       &value_int_compare, delete_fn, /*mark*/NULL);
@@ -4279,6 +4247,19 @@ value_int_init(value_int_t *no, number_t number, value_delete_fn_t *delete_fn)
 
 extern value_t *
 value_int_new(number_t number)
+{   value_int_t *no = (value_int_t *)FTL_MALLOC(sizeof(value_int_t));
+
+    if (NULL != no)
+        return value_int_init(no, number, &value_delete_alloced);
+    else
+        return NULL;
+}
+
+
+
+
+extern value_t *
+value_uint_new(unumber_t number)
 {   value_int_t *no = (value_int_t *)FTL_MALLOC(sizeof(value_int_t));
 
     if (NULL != no)
@@ -7001,7 +6982,9 @@ dir_noadd(dir_t *dir, const value_t *nameval, const value_t *value)
 static void *
 dir_for_count(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   unsigned *lv_len = (unsigned *)arg;
-    (*lv_len)++;
+    if (value != NULL)
+        /* don't count names with value of NULL */
+        (*lv_len)++;
     return NULL;
 }
 
@@ -7697,6 +7680,258 @@ dir_vec_sort(dir_vec_t *vec, compareval_fn_t *compare)
 
 /*****************************************************************************
  *                                                                           *
+ *          Dynamic Directories                                              *
+ *          ===================                                              *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+/* Dynamic directories are ones that use FTL functions to implement the main
+ * functions for getting, setting and enumerating their content
+ */
+
+
+
+
+typedef struct
+{   dir_t dir;
+    parser_state_t *state; /* state for function execution */
+    const value_t *get;    /* [name] - read value */
+    const value_t *set;    /* [name, value] - write value */
+    const value_t *getall; /* [[value, name]:{}] - enumerate names and values */
+    const value_t *count;  /* [] - return number of names */
+} dir_dyn_t;
+
+/* Warning: this is not a good way to provide the state for the functions
+ * there is no real guarantee that it will still be valid at the time of
+ * execution.
+ * Unfortunately there is no real alternative - we can't easily change all
+ * the code to provide a state on every environment access.
+ */
+
+
+
+
+
+#define dir_dyn_dir(dirid) (&((dirid)->dir))
+#define dir_dyn_value(dirid) dir_value(dir_dyn_dir(dirid))
+
+
+
+
+
+
+static void dir_dyn_markver(const value_t *value, int heap_version)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)value;
+
+    if (dyndir->get != &value_null)
+        value_mark_version((value_t *)dyndir->get, heap_version);
+    if (dyndir->set != &value_null)
+        value_mark_version((value_t *)dyndir->set, heap_version);
+    if (dyndir->getall != &value_null)
+        value_mark_version((value_t *)dyndir->getall, heap_version);
+    if (dyndir->count != &value_null)
+        value_mark_version((value_t *)dyndir->count, heap_version);
+}
+
+
+
+
+
+static bool
+dir_dyn_add(dir_t *dir, const value_t *name, const value_t *value)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
+    bool ok = FALSE;
+
+    if (dyndir->set != NULL && dyndir->set != &value_null)
+    {
+        const value_t *code = substitute(dyndir->set, name,
+                                         dyndir->state, /*unstrict*/FALSE);
+        if (code != NULL) {
+            code = substitute(code, value, dyndir->state, /*unstrict*/FALSE);
+            if (code != NULL) {
+                const value_t *good = invoke(code, dyndir->state);
+                ok = good != NULL && value_istype_bool(good) &&
+                     good != value_false;
+            }
+        }
+    }
+    return ok;
+}
+
+
+
+
+static unsigned
+dir_dyn_count(dir_t *dir)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
+    unsigned n = 0;
+
+    if (dyndir->count != NULL && dyndir->count != &value_null)
+    {
+        const value_t *countval = invoke(dyndir->count, dyndir->state);
+        if (value_istype(countval, type_int)) {
+            n = (unsigned)value_int_number(countval);
+        }
+    }
+    return n;
+}
+
+
+
+static void *
+dir_dyn_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
+    const value_t *dirval = NULL;
+    const value_t *val = NULL;
+
+    if (dyndir->getall != NULL && dyndir->getall != &value_null)
+        dirval = invoke(dyndir->getall, dyndir->state);
+
+    if (dirval != NULL && dirval != &value_null &&
+        value_istype(dirval, type_dir))
+    {
+        val = dir_forall((dir_t *)dirval, enumfn, arg);
+    }
+    return (void *)val;
+}
+
+
+
+
+static const value_t *
+dir_dyn_get(dir_t *dir, const value_t *name)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
+    const value_t *val = NULL;
+
+    if (dyndir->get != NULL && dyndir->get != &value_null)
+    {
+        const value_t *code = substitute(dyndir->get, name,
+                                         dyndir->state, /*unstrict*/FALSE);
+        if (code != NULL)
+            val = invoke(code, dyndir->state);
+    }
+    return val;
+}
+
+
+
+static const value_t *
+dir_dyn_get_using_getall(dir_t *dir, const value_t *name)
+{   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
+    const value_t *dirval = NULL;
+    const value_t *val = NULL;
+
+    if (dyndir->getall != NULL && dyndir->getall != &value_null)
+        dirval = invoke(dyndir->getall, dyndir->state);
+
+    if (dirval != NULL && dirval != &value_null &&
+        value_istype(dirval, type_dir))
+    {
+        val = dir_get((dir_t *)dirval, name);
+    }
+    return (void *)val;
+}
+
+
+
+/*! create a new dynamic environment
+ *    @param dyndir    - dyn directory value to be initialized
+ *    @param state     - parser state to use for function execution [!!]
+ *    @param get_fn    - NULL or closure with 1 arg to retrieve name
+ *    @param set_fn    - NULL or closure with 2 args to set name to value
+ *    @param getall_fn - closure with 1 args to enumerate names & values
+ *    @param count_fn  - NULL or code or closure with 0 args to count entries
+ */
+static void
+dir_dyn_init(dir_dyn_t *dyndir, parser_state_t *state,
+             const value_t *get_fn, const value_t *set_fn,
+             const value_t *getall_fn, const value_t *count_fn)
+{
+    dir_init(&dyndir->dir,
+             (set_fn == NULL || set_fn == &value_null)? NULL: &dir_dyn_add,
+             /*lookup*/NULL,
+             (get_fn == NULL || get_fn == &value_null)?
+                 &dir_dyn_get_using_getall: &dir_dyn_get,
+             &dir_dyn_forall, /*print*/ NULL, /*delete*/NULL, &dir_dyn_markver);
+
+    if (count_fn != NULL && count_fn != &value_null)
+        dyndir->dir.count = &dir_dyn_count;
+    /* else will be derived from getall */
+
+    dyndir->state = state;
+    dyndir->set = set_fn;
+    dyndir->get = get_fn;
+    dyndir->count = count_fn;
+    dyndir->getall = getall_fn;
+}
+
+
+
+
+
+
+extern dir_t *
+dir_dyn_new(parser_state_t *state, const char *errprefix,
+            const value_t *get_fn, const value_t *set_fn,
+            const value_t *getall_fn, const value_t *count_fn)
+{
+    bool ok = TRUE;
+    if (get_fn != NULL && get_fn != &value_null && (
+            !value_istype(get_fn, type_closure) ||
+            value_closure_argcount(get_fn) != 1)) {
+        ok = FALSE;
+        parser_error(state,
+                     "%s'get' is not a closure with one unbound variable\n",
+                     errprefix);
+    }
+    if (set_fn != NULL && set_fn != &value_null && (
+            !value_istype(set_fn, type_closure) ||
+            value_closure_argcount(set_fn) != 2)) {
+        ok = FALSE;
+        parser_error(state,
+                     "%s'set' is not a closure with two unbound variables\n",
+                     errprefix);
+    }
+    if (count_fn != NULL && count_fn != &value_null && (
+            !value_istype(count_fn, type_closure) ||
+            value_closure_argcount(count_fn) != 0)) {
+        ok = FALSE;
+        parser_error(state,
+                     "%s'count' is not a closure with no unbound variables\n",
+                     errprefix);
+    }
+    if (getall_fn != NULL && getall_fn != &value_null && (
+            !value_istype(getall_fn, type_closure) ||
+            value_closure_argcount(getall_fn) != 0)) {
+        ok = FALSE;
+        parser_error(state,
+                     "%s'getall' is not a closure with no unbound variables\n",
+                     errprefix);
+    }
+    if (ok) {
+        dir_dyn_t *dyndir = (dir_dyn_t *)FTL_MALLOC(sizeof(dir_dyn_t));
+
+        if (NULL != dyndir)
+            dir_dyn_init(dyndir, state, get_fn, set_fn, getall_fn, count_fn);
+
+        return &dyndir->dir;
+    } else
+        return NULL;
+}
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Composed Directories                                             *
  *          ====================                                             *
  *                                                                           *
@@ -7779,12 +8014,12 @@ dir_join_lookup(dir_t *dir, const value_t *nameval)
 {   dir_join_t *joindir = (dir_join_t *)dir;
     const value_t *index = dir_get(joindir->ixdir, nameval);
     const value_t **refval = NULL;
-    
+
     if (index != NULL)
     {
         dir_t *lookupdir = joindir->valdir;
         if (NULL != lookupdir && NULL != lookupdir->lookup)
-            refval = (*lookupdir->lookup)(lookupdir, nameval);
+            refval = (*lookupdir->lookup)(lookupdir, index);
     }
 
     return refval;
@@ -8458,6 +8693,10 @@ dir_struct_update(const value_t **ref_value,
 
 
 
+#define DEBUG_DTINT IGNORE
+
+
+
 
 /* This is a generic memory reader, that will instantiated later */
 
@@ -8489,7 +8728,7 @@ typedef struct datatype_s datatype_t;
 /*! Function to parse a data type that prefixes the area of data from *binpos
  *  to binend.
  *
- *   @param rdr          Object allowing (read) access to part of memory 
+ *   @param rdr          Object allowing (read) access to part of memory
  *   @param ref_binpos   Location of Index into memory where parsing occurs
  *   @param binend       Index after last byte of memory to be parsed
  *   @param dtype        Details of the datatype being parsed
@@ -8498,7 +8737,8 @@ typedef struct datatype_s datatype_t;
  *             *ref_binpos is updated to follow the parsed prefix.
  *
  *  Note that it is valid to pass in a NULL 'rdr'.  In this case the
- *  data structure's size should be added to ref_binpos.
+ *  data structure's size should be added to ref_binpos and the function
+ *  should return &value_null.
  */
 typedef const value_t *
 binparse_fn_t(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
@@ -8515,9 +8755,22 @@ struct datatype_s {
 
 typedef struct {
     memreader_t memrd;  /* must occur first in the structure */
-    const char *octets;
+    const char *octets; /* pointer to data area in memory */
 } memreader_instore_t;
 
+
+
+static unumber_t
+datatype_sizeof(datatype_t *dt)
+{   unumber_t size = 0;
+    if (dt != NULL && dt->binparse != NULL)
+    {
+        unumber_t ptr = 0;
+        (void)dt->binparse(NULL, &ptr, (unumber_t)-1, dt);
+        size = ptr;
+    }
+    return size;
+}
 
 
 static bool
@@ -8547,6 +8800,7 @@ typedef struct {
     datatype_t dtype;
     unsigned bytes;
     bool little_endian;
+    bool is_signed;
 } datatype_int_t;
 
 
@@ -8556,15 +8810,24 @@ typedef struct {
 static const value_t *
 binparse_bits8(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                datatype_t *dtype)
-{   const value_t *val = &value_null;
-    number_t newpos = *ref_binpos + 1;
+{   const value_t *val = NULL;
+    unumber_t newpos = *ref_binpos + 1;
     if (newpos <= binend) {
         if (rdr != NULL) {
-            char data;
+            ftl_u8_t data;
             if ((*rdr->binget)(rdr, *ref_binpos, &data, sizeof(data))) {
-                val = value_int_new(data);
+                datatype_int_t *inttype = (datatype_int_t *)dtype;
+                ftl_u8_t n = data;
+                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                                    codeid(), inttype->is_signed? "":" un",
+                                    8, ""););
+                if (inttype->is_signed)
+                    val = value_int_new((ftl_s8_t)n);
+                else
+                    val = value_uint_new(n);
             }
-        }
+        } else
+            val = &value_null;
         *ref_binpos = newpos;
     }
     return val;
@@ -8577,15 +8840,24 @@ binparse_bits8(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 static const value_t *
 binparse_bits16l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
-{   const value_t *val = &value_null;
-    number_t newpos = *ref_binpos + 2;
+{   const value_t *val = NULL;
+    unumber_t newpos = *ref_binpos + 2;
     if (newpos <= binend) {
         if (rdr != NULL) {
-            char data[2];
+            ftl_u8_t data[2];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
-                val = value_int_new((data[1] << 8) | data[0]);
+                datatype_int_t *inttype = (datatype_int_t *)dtype;
+                ftl_u16_t n = (data[1] << 8) | data[0];
+                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                                    codeid(), inttype->is_signed? "":" un",
+                                    16, "le"););
+                if (inttype->is_signed)
+                    val = value_int_new((ftl_s16_t)n);
+                else
+                    val = value_uint_new(n);
             }
-        }
+        } else
+            val = &value_null;
         *ref_binpos = newpos;
     }
     return val;
@@ -8598,15 +8870,24 @@ binparse_bits16l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 static const value_t *
 binparse_bits16b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
-{   const value_t *val = &value_null;
-    number_t newpos = *ref_binpos + 2;
+{   const value_t *val = NULL;
+    unumber_t newpos = *ref_binpos + 2;
     if (newpos <= binend) {
         if (rdr != NULL) {
-            char data[2];
+            ftl_u8_t data[2];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
-                val = value_int_new((data[0] << 8) | data[1]);
+                ftl_u16_t n = (data[0] << 8) | data[1];
+                datatype_int_t *inttype = (datatype_int_t *)dtype;
+                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                                    codeid(), inttype->is_signed? "":" un",
+                                    16, "be"););
+                if (inttype->is_signed)
+                    val = value_int_new((ftl_s16_t)n);
+                else
+                    val = value_uint_new(n);
             }
-        }
+        } else
+            val = &value_null;
         *ref_binpos = newpos;
     }
     return val;
@@ -8620,16 +8901,25 @@ binparse_bits16b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 static const value_t *
 binparse_bits32l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
-{   const value_t *val = &value_null;
-    number_t newpos = *ref_binpos + 4;
+{   const value_t *val = NULL;
+    unumber_t newpos = *ref_binpos + 4;
     if (newpos <= binend) {
         if (rdr != NULL) {
-            char data[4];
+            ftl_u8_t data[4];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
-                val = value_int_new((data[3] << 24) | (data[2] << 16) |
-                                    (data[1] << 8) | data[0]);
+                ftl_u32_t n  = (data[3] << 24) | (data[2] << 16) |
+                               (data[1] << 8) | data[0];
+                datatype_int_t *inttype = (datatype_int_t *)dtype;
+                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                                    codeid(), inttype->is_signed? "":" un",
+                                    32, "le"););
+                if (inttype->is_signed)
+                    val = value_int_new((ftl_s32_t)n);
+                else
+                    val = value_uint_new(n);
             }
-        }
+        } else
+            val = &value_null;
         *ref_binpos = newpos;
     }
     return val;
@@ -8643,16 +8933,25 @@ binparse_bits32l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 static const value_t *
 binparse_bits32b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
-{   const value_t *val = &value_null;
-    number_t newpos = *ref_binpos + 4;
+{   const value_t *val = NULL;
+    unumber_t newpos = *ref_binpos + 4;
     if (newpos <= binend) {
         if (rdr != NULL) {
-            char data[4];
+            ftl_u8_t data[4];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
-                val = value_int_new((data[0] << 24) | (data[1] << 16) |
-                                    (data[2] << 8) | data[3]);
+                ftl_u32_t n = (data[0] << 24) | (data[1] << 16) |
+                              (data[2] << 8) | data[3];
+                datatype_int_t *inttype = (datatype_int_t *)dtype;
+                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                                    codeid(), inttype->is_signed? "":" un",
+                                    32, "be"););
+                if (inttype->is_signed)
+                    val = value_int_new((ftl_s32_t)n);
+                else
+                    val = value_uint_new(n);
             }
-        }
+        } else
+            val = &value_null;
         *ref_binpos = newpos;
     }
     return val;
@@ -8663,13 +8962,18 @@ binparse_bits32b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 
 
 static datatype_t *
-datatype_int_init(datatype_int_t *ref_dt, unsigned bytes, bool little_endian)
+datatype_int_init(datatype_int_t *ref_dt, bool is_signed, unsigned bytes,
+                  bool little_endian)
 {
     bool ok = TRUE;
 
     ref_dt->bytes = bytes;
     ref_dt->little_endian = little_endian;
+    ref_dt->is_signed = is_signed;
 
+    DEBUG_DTINT(DPRINTF("%s: new %ssigned %db %s int\n",
+                        codeid(), is_signed? "": "un",
+                        bytes*8, little_endian?"le": "be"););
     switch (bytes)
     {
         case 1:
@@ -8697,6 +9001,20 @@ datatype_int_init(datatype_int_t *ref_dt, unsigned bytes, bool little_endian)
 
 
 
+static datatype_t *
+datatype_int_new(bool is_signed, unsigned bytes, bool little_endian)
+{
+    datatype_int_t *intdt = (datatype_int_t *)
+                            FTL_MALLOC(sizeof(datatype_int_t));
+    datatype_t *dt = NULL;
+
+    if (intdt != NULL)
+        dt = datatype_int_init(intdt, is_signed, bytes, little_endian);
+
+    return dt;
+}
+
+
 
 /* Sequence of <datatype> datatype parsing */
 
@@ -8710,7 +9028,7 @@ typedef struct {
 
 
 
-/* Parse a single octet */
+/* Parse a sequence of the same datatype */
 static const value_t *
 binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
              datatype_t *dtype)
@@ -8739,7 +9057,7 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 
     if (vec != NULL)
         val = dir_value(vec);
-    
+
     /* if (!ok && val != NULL)
         value_delete(&val); - we have no delete-from-heap function */
 
@@ -8748,7 +9066,7 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 
 
 
-static datatype_t *
+extern datatype_t *
 datatype_seq_init(datatype_seq_t *ref_dt, datatype_t *of_dtype, size_t n)
 {
     if (of_dtype == NULL)
@@ -8762,6 +9080,242 @@ datatype_seq_init(datatype_seq_t *ref_dt, datatype_t *of_dtype, size_t n)
         return &ref_dt->dtype;
     }
 }
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Dynamic vector of datatype Directories                           *
+ *          ======================================                           *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+
+typedef struct
+{   dir_t dir;
+    datatype_t *entry_dt; /* data type contained in sequence (to free) */
+    memreader_t *rdr;     /* means to read a value at a given index (to free) */
+    unumber_t first;      /* first valid index */
+    unumber_t last;       /* first index after last valid index */
+    unumber_t stride;     /* number of indeces consumed by entry_dt */
+} dir_dynseq_t;
+
+
+
+
+static void dir_dynseq_delete(value_t *value)
+{   if (value_istype(value, type_dir))
+    {   dir_dynseq_t *dynseq = (dir_dynseq_t *)value;
+        if (dynseq->entry_dt != NULL)
+        {   FTL_FREE(dynseq->entry_dt);
+            dynseq->entry_dt = NULL;
+        }
+        if (dynseq->rdr != NULL)
+        {   FTL_FREE(dynseq->rdr);
+            dynseq->rdr = NULL;
+        }
+        FTL_FREE(value);
+    }
+    /* else type error */
+}
+
+
+
+static const value_t *
+dir_dynseq_get(dir_t *dir, const value_t *name)
+{   dir_dynseq_t *dynseq = (dir_dynseq_t *)dir;
+    const value_t *found = NULL;
+
+    if (dynseq != NULL && value_type_equal(name, type_int))
+    {   unumber_t n = value_int_number(name);
+        unumber_t index = dynseq->first + n * dynseq->stride;
+
+        if (index >= dynseq->first && index < dynseq->last)
+        {
+            binparse_fn_t *parse = dynseq->entry_dt->binparse;
+
+            found = (*parse)(dynseq->rdr, &index, dynseq->last,
+                             dynseq->entry_dt);
+        }
+    }
+
+    return found;
+}
+
+
+
+
+
+#if 0
+static const value_t **
+dir_dynseq_lookup(dir_t *dir, const value_t *nameval)
+{   if (value_type_equal(nameval, type_int))
+    {   dir_dynseq_t *dynseq = (dir_dynseq_t *)dir;
+        const value_t *found = NULL;
+
+        if (dynseq != NULL && value_type_equal(name, type_int))
+        {   unumber_t n = value_int_number(name);
+            unumber_t index = dynseq->first + n * dynseq->stride;
+
+            if (index >= dynseq->first && index < dynseq->last)
+            {
+                binparse_fn_t *parse = dynseq->entry_dt->binparse;
+
+                found = (*parse)(dynseq->rdr, &index, dynseq->last,
+                                 dynseq->entry_dt);
+            }
+        }
+
+        return NULL == bind? (const value_t **)NULL: &found->value;
+    } else
+        return NULL;
+}
+#endif
+
+
+
+
+
+
+static void *
+dir_dynseq_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
+{   dir_dynseq_t *dynseq = (dir_dynseq_t *)dir;
+    void *result = NULL;
+    binparse_fn_t *parse = dynseq->entry_dt->binparse;
+    unumber_t index = dynseq->first;
+    number_t i = 0;
+    bool ok = TRUE;
+
+    while (ok && index < dynseq->last && NULL == result)
+    {
+        /*unumber_t i = index;*/
+        const value_t *rdval = (*parse)(dynseq->rdr, &index, dynseq->last,
+                                        dynseq->entry_dt);
+        /* this updates index */
+        ok = (rdval != NULL);
+        if (ok)
+        {
+            value_t *ixval = value_int_new(i);
+            (*enumfn)(dir, ixval, rdval, arg);
+            value_unlocal(ixval);
+            i++;
+        }
+        value_unlocal(rdval);
+    }
+
+    return result;
+}
+
+
+
+
+
+
+extern dir_t *
+dir_dynseq_init(dir_dynseq_t *dynseq,
+                datatype_t *entry_dt, memreader_t *rdr,
+                unumber_t first, unumber_t last)
+{   dir_t *dsdir = NULL;
+
+    if (entry_dt != NULL && rdr != NULL && last >= first)
+    {
+        dynseq->entry_dt = entry_dt;
+        dynseq->rdr = rdr;
+        dynseq->first = first;
+        dynseq->last = last;
+        dynseq->stride = datatype_sizeof(entry_dt);
+
+        if (dynseq->stride > 0)
+            dir_init(&dynseq->dir, /*add*/NULL, /*lookup*/NULL,
+                     &dir_dynseq_get, &dir_dynseq_forall, &dir_vec_print,
+                     &dir_dynseq_delete, /*mark*/NULL);
+
+        dsdir = &dynseq->dir;
+    }
+
+    return dsdir;
+}
+
+
+
+/* Both entry_dt and rdr must be allocated with FTL_MALLOC */
+extern dir_t *
+dir_dynseq_new(datatype_t *entry_dt, memreader_t *rdr,
+                       unumber_t first, unumber_t last)
+{   dir_dynseq_t *dynseq = (dir_dynseq_t *)FTL_MALLOC(sizeof(dir_dynseq_t));
+
+    if (NULL != dynseq)
+        return dir_dynseq_init(dynseq, entry_dt, rdr, first, last);
+    else
+        return NULL;
+}
+
+
+
+
+
+#if 0  // doesn't make sense to create a parser?
+
+/* Parse a sequence of the same datatype */
+static const value_t *
+binparse_dynseq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t last,
+                datatype_t *dtype)
+{
+    const value_t *val = NULL;
+    datatype_seq_t *seqdt = (datatype_seq_t *)dtype;
+    datatype_t *entry_dt = seqdt->of_dtype;
+    size_t n = seqdt->entries;
+    size_t entryno = 0;
+    bool ok = TRUE;
+    dir_t *vec = dir_seq_new(entry_dt, rdr, *ref_binpos, last);
+
+    while (ok && entryno < n) {
+        const value_t *entry =
+            (*entry_dt->binparse)(rdr, ref_binpos, last, entry_dt);
+        if (entry == NULL)
+            ok = FALSE;
+        else {
+            if (vec == NULL)
+                vec = dir_vec_new();
+            if (vec != NULL)
+                dir_int_set(vec, entryno, entry);
+            entryno++;
+        }
+    }
+
+    if (vec != NULL)
+        val = dir_value(vec);
+
+    /* if (!ok && val != NULL)
+        value_delete(&val); - we have no delete-from-heap function */
+
+    return ok? (val == NULL? &value_null: val): NULL;
+}
+
+
+
+static datatype_t *
+datatype_dynseq_init(datatype_seq_t *ref_dt, datatype_t *of_dtype, size_t n)
+{
+    if (of_dtype == NULL)
+        return NULL;
+    else
+    {
+        ref_dt->of_dtype = of_dtype;
+        ref_dt->entries = n;
+        ref_dt->dtype.binparse = &binparse_dynseq;
+
+        return &ref_dt->dtype;
+    }
+}
+
+#endif
 
 
 
@@ -9401,13 +9955,16 @@ dir_series_print(outchar_t *out, const value_t *root, const value_t *value)
 static dir_t *
 dir_series_init(dir_series_t *series,
                 number_t first, number_t inc, number_t last)
-{   if ((inc == 0 && first != last) ||
-        (inc > 0 && first > last) ||
-        (inc < 0 && first < last))
+{   if (inc == 0 && first != last)
         /* impossible series */
         return NULL;
+
     else
-    {   series->first = first;
+    {
+        /* if ((inc > 0 && first > last) ||
+               (inc < 0 && first < last)) */
+            /* empty series */
+        series->first = first;
         series->inc = inc;
         series->last = last;
 
@@ -11638,11 +12195,13 @@ value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
 
 
 
-typedef struct
+typedef struct value_closure_s value_closure_t;
+
+struct value_closure_s
 {   value_t value;           /* closure used as a value */
     const value_t *code;     /* code body */
     value_env_t *env;        /* environment */
-} value_closure_t;
+} /* value_closure_t */;
 
 
 
@@ -11953,6 +12512,27 @@ value_closure_bind(const value_t *closureval, const value_t *value)
 }
 
 
+
+
+
+extern int
+value_closure_argcount(const value_t *closureval)
+{
+    const value_t *code = NULL;
+    dir_t *env = NULL;
+    const value_t *unbound = NULL;
+    int n = 0;
+
+    if (value_closure_get(closureval, &code, &env, &unbound))
+    {
+        const value_t *nameval = unbound;
+        while (NULL != nameval) {
+            n++;
+            nameval = nameval->link;
+        }
+    }
+    return n;
+}
 
 
 
@@ -12709,6 +13289,23 @@ parse_key(const char **ref_line, const char *key)
 
 
 extern bool
+parse_ending(const char **ref_line, const char *key)
+{   const char *line = *ref_line;
+    const char *end = strstr(line, key);
+
+    if (end != NULL)
+    {
+        *ref_line = end;
+        return TRUE;
+    } else
+        return FALSE;
+}
+
+
+
+
+
+extern bool
 parse_item(const char **ref_line, const char *delims, size_t ndelim,
            char *buf, size_t len)
 {   const char *start = *ref_line;
@@ -13096,6 +13693,36 @@ parse_oneof(const char **ref_line, parser_state_t *state,
 
 
 
+static bool
+parse_match_ending(const char **ref_line, parser_state_t *state,
+                   const value_t *name, void *arg)
+{   if (value_type_equal(name, type_string))
+    {   const char *key;
+        size_t keylen;
+        return value_string_get(name, &key, &keylen) &&
+               parse_ending(ref_line, key);
+    } else
+        return FALSE;
+}
+
+
+
+
+
+
+extern bool
+parse_one_ending(const char **ref_line, parser_state_t *state,
+                 dir_t *prefixes, const value_t **out_val)
+{   return parse_oneof_matching(ref_line, state, prefixes, out_val,
+                                &parse_match_ending, NULL);
+}
+
+
+
+
+
+
+
 
 
 
@@ -13217,11 +13844,6 @@ opeval {Fy 6 xfx Fy 8}
 */
 
 
-
-
-static const value_t *
-substitute(const value_t *code, const value_t *arg,
-           parser_state_t *state, bool try); /* forward ref */
 
 
 static bool
@@ -13355,7 +13977,7 @@ struct op_state_s
 static const value_t *
 invoke_monadic(const value_t *monadic_fn, const value_t *arg,
                parser_state_t *state)
-{   const value_t *bind = substitute(monadic_fn, arg, state, /*try*/FALSE);
+{   const value_t *bind = substitute(monadic_fn, arg, state, /*unstrict*/FALSE);
 
     if (NULL != bind)
         return invoke(bind, state);
@@ -13373,7 +13995,7 @@ invoke_monadic(const value_t *monadic_fn, const value_t *arg,
 static const value_t *
 invoke_diadic(const value_t *diadic_fn, const value_t *arg1,
               const value_t *arg2,  parser_state_t *state)
-{   const value_t *bind = substitute(diadic_fn, arg1, state, /*try*/FALSE);
+{   const value_t *bind = substitute(diadic_fn, arg1, state, /*unstrict*/FALSE);
     if (NULL != bind)
         return invoke_monadic(bind, arg2, state);
     else
@@ -14785,6 +15407,8 @@ mod_get_implicit(const value_t *this_fn)
 
 
 
+
+
 #ifdef FTL_BOOL_ISINT
 
 
@@ -16016,13 +16640,13 @@ parse_operator_expr(const char **ref_line, parser_state_t *state,
 
 
 
-/* if 'try' is set the substitution will not fail if there are not enough
+/* if 'unstrict' is set the substitution will not fail if there are not enough
    unbound symbols for the substitution (the code value itself will be
    returned)
 */
 static const value_t *
 substitute_simple(const value_t *code, const value_t *arg,
-                  parser_state_t *state, bool try, bool *ref_auto_eval)
+                  parser_state_t *state, bool unstrict, bool *ref_auto_eval)
 {   const value_t *val = NULL;
 
     *ref_auto_eval = FALSE;
@@ -16035,7 +16659,7 @@ substitute_simple(const value_t *code, const value_t *arg,
 
             value_closure_get(code, &codeval, &dir, &unbound);
             if (NULL == unbound)
-            {   if (try)
+            {   if (unstrict)
                     val = code;
                 else
                 {   parser_error(state, "too many arguments (no unbound "
@@ -16075,11 +16699,12 @@ substitute_simple(const value_t *code, const value_t *arg,
 
 
 
-static const value_t *
+extern const value_t *
 substitute(const value_t *code, const value_t *arg,
-           parser_state_t *state, bool try)
+           parser_state_t *state, bool unstrict)
 {   bool auto_eval = FALSE;
-    const value_t *val = substitute_simple(code, arg, state, try, &auto_eval);
+    const value_t *val = substitute_simple(code, arg, state,
+                                           unstrict, &auto_eval);
     /* I don't like this feature yet - it makes syntax less explicit and
        difficult to understand
     if (NULL != val && auto_eval)
@@ -16208,7 +16833,7 @@ invoke(const value_t *code, parser_state_t *state)
                 }
             }
         } else
-        {   parser_error(state, "%s expression not executable:\n",
+        {   parser_error(state, "a %s value is not executable:\n",
                           value_type_name(code));
             parser_value_print(state, code);
             fprintf(stderr, "\n");
@@ -16244,7 +16869,7 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
     {   const value_t *code = *ref_val;
 
         if (ok)
-        {   *ref_val = substitute(code, newarg, state, /*try*/FALSE);
+        {   *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
 
             if (NULL == *ref_val)
                 ok = FALSE;
@@ -16301,7 +16926,7 @@ parse_substitution_argv(const char ***ref_argv, int *ref_argn,
 
         if (ok)
         {
-            *ref_val = substitute(code, newarg, state, /*try*/FALSE);
+            *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
 
             if (NULL == *ref_val)
                 ok = FALSE;
@@ -17460,12 +18085,12 @@ value_string_fmtfn(parser_state_t *state, const value_t *fmtfn,
 
     bind = substitute(fmtfn, value_int_new(flags &
                                            ((1<<ff_sign) | (1<<ff_zero))),
-                      state, /*try*/FALSE);
+                      state, /*unstrict*/FALSE);
     if (NULL != bind)
     {   bind = substitute(bind, value_int_new(precision),
-                          state, /*try*/FALSE);
+                          state, /*unstrict*/FALSE);
         if (NULL != bind)
-        {   bind = substitute(bind, val, state, /*try*/FALSE);
+        {   bind = substitute(bind, val, state, /*unstrict*/FALSE);
             if (NULL != bind)
                 str = invoke(bind, state);
         }
@@ -18303,7 +18928,7 @@ genfn_scan(const value_t *this_fn, parser_state_t *state,
     const value_t *val = &value_null;
 
     if (value_istype(strvec, type_dir) &&
-        value_istype(setres, type_closure))
+        (setres == &value_null || value_istype(setres, type_closure)))
     {   dir_t *vec = (dir_t *)strvec;
         const value_t *str = dir_get(vec, value_zero);
         const char *strbase;
@@ -18320,9 +18945,13 @@ genfn_scan(const value_t *this_fn, parser_state_t *state,
                         value_string_new(line, len - (line-strbase)));
                 /* old value will be garbage collected */
 
-                setres = substitute(setres, newval, state, /*try*/TRUE);
-                if (NULL != setres)
-                    (void)invoke(setres, state);
+                if (setres != &value_null) {
+                    setres = substitute(setres,
+                                        newval == NULL? &value_null: newval,
+                                        state, /*unstrict*/TRUE);
+                    if (NULL != setres)
+                        (void)invoke(setres, state);
+                }
             } else
                 val = value_false;
 
@@ -18383,6 +19012,33 @@ fn_scan_match(const value_t *this_fn, parser_state_t *state)
     if (value_istype(prefixes, type_dir))
     {   dir_t *prefix_dir = (dir_t *)prefixes;
         return genfn_scan(this_fn, state, 2, &fnparse_match,
+                          (void *)prefix_dir);
+    } else
+        return &value_null;
+}
+
+
+
+
+static const value_t *
+fnparse_ending(const char **ref_line, parser_state_t *state, const value_t *arg)
+{   dir_t *delimiters = (dir_t *)arg;
+    const value_t *choice = NULL;
+    if (parse_one_ending(ref_line, state, delimiters, &choice)) {
+        return choice;
+    } else
+        return &value_null;
+}
+
+
+
+
+static const value_t *
+fn_scan_ending(const value_t *this_fn, parser_state_t *state)
+{   const value_t *delimiters = parser_builtin_arg(state, 1);
+    if (value_istype(delimiters, type_dir))
+    {   dir_t *prefix_dir = (dir_t *)delimiters;
+        return genfn_scan(this_fn, state, 2, &fnparse_ending,
                           (void *)prefix_dir);
     } else
         return &value_null;
@@ -18555,7 +19211,7 @@ fnparse_code(const char **ref_line, parser_state_t *state,
     int srcline;
 
     if (parse_code(ref_line, state, &strval, &srcpos, &srcline))
-        return strval;
+        return value_code_new(strval, srcpos, srcline);
     else
         return &value_null;
 }
@@ -18566,6 +19222,31 @@ fnparse_code(const char **ref_line, parser_state_t *state,
 static const value_t *
 fn_scan_code(const value_t *this_fn, parser_state_t *state)
 {   return genfn_scan(this_fn, state, 1, &fnparse_code, NULL);
+}
+
+
+
+
+
+static const value_t *
+fnparse_value(const char **ref_line, parser_state_t *state,
+              const value_t *arg)
+{   const value_t *out_val = NULL;
+    bool is_env;
+
+    if (parse_base_env(ref_line, state, &out_val, &is_env))
+        return out_val;
+    else
+        return &value_null;
+}
+
+
+
+
+
+static const value_t *
+fn_scan_value(const value_t *this_fn, parser_state_t *state)
+{   return genfn_scan(this_fn, state, 1, &fnparse_value, NULL);
 }
 
 
@@ -18616,7 +19297,7 @@ fnparse_item(const char **ref_line, parser_state_t *state, const value_t *arg)
 static const value_t *
 fn_scan_item(const value_t *this_fn, parser_state_t *state)
 {   const value_t *delims = parser_builtin_arg(state, 1);
-    if (value_istype(delims, type_string))
+    if (delims == &value_null || value_istype(delims, type_string))
         return genfn_scan(this_fn, state, 2, &fnparse_item, delims);
     else
         return &value_null;
@@ -18766,55 +19447,63 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
     mod_addfn(pcmds, "stack",
               "- return local current invocation directory stack",
               &fn_stack, 0);
+
     mod_addfn(pcmds, "scan",
-              "<string> - return parse object for string",
+              "<string> - return <parseobj> for string",
               &fn_scan, 1);
     mod_addfn(pcmds, "scanned",
-              "<parseobj> - return text remaining in parse object",
+              "<parseobj> - return text remaining in <parseobj>",
               &fn_scanned, 1);
     mod_addfn(pcmds, "scanempty",
-              "<parseobj> - parse white space from parse object",
+              "<parseobj> - TRUE if no characters remain in <parseobj>",
               &fn_scan_empty, 1);
     mod_addfn(pcmds, "scanwhite",
-              "<parseobj> - parse white space from parse object",
+              "<parseobj> - parse some white space in <parseobj>",
               &fn_scan_white, 1);
     mod_addfn(pcmds, "scanspace",
-              "<parseobj> - parse over white space from parse object",
+              "<parseobj> - parse over optional white space in <parseobj>",
               &fn_scan_space, 1);
     mod_addfn(pcmds, "scanint",
-              "<@int> <parseobj> - parse integer from parse object",
+              "<@int> <parseobj> - parse integer in <parseobj>",
               &fn_scan_int, 2);
     mod_addfn(pcmds, "scanintval",
-              "<@int> <parseobj> - parse signed based integer from parse object",
+              "<@int> <parseobj> - parse signed based integer in <parseobj>",
               &fn_scan_intval, 2);
     mod_addfn(pcmds, "scanhex",
-              "<@int> <parseobj> - parse hex from parse object",
+              "<@int> <parseobj> - parse hex in <parseobj>",
               &fn_scan_hex, 2);
     mod_addfn(pcmds, "scanhexw",
-              "<width> <@int> <parseobj> - parse hex in <width> chars from "
-              "parse object, update string",
+              "<width> <@int> <parseobj> - parse hex in <width> chars in "
+              "<parseobj>, update string",
               &fn_scan_hexw, 3);
     mod_addfn(pcmds, "scanstr",
-              "<@string> <parseobj> - parse item until delimiter from "
-              "parse string",
+              "<@string> <parseobj> - parse single or double-quoted string "
+              "in <parseobj>",
               &fn_scan_string, 2);
     mod_addfn(pcmds, "scanid",
-              "<@string> <parseobj> - parse identifier from parse object",
+              "<@string> <parseobj> - parse identifier in <parseobj>",
               &fn_scan_id, 2);
     mod_addfn(pcmds, "scanitemstr",
-              "<@string> <parseobj> - parse item or string from parse object",
+              "<@string> <parseobj> - parse item or string in <parseobj>",
               &fn_scan_itemstr, 2);
     mod_addfn(pcmds, "scancode",
-              "<@string> <parseobj> - parse {code} block from parse object",
+              "<@string> <parseobj> - parse {code} block in <parseobj>",
               &fn_scan_code, 2);
+    mod_addfn(pcmds, "scanvalue",
+              "<@string> <parseobj> - parse a basic value in <parseobj>",
+              &fn_scan_value, 2);
     mod_addfn(pcmds, "scanitem",
-              "<delims> <@string> <parseobj> - parse item until delimiter "
-              "from parse object",
+              "<delims> <@string> <parseobj> - parse item until non-blank or "
+              "delimiter in <parseobj>",
               &fn_scan_item, 3);
     mod_addfn(pcmds, "scanmatch",
-              "<dir> <@val> <parseobj> - parse prefix in dir from "
-              "parse object giving matching value",
+              "<dir> <@val> <parseobj> - parse prefix in dir in "
+              "<parseobj> giving matching value",
               &fn_scan_match, 3);
+    mod_addfn(pcmds, "scantomatch",
+              "<dir> <@val> <parseobj> - parse up to delimiter named in dir in "
+              "<parseobj> giving matching value",
+              &fn_scan_ending, 3);
 
     mod_addfn(pcmds, "opset",
               "<opdefs> <prec> <assoc> <name> <function> - define an operator "
@@ -19548,7 +20237,7 @@ fn_outstring(const value_t *this_fn, parser_state_t *state)
         if (NULL != str)
         {   /* return to calling environment */
             parser_env_return(state, parser_env_calling_pos(state));/*code*/
-            code = substitute(code, str, state, /*try*/FALSE);
+            code = substitute(code, str, state, /*unstrict*/FALSE);
             if (NULL != invoke(code, state))
                 val=value_stream_outstring_string((value_stream_outstring_t *)
                                                   str);
@@ -21672,27 +22361,30 @@ static const value_t *fn_binsplit(const value_t *this_fn, parser_state_t *state)
 {
     const value_t *val = &value_null;
     const value_t *littleval = parser_builtin_arg(state, 1);
-    const value_t *unitbytesval = parser_builtin_arg(state, 2);
-    const value_t *octetsval = parser_builtin_arg(state, 3);
+    const value_t *signedval = parser_builtin_arg(state, 2);
+    const value_t *unitbytesval = parser_builtin_arg(state, 3);
+    const value_t *octetsval = parser_builtin_arg(state, 4);
     const char *octets = NULL;
     size_t octet_count = 0;
 
     if (value_istype(unitbytesval, type_int) &&
         value_istype_bool(littleval) &&
+        value_istype_bool(signedval) &&
         value_string_get(octetsval, &octets, &octet_count))
     {
-        bool little_endian = value_bool(littleval);
+        bool little_endian = !value_bool_is_false(littleval);
+        bool is_signed = !value_bool_is_false(signedval);
         size_t unitbytes = (size_t)value_int_number(unitbytesval);
-        datatype_int_t int_type;
-        datatype_seq_t seq_type;
-        datatype_t *intdt = datatype_int_init(&int_type,
-                                              unitbytes, little_endian);
+        datatype_t *intdt = datatype_int_new(is_signed, unitbytes,
+                                             little_endian);
         if (intdt == NULL) {
             parser_error(state, "%s-endian %d-byte integers not available "
                          "for casting\n",
                          little_endian? "little": "big", (int)unitbytes);
         } else {
             size_t entries = octet_count/unitbytes;
+#if 0
+            datatype_seq_t seq_type;
             datatype_t *seq_intdt =
                 datatype_seq_init(&seq_type, intdt, entries);
             const value_t *newval;
@@ -21701,8 +22393,25 @@ static const value_t *fn_binsplit(const value_t *this_fn, parser_state_t *state)
                           codeid(), (int)octet_count, (int)entries,
                           (int)unitbytes););
             newval = bincast(state, seq_intdt, octets, entries * unitbytes);
+            FTL_FREE(initdt);
             if (newval != NULL)
                 val = newval;
+#else
+            memreader_instore_t *memreader =
+                (memreader_instore_t *)FTL_MALLOC(sizeof(memreader_instore_t));
+            
+            if (memreader != NULL)
+            {
+                dir_t *dynseq;
+                memreader_t *reader =
+                    memreader_instore_init(memreader, (char *)octets);
+                dynseq = dir_dynseq_new(intdt, reader, /*first*/0,
+                                        entries * unitbytes);
+                val = dir_value(dynseq);
+            } else
+            {   FTL_FREE(intdt);
+            }
+#endif
         }
     } else
         parser_report_help(state, this_fn);
@@ -21905,9 +22614,9 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
               "<delim> <str> - make vector of strings separated by <delim>s",
               &fn_split, 2);
     mod_addfn(cmds, "binsplit",
-              "<le?> <n> <str> - make vector of <n>-byte ints "
-              "with <le?> endianness",
-              &fn_binsplit, 3);
+              "<le?> <signed?> <n> <str> - make vector of <signed>> <n>-byte "
+              "ints with <le?> endianness",
+              &fn_binsplit, 4);
     mod_addfn(cmds, "chop",
               "<stride> <str> - make vector of strings each <stride> bytes "
               "or less",
@@ -22075,6 +22784,35 @@ fn_new(const value_t *this_fn, parser_state_t *state)
 
 
 
+
+
+
+
+static const value_t *
+fn_dynenv(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *getall_fn = parser_builtin_arg(state, 1);
+    const value_t *count_fn = parser_builtin_arg(state, 2);
+    const value_t *set_fn = parser_builtin_arg(state, 3);
+    const value_t *get_fn = parser_builtin_arg(state, 4);
+    const value_t *val = &value_null;
+
+    if (value_istype(getall_fn, type_closure) &&
+        (count_fn == &value_null || value_istype(count_fn, type_closure)) &&
+        (set_fn   == &value_null || value_istype(set_fn, type_closure)) &&
+        (get_fn   == &value_null || value_istype(get_fn, type_closure)))
+    {
+        dir_t *newdir = dir_dyn_new(state, "dynenv - ",
+                                    get_fn, set_fn, getall_fn, count_fn);
+        if (newdir != NULL)
+            val = dir_value(newdir);
+
+    } else
+        parser_report_help(state, this_fn);
+
+
+    return val;
+}
 
 
 
@@ -22370,8 +23108,8 @@ fn_sort_domcmpwith(const value_t **ref_v1, const value_t **ref_v2)
     {   parser_state_t *state = sort_global_args->state;
         const value_t *code = sort_global_args->cmpfn;
         const value_t *ret;
-        code = substitute(code, *ref_v1, state, /*try*/TRUE);
-        code = substitute(code, *ref_v2, state, /*try*/TRUE);
+        code = substitute(code, *ref_v1, state, /*unstrict*/TRUE);
+        code = substitute(code, *ref_v2, state, /*unstrict*/TRUE);
         ret = invoke(code, state);
 
         return (int)value_int_number(ret);
@@ -22403,8 +23141,8 @@ fn_sort_rngcmpwith(const value_t **ref_v1, const value_t **ref_v2)
         const value_t *v1 = dir_get(vals, *ref_v1);
         const value_t *v2 = dir_get(vals, *ref_v2);
         const value_t *ret;
-        code = substitute(code, v1, state, /*try*/TRUE);
-        code = substitute(code, v2, state, /*try*/TRUE);
+        code = substitute(code, v1, state, /*unstrict*/TRUE);
+        code = substitute(code, v2, state, /*unstrict*/TRUE);
         ret = invoke(code, state);
 
         return (int)value_int_number(ret);
@@ -22502,9 +23240,10 @@ select_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         const value_t *include;
 
         if (value_type_equal(code, type_closure))
-        {   code = substitute(code, value, selectval->state, /*try*/TRUE);
+        {   code = substitute(code, value, selectval->state, /*unstrict*/TRUE);
             if (NULL != code && value != NULL)
-                code = substitute(code, name, selectval->state, /*try*/TRUE);
+                code = substitute(code, name, selectval->state,
+                                  /*unstrict*/TRUE);
         }
         include = invoke(code, selectval->state);
 
@@ -22776,6 +23515,10 @@ cmds_generic_dir(parser_state_t *state, dir_t *cmds)
     mod_addfn(cmds, "range",
               "<env> - generate vector of values in <env>",
               &fn_range, 1);
+    mod_addfn(cmds, "dynenv",
+              "<getall> <count> <set> <get> - dynamic env built from given "
+              "functions",
+              &fn_dynenv, 4);
     mod_addfn(cmds, "envjoin",
               "<env1> <env2> - composed directory indexing <env2> "
               "with <env1> values",
@@ -23043,7 +23786,7 @@ typedef struct
 
 /* This function may cause a garbage collection */
 static void *
-for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+forall_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   for_exec_args_t *forval = (for_exec_args_t *)arg;
     dir_t *codeargs = parser_env(forval->state);
 
@@ -23054,9 +23797,9 @@ for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
     {   const value_t *code = forval->code;
 
         if (value_type_equal(code, type_closure))
-        {   code = substitute(code, value, forval->state, /*try*/TRUE);
+        {   code = substitute(code, value, forval->state, /*unstrict*/TRUE);
             if (NULL != code)
-                code = substitute(code, name, forval->state, /*try*/TRUE);
+                code = substitute(code, name, forval->state, /*unstrict*/TRUE);
         }
         (void)invoke(code, forval->state);
     }
@@ -23067,7 +23810,8 @@ for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 
 
 
-
+/*! execute 0, 1 or 2 argument function with names and values from dir
+ */
 static const value_t *
 fn_forall(const value_t *this_fn, parser_state_t *state)
 {   const value_t *dir = parser_builtin_arg(state, 1);
@@ -23089,12 +23833,81 @@ fn_forall(const value_t *this_fn, parser_state_t *state)
                           dir_value(parser_env(state)));)
         pos = parser_env_push(state, argdir, /*env_end*/FALSE);
         IGNORE(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
-        (void)dir_forall(env, &for_exec, &forval);
+        (void)dir_forall(env, &forall_exec, &forval);
         (void)parser_env_return(state, pos);
         val = &value_null;
     } else
     {   parser_report_help(state, this_fn);
         val = &value_null;
+    }
+    return val;
+}
+
+
+
+
+
+
+/* This function may cause a garbage collection */
+static void *
+for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{   for_exec_args_t *forval = (for_exec_args_t *)arg;
+    dir_t *codeargs = parser_env(forval->state);
+
+    /* don't execute for values that are NULL - warning this may mean that
+       the perceived domain of an environment is larger than the range
+     */
+    if (NULL != codeargs && value != NULL)
+    {   const value_t *code = forval->code;
+        code = substitute(code, value, forval->state, /*unstrict*/FALSE);
+        if (code != NULL)
+            (void)invoke(code, forval->state);
+    }
+
+    return NULL; /* non-null would stop the enumeration here */
+}
+
+
+
+
+
+/*! execute 1-argument function with values from dir
+ */
+static const value_t *
+fn_for(const value_t *this_fn, parser_state_t *state)
+{   const value_t *dir = parser_builtin_arg(state, 1);
+    const value_t *code = parser_builtin_arg(state, 2);
+    dir_t *env;
+    const value_t *val = &value_null;
+
+    if (value_as_dir(dir, &env) && NULL != code &&
+        value_istype(code, type_closure))
+    {
+        int n = value_closure_argcount(code);
+
+        if (n == 1) {
+            for_exec_args_t forval;
+            dir_t *argdir = dir_id_new();
+            dir_stack_pos_t pos;
+
+            parser_env_return(state, parser_env_calling_pos(state));
+            forval.state = state;
+            forval.code = code;
+            IGNORE(VALUE_SHOW("for before environment: ",
+                              dir_value(parser_env(state)));)
+            pos = parser_env_push(state, argdir, /*env_end*/FALSE);
+            IGNORE(VALUE_SHOW("for environment: ",
+                              dir_value(parser_env(state)));)
+            (void)dir_forall(env, &for_exec, &forval);
+            (void)parser_env_return(state, pos);
+        } else
+        {
+            parser_error(state,
+                         "for - closure must have one unbound value (not %d)",
+                         n);
+        }
+    } else
+    {   parser_report_help(state, this_fn);
     }
     return val;
 }
@@ -23201,8 +24014,11 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
     mod_add(cmds, "set",
             "<name> <expr> - set value in environment",  &cmd_set);
     mod_addfn(cmds, "exit", "- abandon all command inputs", &fn_exit, 0);
+    mod_addfnscope(cmds, "for",
+              "<env> <binding> - execute <binding> <val> for every <env> value",
+              &fn_for, 2, scope);
     mod_addfnscope(cmds, "forall",
-              "<env> <binding> - execute <binding> for all <env> values",
+              "<env> <binding> - execute <binding> <val> <name> for all entries in <env>",
               &fn_forall, 2, scope);
     mod_addfnscope(cmds, "if",
               "<n> <then-code> <else-code> - execute <then-code> if "
@@ -23920,7 +24736,7 @@ cmd_from_fn(const char **ref_line, const value_t *this_cmd,
         if (NULL != fn)
         {   size_t linelen = strlen(*ref_line);
             value_t *arg = value_string_new(*ref_line, linelen);
-            const value_t *bind = substitute(fn, arg, state, /*try*/FALSE);
+            const value_t *bind = substitute(fn, arg, state, /*unstrict*/FALSE);
             if (NULL != bind)
             {   val = invoke(bind, state);
                 if (val != NULL)
@@ -24039,6 +24855,19 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     cmds_generic_dir(state, cmds);
     cmds_generic_mem(state, cmds);
 
+#ifdef USE_FTL_XML
+    {
+        const value_t *pcmdsval =
+            dir_stringl_get(dir_stack_dir(state->env),
+                            FTLDIR_PARSE, strlen(FTLDIR_PARSE));
+        if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir))
+        {
+            dir_t *pcmds = (dir_t *)pcmdsval;
+            cmds_xml(state, pcmds);
+        }
+    }
+#endif
+
     mod_add(cmds,
             "every", "<n> <command> - repeat command every <n> ms",
             &cmd_every);
@@ -24056,6 +24885,19 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
               "[<env>|<closure>|<string>] - number of elements in object",
               &fn_len, 1, scope);
     /*mod_add_dir(cmds, "root", *cmds);*/
+}
+
+
+
+
+
+
+extern void
+cmds_generic_end(parser_state_t *state)
+{
+#ifdef USE_FTL_XML
+    cmds_xml_end(state);
+#endif
 }
 
 

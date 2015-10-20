@@ -1,0 +1,11 @@
+set data [ads=3,b=9]
+set dgetall []:{echo "(getall)"!;data}
+set dget [n]:{echo "(get)"!;data.(n)}
+set dset [n,v]:{echo "(set)"!;data.(n)=v;TRUE}
+set dcount []:{echo "(count)"!;len data!}
+
+set dyn dynenv dgetall dcount dset dget!
+
+set dyn2 dynenv dgetall NULL dset dget!
+set dynr dynenv dgetall dcount NULL dget!
+set dynw dynenv dgetall dcount dset NULL!
