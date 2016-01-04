@@ -269,10 +269,15 @@
 
 /* #define USE_FTL_XML */
 /* #define USE_READLINE */
+/* #define USE_LINENOISE */
 /* #define EXIT_ON_CTRL_C */
 
 #define VERSION_MAJ 1
 #define VERSION_MIN 18
+
+#if defined(USE_READLINE) && defined(USE_LINENOISE)
+#error you can define only one of USE_READLINE and USE_LINENOISE
+#endif
 
 /*#define LOCAL_GARBAGE*/ /* collect garbage only when it's marked non-local */
 
@@ -2181,7 +2186,7 @@ static void charsource_string_close(charsource_t *base_source)
 
 
 
-#ifdef USE_READLINE
+#if defined(USE_READLINE) || defined(USE_LINENOISE)
 
 /* sets a FTL_MALLOC'd string */
 static void charsource_string_setstring(charsource_t *base_source,
@@ -2489,7 +2494,7 @@ charsource_ch_new(int ch)
 
 
 
-#ifndef USE_READLINE
+#if !defined(USE_READLINE) && !defined(USE_LINENOISE)
 
 
 
@@ -2581,7 +2586,7 @@ charsource_prompting_new(FILE *consolein, FILE *consoleout, const char *prompt)
 
 
 
-#endif /* USE_READLINE */
+#endif /* USE_READLINE or USE_LINENOISE */
 
 
 
@@ -2606,12 +2611,27 @@ charsource_prompting_new(FILE *consolein, FILE *consoleout, const char *prompt)
 #endif
 
 
+#ifndef USE_LINENOISE_HISTORY
+#ifdef USE_LINENOISE
+#define USE_LINENOISE_HISTORY 1
+#else
+#define USE_LINENOISE_HISTORY 0
+#endif
+#endif
+
+
+
 #if USE_READLINE_HISTORY
-
-
-
-
 #include "readline/history.h"
+#endif
+
+#if USE_LINENOISE_HISTORY
+#include "linenoise.h"
+#endif
+
+
+
+#if USE_READLINE_HISTORY || USE_LINENOISE_HISTORY
 
 #ifdef HAS_OPENDIR
 #include <sys/types.h>
@@ -2623,10 +2643,10 @@ charsource_prompting_new(FILE *consolein, FILE *consoleout, const char *prompt)
 
 
 typedef struct
-{   char *this_history;
-    char *global_history;
-    bool this_is_open;
-    bool global_is_open;
+{   char *this_history;       /* history file for this local invocation */
+    char *global_history;     /* global history file (all invocations) */
+    bool this_is_open;        /* history was found in the local history file */
+    bool global_is_open;      /* history was found in the global history file */
 } history_file_t;
 
 
@@ -2646,11 +2666,11 @@ history_open(history_file_t *hist)
 
     hist->this_history = FTL_MALLOC(strlen(homedir) +
                                     strlen(ENV_FTL_HOMEDIR_HOME) +
-                                       strlen(history_home) +
-                                       strlen(READLINE_HOME_DIR_PREFIX) +
-                                       strlen(READLINE_HISTORY_NAME) +
-                                       strlen(history_instance) +
-                                       strlen(READLINE_HISTORY_EXTENSION) + 4);
+                                    strlen(history_home) +
+                                    strlen(READLINE_HOME_DIR_PREFIX) +
+                                    strlen(READLINE_HISTORY_NAME) +
+                                    strlen(history_instance) +
+                                    strlen(READLINE_HISTORY_EXTENSION) + 4);
 
     hist->this_is_open = FALSE;
     hist->global_is_open = FALSE;
@@ -2676,7 +2696,7 @@ history_open(history_file_t *hist)
     }
 #endif
 
-    if (NULL != hist->this_history)
+    if (NULL != hist->this_history) /* dir valid and memory available */
     {
         /* Set up the actual name. */
         sprintf(hist->this_history, "%s%s"OS_FILE_SEP
@@ -2685,7 +2705,13 @@ history_open(history_file_t *hist)
                                     READLINE_HISTORY_EXTENSION,
                 homedir, ENV_FTL_HOMEDIR_HOME, history_home, history_instance);
 
-        hist->this_is_open = (read_history(hist->this_history) != 0);
+        hist->this_is_open =
+#if USE_READLINE_HISTORY
+            (read_history(hist->this_history) == 0);
+#endif
+#if USE_LINENOISE_HISTORY
+            (linenoiseHistoryLoad(hist->this_history) == 0);
+#endif
 
         hist->global_history = FTL_MALLOC(strlen(hist->this_history) +
                                           strlen(homedir) +
@@ -2697,15 +2723,24 @@ history_open(history_file_t *hist)
 
         if (hist->global_history != NULL)
         {   sprintf(hist->global_history, "%s%s"OS_FILE_SEP
-                    READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
-                    READLINE_HISTORY_NAME READLINE_HISTORY_EXTENSION,
+                                    READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
+                                    READLINE_HISTORY_NAME
+                                    READLINE_HISTORY_EXTENSION,
                     homedir, ENV_FTL_HOMEDIR_HOME, history_home);
         }
 
         if (hist->this_is_open)
-            hist->global_is_open = (read_history(hist->global_history) != 0);
-        else
             hist->global_is_open = FALSE;
+        else
+        {
+            hist->global_is_open =
+#if USE_READLINE_HISTORY
+                (read_history(hist->global_history) == 0);
+#endif
+#if USE_LINENOISE_HISTORY
+                (linenoiseHistoryLoad(hist->global_history) == 0);
+#endif
+        }
 
         return TRUE;
     } else
@@ -2722,31 +2757,50 @@ static void
 history_close(history_file_t *hist)
 {
     if (hist->this_history != NULL)
-    {   if (hist->this_is_open)
+    {
+#if USE_LINENOISE_HISTORY
+         linenoiseHistorySave(hist->this_history);
+#endif
+#if USE_READLINE_HISTORY
+        if (hist->this_is_open)
             write_history(hist->this_history);
         else
         {   append_history(READLINE_HISTORY_MAXLEN, hist->this_history);
             history_truncate_file(hist->this_history, READLINE_HISTORY_MAXLEN);
         }
+#endif
         FTL_FREE(hist->this_history);
         hist->this_history = NULL;
         hist->this_is_open = FALSE;
     }
 
     if (hist->global_history != NULL)
-    {   if (hist->global_is_open)
+    {
+#if USE_LINENOISE_HISTORY
+        linenoiseHistorySave(hist->global_history);
+#endif
+#if USE_READLINE_HISTORY
+        if (hist->global_is_open)
             write_history(hist->global_history);
         else
         {   append_history(READLINE_HISTORY_MAXLEN, hist->global_history);
             history_truncate_file(hist->global_history,
                                   READLINE_HISTORY_MAXLEN);
         }
+#endif
         FTL_FREE(hist->global_history);
         hist->global_history = NULL;
         hist->global_is_open = FALSE;
     }
 }
 
+
+
+#if USE_LINENOISE_HISTORY
+static void add_history(const char *line)
+{   (void)linenoiseHistoryAdd(line);
+}
+#endif
 
 
 #else/* USE_READLINE_HISTORY */
@@ -2780,14 +2834,15 @@ typedef void *history_file_t ;
 
 
 #ifdef USE_READLINE
-
-
-
-
 #include "readline/readline.h"
+#endif
+
+#ifdef USE_LINENOISE
+#include "linenoise.h"
+#endif
 
 
-
+#if defined(USE_READLINE) || defined(USE_LINENOISE)
 
 
 typedef struct
@@ -2814,7 +2869,12 @@ charsource_readline_rdch(charsource_t *base_source)
         {   char *nextline;
 
             DEBUGCONSOLE(DPRINTF("calling readline\n");)
+#ifdef USE_READLINE
             nextline = readline(source->prompt);
+#endif
+#ifdef USE_LINENOISE
+            nextline = linenoise(source->prompt);
+#endif
             source->prompt_needed = FALSE;
             if (nextline != NULL)
             {   charsource_string_setstring(base_source, nextline,
@@ -19796,17 +19856,22 @@ fn_timef_gen(const value_t *this_cmd, parser_state_t *state,
                parser_error(state, "internal error - time function "
                             "returns NULL\n");
                assert(tinfo != NULL);
+            } else if (fmtbuf[0] == '\0') {
+               val = value_cstring_new("", 0);
             } else {
-               char fmtstr[128];
+               char fmtstr[256];
                size_t len;
-               /* Warning: Win 7 64-bit strftime "%s" causes abort! */
+               /* Warning: Win 7/8/10 32/64-bit strftime "%s" causes abort!
+                *          as does %h, %T and %D (at least)
+                *          although %Y %y %m %d %H %M %S seem OK
+                */
                IGNORE(printf("tm %p format '%s' buflen %d\n",
                               tinfo, fmtbuf, sizeof(fmtstr));
                       printf("tm year %d hour %d\n",
                              1900+tinfo->tm_year, tinfo->tm_hour););
                len = strftime(&fmtstr[0], sizeof(fmtstr), fmtbuf, tinfo);
                IGNORE(printf("len %d\n", len););
-               if (0 != len)
+               if ((int)len >= 0 && len <= sizeof(fmtstr))
                    val = value_string_new(&fmtstr[0], len);
             }
         }

@@ -2,19 +2,30 @@ CC=gcc
 
 $(info Building for OSARCH $(OSARCH))
 
+ARCH=
 ifeq ($(OSARCH),Darwin)
+    ARCH=osx
+endif
+ifeq ($(OSARCH),osx64)
+    ARCH=osx
+endif
+
+ifeq ($(ARCH),osx)
     LIBS_READLINE=
-    DEFS_READLINE=
+    DEFS_READLINE=-DUSE_LINENOISE
     INCS_READLINE=
+    OBJS_READLINE=linenoise.o
     #LIBS_READLINE=-lreadline -lhistory
     #DEFS_READLINE=-DUSE_READLINE
     #INCS_READLINE=-I /opt/local/include/readline -I /opt/local/include
+    #OBJS_READLINE=
 
     CFLAGS_CC=-Wno-tautological-compare
 else
     LIBS_READLINE=-lreadline -lhistory
     DEFS_READLINE=-DUSE_READLINE
     INCS_READLINE=-I /usr/include/readline
+    OBJS_READLINE=
 
     CFLAGS_CC=
 endif
@@ -27,7 +38,7 @@ CFLAGS=$(CFLAGS_CC) -g $(DEFINES) $(INCLUDES)
 
 FTLEXTS = ftlext-test.so
 
-FTLLIB_OBJS = libftl.o filenames.o libdyn.o
+FTLLIB_OBJS = libftl.o filenames.o libdyn.o $(OBJS_READLINE)
 FTL_OBJS = ftl.o $(FTLLIB_OBJS)
 PENV_OBJS = penv.o $(FTLLIB_OBJS)
 
