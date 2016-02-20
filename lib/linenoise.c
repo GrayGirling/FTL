@@ -1,4 +1,4 @@
-/* linenoise.c -- VERSION 1.0
+/* linenoise.c -- VERSION 1.0.cgg
  *
  * Guerrilla line editing library against the idea that a line editing lib
  * needs to be 20,000 lines of C code.
@@ -105,8 +105,6 @@
  *
  */
 
-#include <termios.h>
-#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
@@ -114,8 +112,75 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/types.h>
-#include <sys/ioctl.h>
+
+#ifdef WIN32
+
+#include <windows.h>
+#include <io.h>
+
+static DWORD term_mode_out = 0;
+static DWORD term_mode_in = 0; /* input & output console modes to restore */
+
+/* Windows POSIX'y funcitons */
+#define snprintf _snprintf
+#define strcasecmp _stricmp
+#define strdup _strdup
+
+#define LNDEBUG_LOG "lndebug.txt"
+
+typedef HANDLE ttyio_t;  /* console I/O handle - a HANDLE */
+
+static int tty_isatty(ttyio_t fd)
+{
+    return fd != NULL;
+}
+static int _tty_write(ttyio_t handle, const void *buf, size_t bytes)
+{
+    DWORD written = -1;
+
+    if (WriteConsole(handle, buf, bytes, &written, NULL))
+        return written;
+    else
+        return -1;
+}
+static int _tty_read(ttyio_t handle, void *buf, size_t bytes)
+{
+    DWORD read = -1;
+
+    if (ReadConsole(handle, buf, bytes, &read, NULL))
+        return read;
+    else
+        return -1;
+}
+static ttyio_t tty_stdin(oid)
+{
+    return GetStdHandle(STD_INPUT_HANDLE);
+}
+static ttyio_t tty_stdout(void)
+{
+    return GetStdHandle(STD_OUTPUT_HANDLE);
+}
+
+#else
+
+#include <termios.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
+
+static struct termios orig_termios; /* In order to restore at exit.*/
+
+#define LNDEBUG_LOG "/tmp/lndebug.txt"
+
+typedef int ttyio_t;  /* console I/O handle - a file descriptor */
+
+#define tty_isatty(hand) (isatty(hand))
+#define _tty_write(hand, buf, len) write(hand, buf, len)
+#define _tty_read(hand, buf, len)  read(hand, buf, len)
+#define tty_stdin() (STDIN_FILENO)
+#define tty_stdout() (STDOUT_FILENO)
+
+#endif
+
 #include "linenoise.h"
 
 #define LINENOISE_DEFAULT_HISTORY_MAX_LEN 100
@@ -123,7 +188,6 @@
 static char *unsupported_term[] = {"dumb","cons25","emacs",NULL};
 static linenoiseCompletionCallback *completionCallback = NULL;
 
-static struct termios orig_termios; /* In order to restore at exit.*/
 static int rawmode = 0; /* For atexit() function to check if restore is needed*/
 static int mlmode = 0;  /* Multi line mode. Default is single line. */
 static int atexit_registered = 0; /* Register atexit just 1 time. */
@@ -135,8 +199,8 @@ static char **history = NULL;
  * We pass this state to functions implementing specific editing
  * functionalities. */
 struct linenoiseState {
-    int ifd;            /* Terminal stdin file descriptor. */
-    int ofd;            /* Terminal stdout file descriptor. */
+    ttyio_t ifd;        /* Terminal input handle. */
+    ttyio_t ofd;        /* Terminal output handle. */
     char *buf;          /* Edited line buffer. */
     size_t buflen;      /* Edited line buffer size. */
     const char *prompt; /* Prompt to display. */
@@ -178,10 +242,21 @@ static void refreshLine(struct linenoiseState *l);
 /* Debugging macro. */
 #if 0
 FILE *lndebug_fp = NULL;
+#define lndebug_raw(...) \
+    do { \
+        if (lndebug_fp == NULL) \
+            printf("open "LNDEBUG_LOG"\n"); \
+            lndebug_fp = fopen(LNDEBUG_LOG,"a"); \
+        if (lndebug_fp != NULL) {                 \
+            fprintf(lndebug_fp, __VA_ARGS__); \
+            fflush(lndebug_fp); \
+        } else { printf("failled to open "LNDEBUG_LOG"\n"); fprintf(lndebug_fp, __VA_ARGS__);     \
+        } \
+    } while (0)
 #define lndebug(...) \
     do { \
         if (lndebug_fp == NULL) { \
-            lndebug_fp = fopen("/tmp/lndebug.txt","a"); \
+            lndebug_fp = fopen(LNDEBUG_LOG,"a"); \
             fprintf(lndebug_fp, \
             "[%d %d %d] p: %d, rows: %d, rpos: %d, max: %d, oldmax: %d\n", \
             (int)l->len,(int)l->pos,(int)l->oldpos,plen,rows,rpos, \
@@ -191,8 +266,52 @@ FILE *lndebug_fp = NULL;
         fflush(lndebug_fp); \
     } while (0)
 #else
+#define lndebug_raw(fmt, ...)
 #define lndebug(fmt, ...)
 #endif
+
+#if 0
+static void buf_str(FILE *out, const void *buf, size_t len)
+{   const char *chars = (const char *)buf;
+    while (len-- > 0) {
+        char ch = *chars++;
+        if (ch == '"' || ch == '\'' || ch == '\\')
+            fprintf(out, "\\%c", ch);
+        else if (isprint(ch))
+            fputc(ch, out);
+        else
+            fprintf(out, "\\x%02x", ch);
+    }
+    fflush(out);
+}
+#endif
+
+#if 0
+static int tty_write(ttyio_t handle, const void *buf, size_t bytes)
+{
+    lndebug_raw("out: [%d] \"", bytes);
+    buf_str(lndebug_fp, buf, bytes);
+    lndebug_raw("\"\n");
+    return _tty_write(handle, buf, bytes);
+}
+#else
+#define tty_write  _tty_write
+#endif
+
+#if 0
+static int tty_read(ttyio_t handle, void *buf, size_t bytes)
+{
+    int rc = _tty_read(handle, buf, bytes);
+    lndebug_raw("in: [%d] \"", rc);
+    buf_str(lndebug_fp, buf, bytes);
+    lndebug_raw("\"\n");
+    return rc;
+    
+}
+#else
+#define tty_read  _tty_read
+#endif
+
 
 /* ======================= Low level terminal handling ====================== */
 
@@ -213,16 +332,126 @@ static int isUnsupportedTerm(void) {
     return 0;
 }
 
-/* Raw mode: 1960 magic shit. */
-static int enableRawMode(int fd) {
-    struct termios raw;
+static int getCursorPosition(ttyio_t ifd, ttyio_t ofd);
 
-    if (!isatty(STDIN_FILENO)) goto fatal;
+#ifdef WIN32
+
+/* Select console I/O if not already selected */
+int linenoiseConsoleInit(void)
+{
+    /* Note - when called from some shells, in particular from 'cmd'
+       stdin and stdout are already connected to the console device on
+       windows.
+       In other shells (e.g. cygwin bash) this is not the case and most
+       of the console management calls will fail with 'Invalid handle' - so
+       we assign the console stream explicitly here.
+    */
+    FILE *con_in = freopen("CONIN$", "r+", stdin);
+    FILE *con_out = freopen("CONOUT$", "w+", stdout);
+    
+    lndebug_raw("stdin %sredirected to console\n",
+                con_in==NULL?"not ":"");
+    lndebug_raw("stdout %sredirected to console\n",
+                con_out==NULL?"not ":"");
+    return con_in != NULL && con_out != NULL? 0: ENOTTY; 
+}
+
+static int enableRawMode(ttyio_t hand_tty_in, ttyio_t hand_tty_out) {
+    int rc = 0;
+    
+    if (!tty_isatty(hand_tty_in)) {
+        lndebug_raw("not TTY\n");
+        goto fatal;
+    }
+    if (!GetConsoleMode(hand_tty_out, &term_mode_out)) {
+        int rc = GetLastError();
+        lndebug_raw("no output console mode - hand %d rc 0x%X\n",
+                    hand_tty_out, rc);
+        goto fatal;
+    }
+    if (!GetConsoleMode(hand_tty_in,  &term_mode_in)) {
+        int rc = GetLastError();
+        lndebug_raw("no input console mode - hand %d (invalid %d) rc 0x%X\n",
+                    hand_tty_in, INVALID_HANDLE_VALUE, rc);
+        goto fatal;
+    }
+    
     if (!atexit_registered) {
         atexit(linenoiseAtExit);
         atexit_registered = 1;
     }
-    if (tcgetattr(fd,&orig_termios) == -1) goto fatal;
+    
+    if (/* enter 'raw' input mkode - turn off processed, line, and echo */
+        !SetConsoleMode(hand_tty_in, term_mode_in & ~ENABLE_LINE_INPUT &
+                        ~ENABLE_ECHO_INPUT)) {
+        rc = GetLastError();
+        lndebug_raw("can't set raw input 0x%x - hand %d rc 0x%x\n",
+                    term_mode_in & ~ENABLE_LINE_INPUT & ~ENABLE_ECHO_INPUT,
+                    hand_tty_in, rc);
+    } 
+    if (/* enter 'raw' output mode - turn off processed output */
+        !SetConsoleMode(hand_tty_out,
+                        term_mode_out & ~ENABLE_PROCESSED_OUTPUT)) {
+        rc = GetLastError();
+        lndebug_raw("can't set raw output 0x%x - hand %d rc 0x%x\n",
+                    term_mode_out & ~ENABLE_PROCESSED_OUTPUT, hand_tty_out, rc);
+    } 
+    if (!FlushConsoleInputBuffer(hand_tty_in)) {
+        rc = GetLastError();
+        lndebug_raw("can't flush raw input - hand %d rc 0x%x\n",
+                    hand_tty_in, rc);
+    }
+    if (rc == 0) {
+        lndebug_raw("in Raw mode\n"); 
+        rawmode = 1;
+    }
+    
+    return 0;
+
+fatal:
+    errno = ENOTTY;
+    return -1;
+}
+
+static void disableRawMode(ttyio_t ifd, ttyio_t ofd) {
+    (void)SetConsoleMode(ifd,  term_mode_in);
+    (void)SetConsoleMode(ofd, term_mode_out);
+    lndebug_raw("out of Raw mode\n"); 
+}
+
+/* Try to get the number of columns in the current terminal, or assume 80
+ * if it fails. */
+static int getColumns(ttyio_t ifd, ttyio_t ofd) {
+    CONSOLE_SCREEN_BUFFER_INFO screen_info;
+
+    if (GetConsoleScreenBufferInfo(ofd, &screen_info)) {
+        lndebug_raw("console width %d\n", screen_info.dwSize.X);
+        return screen_info.dwSize.X;
+    } else {
+        int rc = GetLastError();
+        lndebug_raw("no console width - rc 0x%x\n", rc);
+        return 80;
+    }
+}
+
+
+#else
+
+/* Select console I/O if not already selected */
+int linenoiseConsoleInit(void)
+{   return 0;
+}
+
+/* Raw mode: 1960 magic shit. */
+static int enableRawMode(ttyio_t ifd, ttyio_t ofd) {
+    struct termios raw;
+
+    if (!isatty(ifd)) goto fatal;
+    if (!atexit_registered) {
+        atexit(linenoiseAtExit);
+        atexit_registered = 1;
+    }
+    if (tcgetattr(ifd,&orig_termios) == -1) goto fatal;
 
     raw = orig_termios;  /* modify the original mode */
     /* input modes: no break, no CR to NL, no parity check, no strip char,
@@ -232,7 +461,7 @@ static int enableRawMode(int fd) {
     raw.c_oflag &= ~(OPOST);
     /* control modes - set 8 bit chars */
     raw.c_cflag |= (CS8);
-    /* local modes - choing off, canonical off, no extended functions,
+    /* local modes - echoing off, canonical off, no extended functions,
      * no signal chars (^Z,^C) */
     raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
     /* control chars - set return condition: min number of bytes and timer.
@@ -240,7 +469,7 @@ static int enableRawMode(int fd) {
     raw.c_cc[VMIN] = 1; raw.c_cc[VTIME] = 0; /* 1 byte, no timer */
 
     /* put terminal in raw mode after flushing */
-    if (tcsetattr(fd,TCSAFLUSH,&raw) < 0) goto fatal;
+    if (tcsetattr(ifd,TCSAFLUSH,&raw) < 0) goto fatal;
     rawmode = 1;
     return 0;
 
@@ -249,43 +478,19 @@ fatal:
     return -1;
 }
 
-static void disableRawMode(int fd) {
+static void disableRawMode(ttyio_t ifd, ttyio_t ofd) {
     /* Don't even check the return value as it's too late. */
-    if (rawmode && tcsetattr(fd,TCSAFLUSH,&orig_termios) != -1)
+    if (rawmode && tcsetattr(ifd,TCSAFLUSH,&orig_termios) != -1)
         rawmode = 0;
-}
-
-/* Use the ESC [6n escape sequence to query the horizontal cursor position
- * and return it. On error -1 is returned, on success the position of the
- * cursor. */
-static int getCursorPosition(int ifd, int ofd) {
-    char buf[32];
-    int cols, rows;
-    unsigned int i = 0;
-
-    /* Report cursor location */
-    if (write(ofd, "\x1b[6n", 4) != 4) return -1;
-
-    /* Read the response: ESC [ rows ; cols R */
-    while (i < sizeof(buf)-1) {
-        if (read(ifd,buf+i,1) != 1) break;
-        if (buf[i] == 'R') break;
-        i++;
-    }
-    buf[i] = '\0';
-
-    /* Parse it. */
-    if (buf[0] != ESC || buf[1] != '[') return -1;
-    if (sscanf(buf+2,"%d;%d",&rows,&cols) != 2) return -1;
-    return cols;
 }
 
 /* Try to get the number of columns in the current terminal, or assume 80
  * if it fails. */
-static int getColumns(int ifd, int ofd) {
+static int getColumns(ttyio_t ifd, ttyio_t ofd) {
     struct winsize ws;
 
-    if (ioctl(1, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    if (ioctl(1, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
+    {
         /* ioctl() failed. Try to query the terminal itself. */
         int start, cols;
 
@@ -294,7 +499,7 @@ static int getColumns(int ifd, int ofd) {
         if (start == -1) goto failed;
 
         /* Go to right margin and get position. */
-        if (write(ofd,"\x1b[999C",6) != 6) goto failed;
+        if (tty_write(ofd,"\x1b[999C",6) != 6) goto failed;
         cols = getCursorPosition(ifd,ofd);
         if (cols == -1) goto failed;
 
@@ -302,7 +507,7 @@ static int getColumns(int ifd, int ofd) {
         if (cols > start) {
             char seq[32];
             snprintf(seq,32,"\x1b[%dD",cols-start);
-            if (write(ofd,seq,strlen(seq)) == -1) {
+            if (tty_write(ofd,seq,strlen(seq)) == -1) {
                 /* Can't recover... */
             }
         }
@@ -315,9 +520,36 @@ failed:
     return 80;
 }
 
+#endif
+
+/* Use the ESC [6n escape sequence to query the horizontal cursor position
+ * and return it. On error -1 is returned, on success the position of the
+ * cursor. */
+static int getCursorPosition(ttyio_t ifd, ttyio_t ofd) {
+    char buf[32];
+    int cols, rows;
+    unsigned int i = 0;
+
+    /* Report cursor location */
+    if (tty_write(ofd, "\x1b[6n", 4) != 4) return -1;
+
+    /* Read the response: ESC [ rows ; cols R */
+    while (i < sizeof(buf)-1) {
+        if (tty_read(ifd,buf+i,1) != 1) break;
+        if (buf[i] == 'R') break;
+        i++;
+    }
+    buf[i] = '\0';
+
+    /* Parse it. */
+    if (buf[0] != ESC || buf[1] != '[') return -1;
+    if (sscanf(buf+2,"%d;%d",&rows,&cols) != 2) return -1;
+    return cols;
+}
+
 /* Clear the screen. Used to handle ctrl+l */
 void linenoiseClearScreen(void) {
-    if (write(STDOUT_FILENO,"\x1b[H\x1b[2J",7) <= 0) {
+    if (tty_write(tty_stdout(),"\x1b[H\x1b[2J",7) <= 0) {
         /* nothing to do, just to avoid warning. */
     }
 }
@@ -372,7 +604,7 @@ static int completeLine(struct linenoiseState *ls) {
                 refreshLine(ls);
             }
 
-            nread = read(ls->ifd,&c,1);
+            nread = tty_read(ls->ifd,&c,1);
             if (nread <= 0) {
                 freeCompletions(&lc);
                 return -1;
@@ -465,7 +697,7 @@ static void abFree(struct abuf *ab) {
 static void refreshSingleLine(struct linenoiseState *l) {
     char seq[64];
     size_t plen = strlen(l->prompt);
-    int fd = l->ofd;
+    ttyio_t fd = l->ofd;
     char *buf = l->buf;
     size_t len = l->len;
     size_t pos = l->pos;
@@ -493,7 +725,8 @@ static void refreshSingleLine(struct linenoiseState *l) {
     /* Move cursor to original position. */
     snprintf(seq,64,"\r\x1b[%dC", (int)(pos+plen));
     abAppend(&ab,seq,strlen(seq));
-    if (write(fd,ab.b,ab.len) == -1) {} /* Can't recover from write error. */
+    if (tty_write(fd,ab.b,ab.len) == -1) {}
+     /* Can't recover from write error. */
     abFree(&ab);
 }
 
@@ -509,7 +742,8 @@ static void refreshMultiLine(struct linenoiseState *l) {
     int rpos2; /* rpos after refresh. */
     int col; /* colum position, zero-based. */
     int old_rows = l->maxrows;
-    int fd = l->ofd, j;
+    ttyio_t fd = l->ofd;
+    int j;
     struct abuf ab;
 
     /* Update maxrows if needed. */
@@ -577,7 +811,8 @@ static void refreshMultiLine(struct linenoiseState *l) {
     lndebug("\n");
     l->oldpos = l->pos;
 
-    if (write(fd,ab.b,ab.len) == -1) {} /* Can't recover from write error. */
+    if (tty_write(fd,ab.b,ab.len) == -1) {}
+    /* Can't recover from write error. */
     abFree(&ab);
 }
 
@@ -603,7 +838,7 @@ int linenoiseEditInsert(struct linenoiseState *l, char c) {
             if ((!mlmode && l->plen+l->len < l->cols) /* || mlmode */) {
                 /* Avoid a full update of the line in the
                  * trivial case. */
-                if (write(l->ofd,&c,1) == -1) return -1;
+                if (tty_write(l->ofd,&c,1) == -1) return -1;
             } else {
                 refreshLine(l);
             }
@@ -717,13 +952,13 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
- * will be returned ASAP to read().
+ * will be returned ASAP to tty_read().
  *
  * The resulting string is put into 'buf' when the user type enter, or
  * when ctrl+d is typed.
  *
  * The function returns the length of the current buffer. */
-static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, const char *prompt)
+static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t buflen, const char *prompt)
 {
     struct linenoiseState l;
 
@@ -749,13 +984,13 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
      * initially is just an empty string. */
     linenoiseHistoryAdd("");
 
-    if (write(l.ofd,prompt,l.plen) == -1) return -1;
+    if (tty_write(l.ofd,prompt,l.plen) == -1) return -1;
     while(1) {
         char c;
         int nread;
         char seq[3];
 
-        nread = read(l.ifd,&c,1);
+        nread = tty_read(l.ifd,&c,1);
         if (nread <= 0) return l.len;
 
         /* Only autocomplete when the callback is set. It returns < 0 when
@@ -817,14 +1052,14 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
             /* Read the next two bytes representing the escape sequence.
              * Use two calls to handle slow terminals returning the two
              * chars at different times. */
-            if (read(l.ifd,seq,1) == -1) break;
-            if (read(l.ifd,seq+1,1) == -1) break;
+            if (tty_read(l.ifd,seq,1) == -1) break;
+            if (tty_read(l.ifd,seq+1,1) == -1) break;
 
             /* ESC [ sequences. */
             if (seq[0] == '[') {
                 if (seq[1] >= '0' && seq[1] <= '9') {
                     /* Extended escape, read additional byte. */
-                    if (read(l.ifd,seq+2,1) == -1) break;
+                    if (tty_read(l.ifd,seq+2,1) == -1) break;
                     if (seq[2] == '~') {
                         switch(seq[1]) {
                         case '3': /* Delete key. */
@@ -904,16 +1139,18 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
  * by the linenoise_example program using the --keycodes option. */
 void linenoisePrintKeyCodes(void) {
     char quit[4];
+    ttyio_t conin  = tty_stdin();
+    ttyio_t conout = tty_stdout();
 
     printf("Linenoise key codes debugging mode.\n"
             "Press keys to see scan codes. Type 'quit' at any time to exit.\n");
-    if (enableRawMode(STDIN_FILENO) == -1) return;
+    if (enableRawMode(conin, conout) == -1) return;
     memset(quit,' ',4);
     while(1) {
         char c;
         int nread;
 
-        nread = read(STDIN_FILENO,&c,1);
+        nread = tty_read(conin,&c,1);
         if (nread <= 0) continue;
         memmove(quit,quit+1,sizeof(quit)-1); /* shift string to left. */
         quit[sizeof(quit)-1] = c; /* Insert current char on the right. */
@@ -924,19 +1161,21 @@ void linenoisePrintKeyCodes(void) {
         printf("\r"); /* Go left edge manually, we are in raw mode. */
         fflush(stdout);
     }
-    disableRawMode(STDIN_FILENO);
+    disableRawMode(conin, conout);
 }
 
 /* This function calls the line editing function linenoiseEdit() using
  * the STDIN file descriptor set in raw mode. */
 static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
     int count;
+    ttyio_t conin  = tty_stdin();
+    ttyio_t conout = tty_stdout();
 
     if (buflen == 0) {
         errno = EINVAL;
         return -1;
     }
-    if (!isatty(STDIN_FILENO)) {
+    if (!tty_isatty(conin)) {
         /* Not a tty: read from file / pipe. */
         if (fgets(buf, buflen, stdin) == NULL) return -1;
         count = strlen(buf);
@@ -946,9 +1185,9 @@ static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
         }
     } else {
         /* Interactive editing. */
-        if (enableRawMode(STDIN_FILENO) == -1) return -1;
-        count = linenoiseEdit(STDIN_FILENO, STDOUT_FILENO, buf, buflen, prompt);
-        disableRawMode(STDIN_FILENO);
+        if (enableRawMode(conin, conout) == -1) return -1;
+        count = linenoiseEdit(conin, conout, buf, buflen, prompt);
+        disableRawMode(conin, conout);
         printf("\n");
     }
     return count;
@@ -966,7 +1205,7 @@ char *linenoise(const char *prompt) {
     if (isUnsupportedTerm()) {
         size_t len;
 
-        printf("%s",prompt);
+        printf("%s",prompt == NULL? "%": prompt);
         fflush(stdout);
         if (fgets(buf,LINENOISE_MAX_LINE,stdin) == NULL) return NULL;
         len = strlen(buf);
@@ -998,7 +1237,7 @@ static void freeHistory(void) {
 
 /* At exit we'll try to fix the terminal to the initial conditions. */
 static void linenoiseAtExit(void) {
-    disableRawMode(STDIN_FILENO);
+    disableRawMode(tty_stdin(), tty_stdout());
     freeHistory();
 }
 
@@ -1077,8 +1316,13 @@ int linenoiseHistorySave(const char *filename) {
     int j;
 
     if (fp == NULL) return -1;
-    for (j = 0; j < history_len; j++)
+    for (j = 0; j < history_len; j++) {
+        if (history[j] == NULL) {
+            fprintf(stderr, "history %d is NULL\n", j);
+            history[j] = "";
+        }
         fprintf(fp,"%s\n",history[j]);
+    }
     fclose(fp);
     return 0;
 }

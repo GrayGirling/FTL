@@ -1,0 +1,15 @@
+This version of linenoise has been modified by Gray Girling to attempt
+some support for Windows.
+
+It uses direct console access in Win32 to obtain raw access to the keyboard.
+Unforutnately this is far from a useful start:
+  * the console access does not work properly in e.g. cygwin consoles
+  * the console access does not provide arrow key input
+  * none of the code that assumes that the console interprets VT100 escape codes
+    is valid in windows - a separate library will be needed to implement the
+    various actions
+
+Perhaps there is some mileage in using PDCurses from
+https://github.com/wmcbrine/PDCurses
+
+As it stands this library is not usable under Windows.

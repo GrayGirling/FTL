@@ -72,7 +72,25 @@
    enforce type parsing (e.g. ip.{168.192.4.5})
 
    Support a register of types so we can extend the set of types in ftl (i.e.
-   from ftl scripts)
+   from ftl scripts). Ideally introduce a new 'type' type which supports the
+   same operations as the C version does, extended with a way to register a
+   directory e.g. containing user-supplied operations.  Perhaps consider '<val>
+   -> <user-type-dir-field>' as a way to access these operation given a value of
+   a given type.
+
+   This syntax should be used as the basis of type values.  e.g. the 'int' type
+   should impose the identity int.{1} == 1, string.{"this"} == "this" and
+   mac.{1:2:3:4:5:6} == macaddr {1:2:3:4:5:6}!. Make a representation for a
+   type that includes a unique ID and a parse function?
+
+   Ideally other components of a type might be the operations on it -
+   e.g. int.add.  For such diadic operators how do you infer which operand
+   defines the operator and avoid ambiguity?  Should there be a operator x
+   type1 x type2 -> operator_function facility independent of the type
+   definitions?
+
+   The default '_parse' should be made available in the library - as the one
+   that parses an FTL value.
 
    Support environment syntax which allows a wider range of index types -
    possibly any index type that supports comparison.
@@ -102,12 +120,11 @@
    different machine or is of a different age.  One day we'll have to split
    this file into several parts - we need a mechanisms that will still work!
 
-   Construct an event handling mechanism:
+   Using the event handling mechanism:
        throw <val>,
-       catch {<code>} [val]:{catch code}
-   where the catch code executes after the abandonment of <expr> in the event
-   that it calls throw.  Run each interactive command line in a global catch
-   environment that simply prints <val> as an error.
+       catch [val]:{catch code} {<code>}
+   Run each interactive command line in a global catch environment that simply
+   prints <val> as an error.
 
    Use signal handling, when available, to define additional throw sources.
 
@@ -170,20 +187,6 @@
    It would also mean that env.{parse} would have this natural meaning (because
    a.b == a::{b}) - and this idiom env.{code} should be compiled as such.
 
-   This syntax should be used as the basis of type values.  e.g. the 'int' type
-   should impose the identity int.{1} == 1, string.{"this"} == "this" and
-   mac.{1:2:3:4:5:6} == macaddr {1:2:3:4:5:6}!. Make a representation for a
-   type that includes a unique ID and a parse function?
-
-   Ideally other components of a type might be the operations on it -
-   e.g. int.add.  For such diadic operators how do you infer which operand
-   defines the operator and avoid ambiguity?  Should there be a operator x
-   type1 x type2 -> operator_function facility independent of the type
-   definitions?
-
-   The default '_parse' should be made available in the library - as the one
-   that parses an FTL value.
-
    Dynamic mapping of strings on to vectors. Dynamic mapping of subvectors.
    Dynamic origin shifting.  Extend support for datatype_t and make 1st class
    value.  Implement 'cast' to achieve the above dynamic mappings.  Make it
@@ -229,6 +232,7 @@
 #include <time.h>
 #include <wctype.h>
 #include <stddef.h> /* for ptrdiff_t */
+#include <setjmp.h>
 
 #ifdef _WIN32
 
@@ -2914,6 +2918,9 @@ charsource_readline_init(charsource_readline_t *source,
 {    charsource_t *rl;
      source->prompt = prompt;
      source->prompt_needed = TRUE;
+#ifdef USE_LINENOISE
+     linenoiseConsoleInit();
+#endif
      rl = charsource_string_init(&source->string_base, delete_fn, "*console*",
                                  /* string */NULL, 0);
      source->string_base.base.rdch = &charsource_readline_rdch;
@@ -12372,10 +12379,7 @@ extern value_t *
 value_closure_new(const value_t *code, value_env_t *env)
 {   value_closure_t *closure = NULL;
 
-    if (NULL == code ||
-        value_type_equal(code, type_code) ||
-        value_type_equal(code, type_cmd) ||
-        value_type_equal(code, type_func))
+    if (NULL == code || value_is_codebody(code))
     {   closure = (value_closure_t *)FTL_MALLOC(sizeof(value_closure_t));
         if (NULL != closure)
             value_closure_init(closure, code, env, &value_closure_delete);
@@ -12695,6 +12699,8 @@ struct value_coroutine_s
     suspend_fn_t *sleep;        /* function used to sleep for n ms */
     int errors;                 /* count of errors */
     bool echo_cmds;             /* whether commands should be echoed */
+    jmp_buf *catch_pos;         /* longjmp() dest for outer catch{} */
+    const value_t *catch_arg;   /* argument to exception handler */
 } /* value_coroutine_t, parser_state_t */;
 
 
@@ -12735,6 +12741,7 @@ extern charsource_t *
 parser_charsource(parser_state_t *parser_state)
 {   return instack_charsource(linesource_instack(&(parser_state)->source));
 }
+
 
 
 
@@ -12785,6 +12792,8 @@ value_coroutine_init(parser_state_t *state, value_delete_fn_t *delete_fn,
     state->opdefs = opdefs;
     state->sleep = &sleep_ms;
     state->errors = 0;
+    state->catch_pos = NULL;  /* no outer exception */
+    state->catch_arg = NULL;
     parser_env_push(state, root, /*env_end*/FALSE);
     value_unlocal(dir_value(root));
     value_unlocal(dir_stack_value(env));
@@ -13136,6 +13145,74 @@ parser_report_help(parser_state_t *parser_state, const value_t *cmd)
 
     return parser_error(parser_state, "syntax - %s\n", help);
 }
+
+
+
+
+static void
+parser_save(const parser_state_t *parser_state, parser_state_t *saved)
+{   *saved = *parser_state;
+}
+
+
+
+
+static void
+parser_restore(parser_state_t *parser_state, const parser_state_t *saved)
+{   int errors = parser_state->errors;
+    *parser_state = *saved;
+    parser_state->errors = errors;
+}
+
+
+
+
+extern bool
+parser_throw(parser_state_t *parser_state, const value_t *exception)
+{   bool ok = (parser_state->catch_pos != NULL);
+
+    if (ok) {
+        parser_state->catch_arg = exception;
+        longjmp(*parser_state->catch_pos, 1/* non-zero */);
+    }
+
+    return ok;
+}
+
+
+
+extern const value_t *
+parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok)
+{
+    parser_state_t saved_state;
+    jmp_buf except_place;
+    int event;
+    const value_t *val = &value_null;
+
+    parser_save(state, &saved_state);
+
+    state->catch_pos = &except_place;
+    state->catch_arg = NULL;
+
+    event = setjmp(except_place);
+
+    if (event == 0) {
+        /* no event has occurred yet */
+        val = invoke(code, state);
+
+        /* restore outer values */
+        state->catch_pos = saved_state.catch_pos;
+        state->catch_arg = saved_state.catch_arg;
+        *out_ok = TRUE;
+    } else {
+        /* longjmp() was called somewhere in the body of execute_code */
+        val = state->catch_arg;
+        parser_restore(state, &saved_state);
+        *out_ok = FALSE;
+    }
+    return val;
+}
+
 
 
 
@@ -16343,9 +16420,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
     IGNORE(DPRINTF("env expr base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
 
     if (ok) {
-        if (value_type_equal(lhs, type_code) ||
-            value_type_equal(lhs, type_func) ||
-            value_type_equal(lhs, type_cmd))
+        if (value_is_codebody(lhs))
             code = lhs;
         else if (value_type_equal(lhs, type_closure)) {
             const value_closure_t *closure = (const value_closure_t *)lhs;
@@ -16387,9 +16462,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
             } else
             {   /* deal with the code value on the right hand of the ':' */
 
-                bool rhs_is_code    = value_type_equal(rhs, type_code) ||
-                                      value_type_equal(rhs, type_cmd) ||
-                                      value_type_equal(rhs, type_func);
+                bool rhs_is_code    = value_is_codebody(rhs);
                 bool rhs_is_closure = value_type_equal(rhs, type_closure);
                 bool rhs_is_dir     = value_type_equal(rhs, type_dir);
                 bool promote_to_env = inherit || rhs_is_closure ||
@@ -16778,7 +16851,6 @@ substitute(const value_t *code, const value_t *arg,
 
 
 
-
 /* This function may cause a garbage collection */
 extern const value_t *
 invoke(const value_t *code, parser_state_t *state)
@@ -16904,6 +16976,30 @@ invoke(const value_t *code, parser_state_t *state)
 
     return val;
 }
+
+
+
+
+
+
+
+extern bool value_istype_invokable(const value_t *val)
+{   bool ok = FALSE;
+
+    if (NULL == val)
+        fprintf(stderr, "%s: value is unset - expected "
+                "code, command or function\n",
+                codeid());
+    if (!value_is_invokable(val))
+        fprintf(stderr, "%s: (%s) value has wrong type - "
+                "expected code, command or function\n",
+                codeid(), value_type_name(val));
+    else
+        ok = TRUE;
+    
+    return ok;
+}
+
 
 
 
@@ -18321,10 +18417,7 @@ fn_closure(const value_t *this_fn, parser_state_t *state)
 
     if (value_istype_bool(inhval) &&
         (closure_env || value_istype(argenvval, type_dir))) {
-         if (nocode ||
-             value_type_equal(code, type_code) ||
-             value_type_equal(code, type_cmd) ||
-             value_type_equal(code, type_func))
+         if (nocode || value_is_codebody(code))
          {
              bool inherit = (inhval != value_false);
              value_env_t *newenvval = NULL;
@@ -24019,7 +24112,7 @@ fn_while(const value_t *this_fn, parser_state_t *state)
     const value_t *do_code = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
 
-    if (cond_code != NULL && do_code != NULL)
+    if (value_istype_invokable(cond_code) && value_istype_invokable(do_code))
     {   const value_t *cond;
         bool ok = TRUE;
 
@@ -24030,6 +24123,62 @@ fn_while(const value_t *this_fn, parser_state_t *state)
                !value_bool_is_false(cond))
         {   val = invoke(do_code, state);
             ok = (val != NULL);
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+/* This function may cause a garbage collection */
+static const value_t *
+fn_throw(const value_t *this_fn, parser_state_t *state)
+{   const value_t *info = parser_builtin_arg(state, 1);
+    const value_t *val = value_false;
+
+    if (info != NULL) {
+        bool thrown = parser_throw(state, info);
+        val = value_bool(thrown);
+        if (!thrown)
+            parser_error(state,  "%s: attempt to throw exception without an "
+                         "enclosing try block\n",
+                         codeid());
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+/* This function may cause a garbage collection */
+static const value_t *
+fn_catch(const value_t *this_fn, parser_state_t *state)
+{   const value_t *exception_code = parser_builtin_arg(state, 1);
+    const value_t *execute_code = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_istype_invokable(exception_code) &&
+        value_istype_invokable(execute_code))
+    {   bool ok = TRUE;
+
+        parser_env_return(state, parser_env_calling_pos(state));
+        val = parser_catch_invoke(execute_code, state, &ok);
+
+        if (!ok) /* an exception was caught - returned in val */
+        {
+            const value_t *exception;
+            exception = substitute(exception_code, val, state,
+                                   /*unstrict*/FALSE);
+            val = invoke(exception, state);
         }
     } else
         parser_report_help(state, this_fn);
@@ -24096,6 +24245,12 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
               "<do> <test> - execute <do> while <test> evaluates "
               "to non-FALSE",
               &fn_do, 2, scope);
+    mod_addfnscope(cmds, "catch",
+              "<excep> <do> - run <do> executing <excep> <ex> on an exception",
+              &fn_catch, 2, scope);
+    mod_addfnscope(cmds, "throw",
+              "<value> - signal an exception with <value>, exit outer 'catch'",
+              &fn_throw, 1, scope);
 }
 
 

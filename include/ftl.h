@@ -471,9 +471,11 @@ typedef struct value_s value_t;
 extern const char *
 value_type_name(const value_t *val);
 
+/* true iff value is non-null with the required type */
 extern bool
 value_type_equal(const value_t *val, type_t kind);
 
+/* as value_type_equal but provides an error message to stderr if wrong */
 extern bool
 value_istype(const value_t *val, type_t kind);
 
@@ -1189,6 +1191,11 @@ value_env_bind(value_env_t *envval, const value_t *value);
 
 /*          Closure Values                                   */
 
+#define value_is_codebody(_val)         \
+   (value_type_equal(_val, type_code) || \
+    value_type_equal(_val, type_cmd)  || \
+    value_type_equal(_val, type_func))
+
 extern value_t *
 value_closure_new(const value_t *code, value_env_t *env);
 
@@ -1324,6 +1331,18 @@ parser_error_count(parser_state_t *parser_state);
 extern int
 parser_report_help(parser_state_t *parser_state, const value_t *cmd);
 
+/* throw an exception returning TRUE iff it succeeded */ 
+extern bool
+parser_throw(parser_state_t *parser_state, const value_t *exception);
+
+/* invoke code, catching any 'throw'
+ * set *out_ok TRUE iff there was no throw
+ * return the result of executing code if there was no throw
+ * return the thrown value if there was a throw
+ */
+extern const value_t *
+parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok);
+    
 extern void
 parser_collect(parser_state_t *state);
 
@@ -1520,6 +1539,16 @@ extern void *
 mod_get_implicit(const value_t *this_fn);
 
 /*          Value Parsing                            */
+
+
+    
+#define value_is_invokable(_val)         \
+   (value_type_equal(_val, type_code) || \
+    value_type_equal(_val, type_closure))
+
+/* check for type as above and give error message in incorrect */
+extern bool value_istype_invokable(const value_t *val);
+
 
 /*! Create a binding providing an argument to some code (resulting in a closure)
  *  if 'try' is set the substitution will not fail if there are not enough
