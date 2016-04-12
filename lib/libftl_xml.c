@@ -385,7 +385,7 @@ parse_xml_escape(const char **ref_line, unsigned *out_unicode)
                         is_hex = FALSE;
                 } while (is_hex);
             } else
-            {   while (isdigit(ch))
+            {   while (isdigit((unsigned char)ch))
                 {   unicode = unicode * 10 + (ch - '0');
                     ch = *line++;
                 }
@@ -398,7 +398,7 @@ parse_xml_escape(const char **ref_line, unsigned *out_unicode)
             char esc[16];
             const char *name = line;
             const char *name_toolong = line + sizeof(esc);
-            while (isalpha(*line) && line < name_toolong)
+            while (isalpha((unsigned char)*line) && line < name_toolong)
                 line++;
             ok = got_token = (*line++ == ';');
             if (ok) {
@@ -497,7 +497,7 @@ parse_xml_name(const char **ref_line, char *buf, size_t len)
     const char *line = start;
     char ch = *line;
 
-    if (ch=='_' || ch==':' || isalpha(ch))
+    if (ch=='_' || ch==':' || isalpha((unsigned char)ch))
     {
         do {
             if (len > 1)
@@ -506,7 +506,8 @@ parse_xml_name(const char **ref_line, char *buf, size_t len)
             }
             line++;
         } while ((ch = *line) != '\0' &&
-                 (ch=='_' ||  ch==':' || ch=='-' || ch=='.' || isalnum(ch))
+                 (ch=='_' ||  ch==':' || ch=='-' || ch=='.' ||
+                  isalnum((unsigned char)ch))
                 );
     }
 

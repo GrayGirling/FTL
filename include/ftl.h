@@ -1262,11 +1262,14 @@ parser_env(parser_state_t *parser_state);
 extern dir_t *
 parser_env_copy(parser_state_t *parser_state);
 
+extern dir_t *
+parser_opdefs(const parser_state_t *parser_state);
+    
 extern const value_t *
 parser_builtin_arg(parser_state_t *parser_state, int argno);
 
 extern dir_stack_t *
-parser_env_stack(parser_state_t *parser_state);
+parser_env_stack(const parser_state_t *parser_state);
 
 extern dir_stack_pos_t
 parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool env_end);
@@ -1281,16 +1284,16 @@ parser_env_return(parser_state_t *parser_state, dir_stack_pos_t pos);
 
 /* The environment stack position when the current function was called */
 extern dir_stack_pos_t
-parser_env_calling_pos(parser_state_t *parser_state);
+parser_env_calling_pos(const parser_state_t *parser_state);
 
 extern bool
-parser_echo(parser_state_t *parser_state);
+parser_echo(const parser_state_t *parser_state);
 
 extern void
 parser_echo_set(parser_state_t *parser_state, bool on);
 
 extern suspend_fn_t *
-parser_suspend_get(parser_state_t *parser_state);
+parser_suspend_get(const parser_state_t *parser_state);
 
 extern void
 parser_suspend_set(parser_state_t *parser_state, suspend_fn_t *sleep);
@@ -1335,13 +1338,19 @@ parser_report_help(parser_state_t *parser_state, const value_t *cmd);
 extern bool
 parser_throw(parser_state_t *parser_state, const value_t *exception);
 
+typedef const value_t *parser_call_fn_t(parser_state_t *state, void *call_arg);
+
+extern const value_t *
+parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
+                  void *call_arg, bool *out_ok);
+
 /* invoke code, catching any 'throw'
  * set *out_ok TRUE iff there was no throw
  * return the result of executing code if there was no throw
  * return the thrown value if there was a throw
  */
 extern const value_t *
-parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok);
+parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok);
     
 extern void
 parser_collect(parser_state_t *state);

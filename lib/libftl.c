@@ -207,6 +207,7 @@
    specification of an available C interface (a specification which is a C
    header - perhaps with restricted syntax - would be nice).
 
+   fix 'new  [a=8, b=8]::<4,6>'
 */
 
 
@@ -401,8 +402,8 @@
 
 
 
-#ifdef IGNORE
-#undef IGNORE
+#ifdef OMIT
+#undef OMIT
 #endif
 
 #ifdef DO
@@ -410,7 +411,7 @@
 #endif
 
 #define DO(_x) _x
-#define IGNORE(_x)
+#define OMIT(_x)
 
 #define FORCEDEBUG
 
@@ -427,6 +428,7 @@
 /* #define DEBUGOP DO */
 /* #define DEBUGRCFILE DO */
 /* #define DEBUGEXECV DO */
+/* #define DEBUGMODEXEC DO */
 /* #define DEBUGCMP DO */
 /* #define DEBUGMEMDIFF DO */
 
@@ -443,6 +445,7 @@
 #undef DEBUGSOCK
 #undef DEBUGOP
 #undef DEBUGEXECV
+#undef DEBUGMODEXEC
 #undef DEBUGRCFILE
 #undef DEBUGCMP
 #undef DEBUGMEMDIFF
@@ -451,49 +454,52 @@
 
 
 #ifndef DEBUGGC
-#define DEBUGGC IGNORE
+#define DEBUGGC OMIT
 #endif
 #ifndef DEBUGVALINIT
-#define DEBUGVALINIT IGNORE
+#define DEBUGVALINIT OMIT
 #endif
 #ifndef DEBUGCONSOLE
-#define DEBUGCONSOLE IGNORE
+#define DEBUGCONSOLE OMIT
 #endif
 #ifndef DEBUGEXPD
-#define DEBUGEXPD IGNORE
+#define DEBUGEXPD OMIT
 #endif
 #ifndef DEBUGSERIES
-#define DEBUGSERIES IGNORE
+#define DEBUGSERIES OMIT
 #endif
 #ifndef DEBUGTRACE
-#define DEBUGTRACE IGNORE
+#define DEBUGTRACE OMIT
 #endif
 #ifndef DEBUGDIR
-#define DEBUGDIR IGNORE
+#define DEBUGDIR OMIT
 #endif
 #ifndef DEBUGENV
-#define DEBUGENV IGNORE
+#define DEBUGENV OMIT
 #endif
 #ifndef DEBUGMOD
-#define DEBUGMOD IGNORE
+#define DEBUGMOD OMIT
 #endif
 #ifndef DEBUGSOCK
-#define DEBUGSOCK IGNORE
+#define DEBUGSOCK OMIT
 #endif
 #ifndef DEBUGOP
-#define DEBUGOP IGNORE
+#define DEBUGOP OMIT
 #endif
 #ifndef DEBUGEXECV
-#define DEBUGEXECV IGNORE
+#define DEBUGEXECV OMIT
+#endif
+#ifndef DEBUGMODEXEC
+#define DEBUGMODEXEC OMIT
 #endif
 #ifndef DEBUGRCFILE
-#define DEBUGRCFILE IGNORE
+#define DEBUGRCFILE OMIT
 #endif
 #ifndef DEBUGCMP
-#define DEBUGCMP IGNORE
+#define DEBUGCMP OMIT
 #endif
 #ifndef DEBUGMEMDIFF
-#define DEBUGMEMDIFF IGNORE
+#define DEBUGMEMDIFF OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -625,7 +631,7 @@ extern void sleep_ms(unsigned long milliseconds)
 
 typedef unsigned os_uid_t;
 
-#define DEBUGUID IGNORE
+#define DEBUGUID OMIT
 
 #define BYTESWAP_32(v)    ((((v) & 0xff000000) >> 24)|  \
                            (((v) & 0x00ff0000) >> 8) |  \
@@ -824,7 +830,7 @@ extern void sleep_ms(unsigned long milliseconds)
 
 static bool user_uid(const char *name, unsigned *out_uid)
 {   struct passwd *pwd = getpwnam(name);
-    IGNORE(printf("%s: lookup '%s' gives %p\n", codeid(), name, pwd);)
+    OMIT(printf("%s: lookup '%s' gives %p\n", codeid(), name, pwd);)
     if (NULL == pwd)
         return FALSE;
     else
@@ -1277,7 +1283,7 @@ charsink_string_putc(charsink_t *sink, int ch)
             if (new_maxn < index+2)
                 new_maxn = index+2;
 
-            IGNORE(printf("extend string from %d to %d (index %d)\n",
+            OMIT(printf("extend string from %d to %d (index %d)\n",
                           old_maxn, new_maxn, index);)
             newchars = (char *)FTL_MALLOC(new_maxn*sizeof(char));
             if (NULL != newchars)
@@ -1295,9 +1301,9 @@ charsink_string_putc(charsink_t *sink, int ch)
         {   charbuf->charvec[index] = ch;
             if (index+1 > charbuf->n)
                 charbuf->n = index+1;
-            IGNORE(printf("%d:'%c' len %d\n", index, ch, charbuf->n);)
+            OMIT(printf("%d:'%c' len %d\n", index, ch, charbuf->n);)
         }
-        IGNORE(else printf("Failed to add char index %d - max is %d\n",
+        OMIT(else printf("Failed to add char index %d - max is %d\n",
                            index, charbuf->maxn);)
     }
 
@@ -1346,7 +1352,7 @@ charsink_string_new(void)
     if (NULL != charbuf)
         return charsink_string_init(charbuf);
     else
-    {   IGNORE(printf("%s: no memory for a new string buffer (%d bytes)\n",
+    {   OMIT(printf("%s: no memory for a new string buffer (%d bytes)\n",
                       codeid(), (int)sizeof(charsink_string_t));)
         return NULL;
     }
@@ -1383,13 +1389,13 @@ charsink_fixstring_putc(charsink_t *sink, int ch)
 
         if (index+1 >= charbuf->maxn) {  /* "+1" to allow a final \0 */
             ok = FALSE;
-            IGNORE(else printf("Failed to add char index %d - max is %d\n",
+            OMIT(else printf("Failed to add char index %d - max is %d\n",
                                index, charbuf->maxn);)
         } else
         {   charbuf->charvec[index] = ch;
             if (index+1 > charbuf->n)
                 charbuf->n = index+1;
-            IGNORE(printf("%d:'%c' len %d\n", index, ch, charbuf->n);)
+            OMIT(printf("%d:'%c' len %d\n", index, ch, charbuf->n);)
         }
     }
 
@@ -1437,7 +1443,7 @@ charsink_fixstring_new(char *str, size_t len)
     if (NULL != charbuf)
         return charsink_fixstring_init(charbuf, str, len);
     else
-    {   IGNORE(printf("%s: no memory for a new fixed string buffer "
+    {   OMIT(printf("%s: no memory for a new fixed string buffer "
                       "(%d bytes)\n",
                       codeid(), (int)sizeof(charsink_string_t));)
         return NULL;
@@ -1584,7 +1590,7 @@ charsource_init(charsource_t *source,
         {   va_start(args, name_format);
             (void)vsnprintf(namebuf, namelen+1, name_format, args);
             va_end(args);
-            IGNORE(printf("%s: name '%s' -> [%d] '%s'\n",
+            OMIT(printf("%s: name '%s' -> [%d] '%s'\n",
                           codeid(), name_format, namelen, namebuf););
         }
     }
@@ -1722,7 +1728,8 @@ typedef struct
 STATIC_INLINE int
 charsource_file_rdch(charsource_t *base_source)
 {   charsource_file_t *source = (charsource_file_t *)base_source;
-    return getc(source->stream);
+    int ch = getc(source->stream);
+    return ch;
 }
 
 
@@ -1781,7 +1788,7 @@ static charsource_t *
 charsource_file_init(charsource_file_t *source,
                      charsource_delete_fn_t *delete_fn,
                      const char *name, FILE *stream)
-{    IGNORE(printf("%s: new file '%s'\n", codeid(), name););
+{    OMIT(printf("%s: new file '%s'\n", codeid(), name););
      charsource_init(&source->base,
                      &charsource_file_rdch, &charsource_file_read, delete_fn,
                      &charsource_file_close, "%s", name);
@@ -1854,7 +1861,7 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
                 memcpy(namebuf, name, namelen);
                 namebuf[namelen] = '\0';
             }
-            IGNORE(fprintf(stderr, "%s: open absolute '%s' %s\n",
+            OMIT(fprintf(stderr, "%s: open absolute '%s' %s\n",
                            codeid(), name, stream!=NULL?"OK":"FAILED"););
         } /* else buffer not big enough for this path prefix */
     } else {
@@ -1889,7 +1896,7 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
                     namebuf[prefixlen+1+namelen] = '\0';
                 }
                 stream = fopen(namebuf, mode);
-                IGNORE(fprintf(stderr, "%s: open '%s' %s\n",
+                OMIT(fprintf(stderr, "%s: open '%s' %s\n",
                                codeid(), namebuf, stream!=NULL?"OK":"FAILED"););
             } /* else buffer not big enough for this path prefix */
 
@@ -1931,7 +1938,7 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
         else
             fclose(stream);
     }
-    IGNORE (else printf("%s: couldn't open file on path '%s' - [%d]%s\n",
+    OMIT (else printf("%s: couldn't open file on path '%s' - [%d]%s\n",
                         codeid(), path, namelen, name););
 
     return (charsource_t *)source;
@@ -2849,6 +2856,11 @@ typedef void *history_file_t ;
 #if defined(USE_READLINE) || defined(USE_LINENOISE)
 
 
+
+static bool cause_sigint(void); /* forward reference to Ctrl-C handler */
+
+
+
 typedef struct
 {   charsource_string_t string_base;
     const char *prompt;
@@ -2877,7 +2889,20 @@ charsource_readline_rdch(charsource_t *base_source)
             nextline = readline(source->prompt);
 #endif
 #ifdef USE_LINENOISE
-            nextline = linenoise(source->prompt);
+            do {
+                errno = 0;
+                nextline = linenoise(source->prompt);
+                /* if (nextline == NULL && errno == EAGAIN)
+                       (void)cause_sigint();
+                       // probably we won't have a try block
+                */
+            } while (nextline == NULL && errno == EAGAIN);
+                
+            OMIT(fprintf(stderr, "ln: %s%d %s rc %d\n",
+                         nextline==NULL? "NONE " :"",
+                         nextline==NULL? 0: (int)strlen(nextline),
+                         feof(stdin)? "EOF": "", errno);
+            );
 #endif
             source->prompt_needed = FALSE;
             if (nextline != NULL)
@@ -3311,7 +3336,7 @@ vreport_line(charsink_t *sink, linesource_t *source,
     } else {
         int n = 0;
 
-        IGNORE(printf("%s: sink is %sset - source is '%s'\n",
+        OMIT(printf("%s: sink is %sset - source is '%s'\n",
                       codeid(),NULL==sink? "un":"",
                       linesource_source(source)););
         if (NULL == sink)
@@ -4001,7 +4026,7 @@ value_list_locals(void)
                     codeid(), value_type_name(val), val,
                     heap_version - val->heap_version);
             DEBUGVALINIT(fprintf(stderr, " - line %5d: ", val->lineno););
-            IGNORE(VALUE_SHOW("", val););
+            OMIT(VALUE_SHOW("", val););
             DO(fprintf(stderr, "\n"););
         }
         val = val->heap_next;
@@ -4350,7 +4375,7 @@ value_uint_new(unumber_t number)
 extern void
 value_int_update(const value_t **ref_value, number_t number)
 {   const value_t *val;
-    IGNORE(printf("%s: update int at *%p - %d\n",
+    OMIT(printf("%s: update int at *%p - %d\n",
                   codeid(), ref_value, (int)number););
     val = *ref_value;
     if (NULL == val || !value_type_equal(val, type_int))
@@ -4631,7 +4656,7 @@ static bool parse_int_shift(const char **ref_line,
             else
                 accum = (number_t) (((unumber_t)starting) >> (unsigned)opnd);
 
-            IGNORE(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
+            OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
                           " == %"F_NUMBER_T"\n",
                           codeid(), starting, left?"lsh":"rsh", opnd, accum);)
         }
@@ -5302,7 +5327,7 @@ value_string_get(const value_t *value, const char **out_buf, size_t *out_len)
 
 extern void
 value_string_update(const value_t **ref_value, const char *string)
-{   IGNORE(printf("%s: update str at *%p - '%s'\n",
+{   OMIT(printf("%s: update str at *%p - '%s'\n",
                   codeid(), ref_value, string););
     /* we don't know how to update efficiently - this string may have
        sub-string pointers into it too, so always replace the string */
@@ -5377,10 +5402,10 @@ string_print(outchar_t *out, const char *str, size_t len)
 static bool
 string_is_id(const char *str, size_t len)
 {   bool is_id = FALSE;
-    if (len > 0 && (isalpha(str[0]) || str[0]=='_')) {
+    if (len > 0 && (isalpha((unsigned char)str[0]) || str[0]=='_')) {
         do
             len--;
-        while (len > 0 && (isalnum(str[len]) || str[len]=='_'));
+        while (len > 0 && (isalnum((unsigned char)str[len]) || str[len]=='_'));
         is_id = (len == 0);
     }
     return is_id;
@@ -5761,7 +5786,7 @@ value_string_get_terminated(const value_t *strval,
             *out_len = len;
         } else {
             /* we'll need to make a new copy of the string */
-            IGNORE(printf("%s: copying %d-byte string\n", codeid(), len););
+            OMIT(printf("%s: copying %d-byte string\n", codeid(), len););
             dstr = value_string_new(strbase, len);
             if (NULL != dstr) {
                 value_string_get(dstr, out_buf, out_len);
@@ -6385,7 +6410,7 @@ value_stream_file_new(const char *name, bool binary, bool read, bool write)
     str = fopen(name, mode);
 
     if (NULL == str)
-    {   IGNORE(fprintf(stderr,"%s: can't open '%s' in mode '%s'\n",
+    {   OMIT(fprintf(stderr,"%s: can't open '%s' in mode '%s'\n",
                        codeid(), name, mode););
         return NULL;
     } else
@@ -6840,7 +6865,7 @@ value_dir_bind_print(dir_t *dir, const value_t *name,
         else
             pr->len += value_print(out, root, name);
         pr->len += outchar_printf(out, "=");
-        IGNORE(pr->len += outchar_printf(out, "(%s)#%p ",
+        OMIT(pr->len += outchar_printf(out, "(%s)#%p ",
                                          value_type_name(value), value);)
         pr->len += value_print(out, root, value);
 
@@ -7203,7 +7228,7 @@ extern const value_t *
 dir_stringl_get(dir_t *dir, const char *name, size_t namelen)
 {   value_string_t nameval;
     value_cstring_init(&nameval, name, namelen, /*delete*/NULL);
-    IGNORE(
+    OMIT(
         printf("%s: look up '", codeid());
         value_fprint(stdout, /*root*/NULL, (value_t *)&nameval);
         printf("'\n");)
@@ -7516,7 +7541,7 @@ dir_vec_int_add(dir_t *dir, size_t index, const value_t *value)
             if (new_maxn < index+1)
                 new_maxn = index+1;
 
-            IGNORE(printf("extend vec from %d to %d (index %d)\n",
+            OMIT(printf("extend vec from %d to %d (index %d)\n",
                           old_maxn, new_maxn, index);)
             newbind = (value_t **)FTL_MALLOC(new_maxn*sizeof(value_t *));
             if (NULL != newbind)
@@ -7535,7 +7560,7 @@ dir_vec_int_add(dir_t *dir, size_t index, const value_t *value)
             if (index+1 > vecdir->n)
                 vecdir->n = index+1;
         }
-        IGNORE(else printf("Failed to add index %d - max is %d\n",
+        OMIT(else printf("Failed to add index %d - max is %d\n",
                            (int)index, (int)vecdir->maxn);)
     }
 
@@ -7598,7 +7623,7 @@ dir_vec_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
     if (NULL != bindvec)
     {   size_t i = 0;
 
-        IGNORE(printf("vec has %d entries\n", vecdir->n);)
+        OMIT(printf("vec has %d entries\n", vecdir->n);)
         while (NULL == result && i < vecdir->n)
         {   const value_t *newint = value_int_new(i);
             result = (*enumfn)(dir, newint, bindvec[i], arg);
@@ -7631,7 +7656,7 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
         {   pr->len += value_print(pr->out, pr->root, name);
             pr->len += outchar_printf(pr->out, "=");
         }
-        IGNORE(pr->len += outchar_printf(pr->out, "(%s)#%p ",
+        OMIT(pr->len += outchar_printf(pr->out, "(%s)#%p ",
                                          value_type_name(value), value);)
         pr->len += value_print(pr->out, pr->root, value);
 
@@ -8213,7 +8238,7 @@ values_string_argname_init(void)
     for (i=0; i<FTL_ARGNAMES_CACHED+1; i++)
     {   char *argname = &(builtin_argname[i])[0];
         sprintf(argname, "%s%d", BUILTIN_ARG, i);
-        IGNORE(fprintf(stderr,"%s: arg '%s'[%d]\n", codeid(),
+        OMIT(fprintf(stderr,"%s: arg '%s'[%d]\n", codeid(),
                        argname, strlen(argname)););
         (void)value_cstring_init(&value_string_argname_val[i],
                                  argname,
@@ -8273,7 +8298,7 @@ dir_get_builtin_arg(dir_t *dir, int argno)
     const value_t *res;
     (void)sprintf(&argname[0], "%s%d", BUILTIN_ARG, argno);
     res = dir_string_get(dir, &argname[0]);
-    IGNORE(
+    OMIT(
         if (NULL == res)
         {   fprintf(stderr, "can't find %s in: ", &argname[0]);
             value_fprint(stderr, /*root*/NULL, dir_value(dir));
@@ -8380,7 +8405,7 @@ struct_spec_end(struct_spec_t *spec)
 
 static void
 struct_spec_field_noset(void *mem, const value_t *val)
-{   fprintf(stderr, "%s: write of %s ignored - read only field\n",
+{   fprintf(stderr, "%s: write of %s OMITd - read only field\n",
                 codeid(), type_name(value_type(val)));
 }
 
@@ -8406,7 +8431,7 @@ struct_spec_add_field(struct_spec_t *spec, field_kind_t kind,
 
         *spec->end_fields = newfield;
         spec->end_fields = &newfield->link;
-        IGNORE(printf("%s: add spec field \"%s\" - get %p set %p\n",
+        OMIT(printf("%s: add spec field \"%s\" - get %p set %p\n",
                       codeid(), newfield->name,
                       newfield->field.get, newfield->field.set);)
     }
@@ -8445,7 +8470,7 @@ struct_spec_forall(struct_spec_t *spec, struct_spec_enum_fn_t fn, void *arg)
 
     while (NULL != field && NULL == result)
     {   result = (*fn)(field, arg);
-        IGNORE(printf("%s: spec field \"%s\" result %p\n",
+        OMIT(printf("%s: spec field \"%s\" result %p\n",
                       codeid(), field->name, result);)
         field = field->link;
     }
@@ -8515,7 +8540,7 @@ dir_struct_delete(value_t *value)
 static void
 dir_struct_markver(const value_t *value, int heap_version)
 {   dir_struct_t *structdir = (dir_struct_t *)value;
-    IGNORE(printf("%s: marking struct dir %p ref %p\n",
+    OMIT(printf("%s: marking struct dir %p ref %p\n",
                   codeid(), structdir, structdir->ref);)
     value_mark_version((value_t *)structdir->ref, heap_version);
     dir_id_markver(dir_id_value(&structdir->get_cache), heap_version);
@@ -8612,13 +8637,13 @@ dir_spec_enum_fn(const struct_field_t *field, void *arg)
     {   dir_id_add(get_cache, nameval, &value_null);
         ref_value = dir_id_lookup(get_cache, nameval);
     }
-    IGNORE(printf("%s: get field \"%s\" in struct %p val at %p\n",
+    OMIT(printf("%s: get field \"%s\" in struct %p val at %p\n",
                   codeid(), field->name, args->structmem, ref_value);)
     if (NULL != ref_value)
-    {   IGNORE(printf("%s: get field \"%s\" call get %p\n",
+    {   OMIT(printf("%s: get field \"%s\" call get %p\n",
                       codeid(), field->name, field->get);)
         (*field->field.get)(args->structmem, ref_value);
-        IGNORE(printf("%s: got field \"%s\" of %p new val is %p\n",
+        OMIT(printf("%s: got field \"%s\" of %p new val is %p\n",
                       codeid(), field->name, args->structmem, *ref_value);)
         result = (*args->enumfn)(args->dir, nameval, *ref_value, args->arg);
     }
@@ -8760,7 +8785,7 @@ dir_struct_update(const value_t **ref_value,
 
 
 
-#define DEBUG_DTINT IGNORE
+#define DEBUG_DTINT OMIT
 
 
 
@@ -8885,7 +8910,7 @@ binparse_bits8(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
             if ((*rdr->binget)(rdr, *ref_binpos, &data, sizeof(data))) {
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
                 ftl_u8_t n = data;
-                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                OMIT(DPRINTF("%s: %ssigned %db %s\n",
                                     codeid(), inttype->is_signed? "":" un",
                                     8, ""););
                 if (inttype->is_signed)
@@ -8915,7 +8940,7 @@ binparse_bits16l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
                 ftl_u16_t n = (data[1] << 8) | data[0];
-                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                OMIT(DPRINTF("%s: %ssigned %db %s\n",
                                     codeid(), inttype->is_signed? "":" un",
                                     16, "le"););
                 if (inttype->is_signed)
@@ -8945,7 +8970,7 @@ binparse_bits16b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 ftl_u16_t n = (data[0] << 8) | data[1];
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
-                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                OMIT(DPRINTF("%s: %ssigned %db %s\n",
                                     codeid(), inttype->is_signed? "":" un",
                                     16, "be"););
                 if (inttype->is_signed)
@@ -8977,7 +9002,7 @@ binparse_bits32l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                 ftl_u32_t n  = (data[3] << 24) | (data[2] << 16) |
                                (data[1] << 8) | data[0];
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
-                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                OMIT(DPRINTF("%s: %ssigned %db %s\n",
                                     codeid(), inttype->is_signed? "":" un",
                                     32, "le"););
                 if (inttype->is_signed)
@@ -9009,7 +9034,7 @@ binparse_bits32b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                 ftl_u32_t n = (data[0] << 24) | (data[1] << 16) |
                               (data[2] << 8) | data[3];
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
-                IGNORE(DPRINTF("%s: %ssigned %db %s\n",
+                OMIT(DPRINTF("%s: %ssigned %db %s\n",
                                     codeid(), inttype->is_signed? "":" un",
                                     32, "be"););
                 if (inttype->is_signed)
@@ -9448,7 +9473,7 @@ dir_argvec_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
     if (NULL != argv)
     {   size_t i = 0;
 
-        IGNORE(printf("argv has %d entries\n", vecdir->argc);)
+        OMIT(printf("argv has %d entries\n", vecdir->argc);)
         while (NULL == result && i < vecdir->argc)
         {   const char *thisarg = argv[i];
             value_t *argval = &value_null;
@@ -9590,7 +9615,7 @@ array_spec_set_cont(array_spec_t *spec, field_kind_t kind, size_t elems,
     {   field_init(newfield, kind, set, get);
         spec->field = newfield;
         spec->elems = elems;
-        IGNORE(printf("%s: add array content - get %p set %p\n",
+        OMIT(printf("%s: add array content - get %p set %p\n",
                        codeid(), newfield->get, newfield->set);)
     }
 }
@@ -9625,7 +9650,7 @@ dir_array_delete(value_t *value)
 static void
 dir_array_markver(const value_t *value, int heap_version)
 {   dir_array_t *arraydir = (dir_array_t *)value;
-    IGNORE(printf("%s: marking array dir %p\n", codeid(), arraydir);)
+    OMIT(printf("%s: marking array dir %p\n", codeid(), arraydir);)
     value_mark_version((value_t *)arraydir->ref, heap_version);
     dir_vec_markver(dir_vec_value(&arraydir->get_cache), heap_version);
 }
@@ -10222,7 +10247,7 @@ dir_sysenv_get(dir_t *dir, const value_t *name)
     {   char *strval = getenv(namestr);
         if (NULL != strval)
             val = value_string_new_measured(strval);
-        IGNORE(else printf("%s: sysenv get '%s' not in env\n",
+        OMIT(else printf("%s: sysenv get '%s' not in env\n",
                            codeid(), namestr);)
     }
     return val;
@@ -10361,7 +10386,7 @@ dir_fs_get(dir_t *dir, const value_t *name)
     {   char *strval = getenv(namestr);
         if (NULL != strval)
             val = value_string_new_measured(strval);
-        IGNORE(else printf("%s: fs get '%s' not in env\n",
+        OMIT(else printf("%s: fs get '%s' not in env\n",
                            codeid(), namestr);)
     }
     return val;
@@ -10733,7 +10758,7 @@ wcstralloc(const char *str, size_t strleng, size_t *out_wchars)
     {   size_t n = mbsntowcs(NULL, str, strleng, 0);
 
         if (n == (size_t)(-1))
-        {   IGNORE(fprintf(stderr, "%s: unicode conversion failed for '%s'\n",
+        {   OMIT(fprintf(stderr, "%s: unicode conversion failed for '%s'\n",
                            codeid(), str);)
             return (wchar_t *)NULL; /* conversion error */
         } else
@@ -10745,13 +10770,13 @@ wcstralloc(const char *str, size_t strleng, size_t *out_wchars)
                 /* +1 converts final '\0' too */
                 if (realn == (size_t)(-1))
                 {   FTL_FREE(wcstr);
-                    IGNORE(fprintf(stderr, "%s: unicode conversion of '%s' - "
+                    OMIT(fprintf(stderr, "%s: unicode conversion of '%s' - "
                                    "bad size %d (supposed to be %d)?\n",
                                     codeid(), str, n, realn);)
                     return (wchar_t *)NULL; /* size error? */
                 } else
                 {   /* updated only on success */
-                    *out_wchars = realn;  /* count ignores final L'\0; */
+                    *out_wchars = realn;  /* count OMITs final L'\0; */
                     return wcstr;
                 }
             }
@@ -10800,7 +10825,7 @@ static long /* rc */
 win_regkeyval_close(key_t *ref_key)
 {   key_t key = *ref_key;
 
-    IGNORE(fprintf(stderr, "%s: closing key handle %p\n", codeid(), key);)
+    OMIT(fprintf(stderr, "%s: closing key handle %p\n", codeid(), key);)
     if (key != NULL)
     {   int rc = RegCloseKey(key);
         if (rc != ERROR_SUCCESS)
@@ -10850,7 +10875,7 @@ win_regkeyval_get(key_t key, const char *valname, size_t valnamelen,
                                                         out_type, data,
                                                         &datalen);
                 if (rc != ERROR_SUCCESS)
-                {   IGNORE(fprintf(stderr, "%s: (real) query for reqistry "
+                {   OMIT(fprintf(stderr, "%s: (real) query for reqistry "
                                    "value failed rc %d\n", codeid(), rc);)
                     FTL_FREE(data);
                 } else
@@ -10859,7 +10884,7 @@ win_regkeyval_get(key_t key, const char *valname, size_t valnamelen,
                 }
             }
         }
-        IGNORE(else fprintf(stderr, "%s: initial query for reqistry value "
+        OMIT(else fprintf(stderr, "%s: initial query for reqistry value "
                             "failed rc %d\n", codeid(), rc););
 
         REGVAL_NAMEVAR_CLOSE(valname_k);
@@ -10919,7 +10944,7 @@ win_regkeyval_enum_value(key_t key, unsigned long n,
                 if (rc == ERROR_NO_MORE_ITEMS)
                     rc = ERROR_SUCCESS;
                     /* *out_last will be TRUE */
-                IGNORE(else
+                OMIT(else
                        fprintf(stderr, "%s: (real) enum of value %d "
                                "fails rc %d - data %d bytes name %d chars\n",
                                codeid(), n, rc, datalen, namechars);)
@@ -10952,7 +10977,7 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
     unsigned char *data = (unsigned char *)key_data;
     dir_t *dir = dir_id_new();
 
-    IGNORE(fprintf(stderr,"%s: key type %d data size %d\n",
+    OMIT(fprintf(stderr,"%s: key type %d data size %d\n",
                    codeid(), key_type, datalen););
 
     if (NULL != dir)
@@ -11078,7 +11103,7 @@ dir_regkeyval_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
         rc = win_regkeyval_enum_value(keydir->key, n, &complete, &key_type,
                                       &keyval_wc, &valnamechars,
                                       &data, &datalen);
-        IGNORE(fprintf(stderr,"%s: enum %d %scomplete rc %d\n",
+        OMIT(fprintf(stderr,"%s: enum %d %scomplete rc %d\n",
                        codeid(), n, complete?"":"not ", rc);)
         (void)rc;
         if (!complete)
@@ -11319,7 +11344,7 @@ dir_regkeyval_init(dir_regkeyval_t *keydir, key_t root,
         dir_init(&keydir->dir, &dir_regkeyval_add, /*lookup*/ NULL,
                  &dir_regkeyval_get, &dir_regkeyval_forall,
                  /*print*/ NULL, delete_fn, /*markver*/NULL);
-    IGNORE(else
+    OMIT(else
               fprintf(stderr, "%s: failed to create registry key environment"
                       " - rc %d\n", codeid(), rc);)
     return rc;
@@ -11884,7 +11909,7 @@ value_env_bind_print(dir_t *dir, const value_t *name,
         else
             pr->len += value_print(pr->out, pr->root, name);
         pr->len += outchar_printf(pr->out, "=");
-        IGNORE(pr->len += outchar_printf(pr->out, "(%s)#%p ",
+        OMIT(pr->len += outchar_printf(pr->out, "(%s)#%p ",
                                          value_type_name(value), value);)
         pr->len += value_print(pr->out, pr->root, value);
         pr->vals++;
@@ -12066,7 +12091,7 @@ value_env_copy(value_env_t *envdir_from)
 extern void
 value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
 {   if (NULL != env)
-    {   IGNORE(
+    {   OMIT(
             printf("%s: push onto stack %p %s ",
                    codeid(), &env->dirs,
                    value_type_name(dir_value(newdir)));
@@ -12174,12 +12199,10 @@ value_env_bind(value_env_t *envdir, const value_t *value)
 
             if (NULL != localbind)
             {   dir_set(localbind, unbound, value);
-                IGNORE(DIR_SHOW("\n** pushing env: ", localbind);
-                       DIR_SHOW("\n** onto env: ",
-                                  value_env_dir(newenvdir));)
+                OMIT(DIR_SHOW("\n** pushing env: ", localbind);
+                     DIR_SHOW("\n** onto env: ", value_env_dir(newenvdir));)
                 value_env_pushdir(newenvdir, localbind, /*env_end*/FALSE);
-                IGNORE(DIR_SHOW("\n** result: ",
-                                  value_env_dir(newenvdir));)
+                OMIT(DIR_SHOW("\n** result: ", value_env_dir(newenvdir));)
 
             } else
             {   /* will garbage collect localbind and envdir later */
@@ -12495,7 +12518,7 @@ value_closure_pushenv(const value_t *value, value_env_t *env, bool env_end)
         } else
             ok = value_env_pushenv(closure->env, env, env_end);
     }
-    IGNORE(else printf("%s: NULL value onto closure failed\n", codeid());)
+    OMIT(else printf("%s: NULL value onto closure failed\n", codeid());)
 
     return ok;
 }
@@ -12643,7 +12666,7 @@ value_to_dir(const value_t *val, dir_t **out_dir)
         dir_t *env = NULL;
         (void)value_closure_get(val, &code, &env, &unbound);
         *out_dir = env; /* NB: this may be NULL */
-        IGNORE(if (NULL == *out_dir)
+        OMIT(if (NULL == *out_dir)
                    printf("%s: closure has empty env dir\n", codeid());)
         return TRUE;
     } else
@@ -12879,7 +12902,7 @@ parser_root_set(parser_state_t *parser_state, dir_t *dir)
 }
 
 extern dir_stack_t *
-parser_env_stack(parser_state_t *parser_state)
+parser_env_stack(const parser_state_t *parser_state)
 {   return (parser_state)->env;
 }
 
@@ -12895,7 +12918,7 @@ parser_env_copy(parser_state_t *parser_state)
 }
 
 extern dir_t *
-parser_opdefs(parser_state_t *parser_state)
+parser_opdefs(const parser_state_t *parser_state)
 {   return (parser_state)->opdefs;
 }
 
@@ -12925,13 +12948,13 @@ parser_env_return(parser_state_t *parser_state, dir_stack_pos_t pos)
 
 
 extern dir_stack_pos_t
-parser_env_calling_pos(parser_state_t *parser_state)
+parser_env_calling_pos(const parser_state_t *parser_state)
 {   return dir_stack_last_pos((parser_state)->env);
 }
 
 
 extern bool
-parser_echo(parser_state_t *parser_state)
+parser_echo(const parser_state_t *parser_state)
 {   return (parser_state)->echo_cmds;
 }
 
@@ -12942,7 +12965,7 @@ parser_echo_set(parser_state_t *parser_state, bool on)
 }
 
 extern suspend_fn_t *
-parser_suspend_get(parser_state_t *parser_state)
+parser_suspend_get(const parser_state_t *parser_state)
 {   return (parser_state)->sleep;
 }
 
@@ -13150,18 +13173,25 @@ parser_report_help(parser_state_t *parser_state, const value_t *cmd)
 
 
 static void
-parser_save(const parser_state_t *parser_state, parser_state_t *saved)
-{   *saved = *parser_state;
+parser_save(const parser_state_t *parser_state,
+            parser_state_t *out_saved, dir_t **out_saved_stack)
+{   *out_saved = *parser_state;
+    *out_saved_stack = dir_stack_top(parser_env_stack(parser_state));
 }
 
 
 
 
 static void
-parser_restore(parser_state_t *parser_state, const parser_state_t *saved)
+parser_restore(parser_state_t *parser_state,
+               const parser_state_t *saved, dir_t *saved_stack)
 {   int errors = parser_state->errors;
+    //dir_stack_t *stack;
     *parser_state = *saved;
     parser_state->errors = errors;
+    //stack = parser_env_stack(parser_state);
+    //stack->stack = saved_stack;
+    parser_env_return(parser_state, (dir_stack_pos_t)&saved_stack);
 }
 
 
@@ -13182,14 +13212,16 @@ parser_throw(parser_state_t *parser_state, const value_t *exception)
 
 
 extern const value_t *
-parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok)
+parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
+                  void *call_arg, bool *out_ok)
 {
     parser_state_t saved_state;
+    dir_t *saved_stack = NULL;
     jmp_buf except_place;
     int event;
     const value_t *val = &value_null;
 
-    parser_save(state, &saved_state);
+    parser_save(state, &saved_state, &saved_stack);
 
     state->catch_pos = &except_place;
     state->catch_arg = NULL;
@@ -13198,7 +13230,7 @@ parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok)
 
     if (event == 0) {
         /* no event has occurred yet */
-        val = invoke(code, state);
+        val = (*call)(state, call_arg);
 
         /* restore outer values */
         state->catch_pos = saved_state.catch_pos;
@@ -13207,11 +13239,27 @@ parser_catch_invoke(const value_t *code, parser_state_t *state, bool *out_ok)
     } else {
         /* longjmp() was called somewhere in the body of execute_code */
         val = state->catch_arg;
-        parser_restore(state, &saved_state);
+        parser_restore(state, &saved_state, saved_stack);
         *out_ok = FALSE;
     }
     return val;
 }
+
+
+
+static const value_t *parser_call_invoke(parser_state_t *state, void *call_arg)
+{
+    const value_t *code = (const value_t *)call_arg;
+    return invoke(code, state);
+}
+
+
+
+extern const value_t *
+parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok)
+{
+    return parser_catch_call(state, &parser_call_invoke, (void *)code, out_ok);
+}    
 
 
 
@@ -13232,7 +13280,7 @@ parser_collect(parser_state_t *state)
     heap_value = value_heap_nextversion();
     /* should be able to drop the following soon */
     value_mark_version(parser_state_value(state), heap_value);
-    IGNORE(value_list_locals());
+    OMIT(value_list_locals());
     value_mark_local(heap_value);
     value_heap_collect();
 }
@@ -13330,7 +13378,7 @@ parser_expand(parser_state_t *state, outchar_t *out,
                         value_print(sink, dir_value(parser_root(state)),
                                     macval);
                         charsink_string_buf(sink, &body, &blen);
-                        IGNORE(printf("mac body: '%s'[%d]\n", body, blen);)
+                        OMIT(printf("mac body: '%s'[%d]\n", body, blen);)
                         macval = value_string_new(body, blen);
                         charsink_string_close(sink);
                     }
@@ -13384,10 +13432,10 @@ parse_white(const char **ref_line)
 {   const char *start = *ref_line;
     const char *line = start;
 
-    while (isspace(*line)) {
+    while (isspace((unsigned char)*line)) {
         line++;
     }
-    IGNORE(printf("%s: %d white chars\n", codeid(), line-start););
+    OMIT(printf("%s: %d white chars\n", codeid(), line-start););
     *ref_line = line;
     return line != start;
 }
@@ -13451,7 +13499,7 @@ parse_item(const char **ref_line, const char *delims, size_t ndelim,
     if (delims == NULL)
         delims="";
 
-    while (*line != '\0' && !isspace(*line) &&
+    while (*line != '\0' && !isspace((unsigned char)*line) &&
            NULL == memchr(delims, *line, ndelim))
     {   if (len > 1)
         {   len--;
@@ -13485,14 +13533,15 @@ parse_id(const char **ref_line, char *buf, size_t len)
     char ch = *line;
 
 #if BUILTIN_ARG_CH1 == '_'
-    if (ch=='_' || isalnum(ch))
+    if (ch=='_' || isalnum((unsigned char)ch))
         do {
             if (len > 1)
             {   len--;
                 *buf++ = ch;
             }
             line++;
-        } while ((ch = *line) != '\0' && (ch=='_' || isalnum(ch)) );
+        } while ((ch = *line) != '\0' &&
+                 (ch=='_' || isalnum((unsigned char)ch)) );
 #else
     if (ch==BUILTIN_ARG_CH1)
         do {
@@ -13501,16 +13550,17 @@ parse_id(const char **ref_line, char *buf, size_t len)
                 *buf++ = ch;
             }
             line++;
-        } while ((ch = *line) != '\0' && isdigit(ch));
+        } while ((ch = *line) != '\0' && isdigit((unsigned char)ch));
     else
-    if (ch=='_' || isalpha(ch))
+    if (ch=='_' || isalpha((unsigned char)ch))
         do {
             if (len > 1)
             {   len--;
                 *buf++ = ch;
             }
             line++;
-        } while ((ch = *line) != '\0' && (ch=='_' || isalnum(ch)) );
+        } while ((ch = *line) != '\0' &&
+                 (ch=='_' || isalnum((unsigned char)ch)) );
 #endif
 
     if (len <= 0)
@@ -14165,8 +14215,9 @@ parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
 {   const char *line = *ref_line;
     const value_t *opval = NULL;
     bool ok = parse_oneof(ref_line, ops->state, opdefs, &opval) &&
-              !(isalpha((*ref_line)[-1]) && (isalpha((*ref_line)[0]) ||
-                                             (*ref_line)[0] == '_'));
+              !(isalpha((unsigned char)(*ref_line)[-1]) &&
+                (isalpha((unsigned char)(*ref_line)[0]) ||
+                 (*ref_line)[0] == '_'));
     /* an operator can not end on an alphabetic or '_' if there is one to
        continue */
 
@@ -14737,16 +14788,16 @@ fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
     dir_stack_t *stack;
 
     (void)value_closure_get(this_fn, &codeval, &dir, &unbound);
-    IGNORE(DIR_SHOW_ST("pre-return dir of @fn: ", state, dir);)
+    OMIT(DIR_SHOW_ST("pre-return dir of @fn: ", state, dir);)
 
     stack = value_env_dir_stack((value_env_t *)dir);
     func = (value_func_lhv_t *)codeval;
     /* return to the calling envrionment */
     dir_stack_return(stack, dir_stack_last_pos(stack)); /* argument */
     dir_stack_return(stack, dir_stack_last_pos(stack)); /* infodir */
-    IGNORE(DIR_SHOW_ST("return dir of @fn: ", state, dir);
-           printf("at %p\n", dir_stack_top(stack));
-           printf("top is %p\n", dir_stack_top(parser_env_stack(state)));)
+    OMIT(DIR_SHOW_ST("return dir of @fn: ", state, dir);
+         printf("at %p\n", dir_stack_top(stack));
+         printf("top is %p\n", dir_stack_top(parser_env_stack(state)));)
 
     if (NULL != dir)
     {   if (!dir_set(dir_stack_top(stack), func->lv_name, val))
@@ -14949,7 +15000,7 @@ value_mem_bin_write(const value_mem_t *mem, size_t byte_index,
               byte_index >= base &&
               byte_index + buflen <= base + binlen;
 
-    IGNORE(printf("%s: bin write %zd[%zd] in %"F_NUMBER_T"[%zd] %s\n", codeid(),
+    OMIT(printf("%s: bin write %zd[%zd] in %"F_NUMBER_T"[%zd] %s\n", codeid(),
                   byte_index, buflen, base, binlen, ok? "OK": "failed"););
     if (ok)
     {   char *writeable_bin = (char *)bin;
@@ -14987,7 +15038,7 @@ value_mem_bin_len_able_ro(const value_mem_t *mem, size_t byte_index,
         if (0 != (ability & (1 << mem_can_write)))
             len = 0; /* we can't write */
 
-        IGNORE(printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd "
+        OMIT(printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd "
                       "%sable 0x%X - gives len %zd\n",
                       codeid(), membase, byte_index, binlen, unable?"un":"",
                       ability, len););
@@ -15019,7 +15070,7 @@ value_mem_bin_len_able_rw(const value_mem_t *mem, size_t byte_index,
                 byte_index < membase + binlen)
                 len = (size_t)(membase + binlen - byte_index);
         }
-        IGNORE(printf("%s: mem bin base %"F_NUMBER_T" index %zd "
+        OMIT(printf("%s: mem bin base %"F_NUMBER_T" index %zd "
                       "len %zd %sable 0x%X - gives len %zd\n",
                       codeid(), membase, byte_index, binlen, unable?"un":"",
                       ability, len););
@@ -15097,7 +15148,7 @@ value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
 
     if (binmem != NULL) {
         value_t *binstr = value_string_alloc_new(len, out_block);
-        IGNORE(printf("%s: binstr %p out_block %p\n", codeid(),
+        OMIT(printf("%s: binstr %p out_block %p\n", codeid(),
                       binstr, out_block););
         if (binstr == NULL || out_block == NULL)
         {   FTL_FREE(binmem);
@@ -15478,9 +15529,12 @@ mod_parse_cmd(dir_t *dir, const char **ref_line, const value_t **out_cmd)
     char cmdname[FTL_CMDNAME_MAX+1];
     const char *start = *ref_line;
 
-    if (parse_id(ref_line, &cmdname[0], sizeof(cmdname)))
+    if (parse_id(ref_line, &cmdname[0], sizeof(cmdname))) {
+        DEBUGMODEXEC(fprintf(stderr, "%s: exec - got '%s', search in %p\n",
+                             codeid(), &cmdname[0], dir););
+        DEBUGMODEXEC(DIR_SHOW("dir: ", dir);)
         cmd = dir_string_get(dir, cmdname);
-
+    }
     if (cmd != NULL)
     {   *out_cmd = cmd;
         return TRUE;
@@ -15823,7 +15877,7 @@ parse_env(const char **ref_line, parser_state_t *state,
                  parse_index_expr(ref_line, state, &index) &&
                  parse_space(ref_line));
 
-        IGNORE(DPRINTF("env %sunbound%s: %s\n",
+        OMIT(DPRINTF("env %sunbound%s: %s\n",
                        ok? "":"(FAIL) ",unbound?"":" (NONE)", *ref_line););
 
         if (ok && unbound)
@@ -15912,7 +15966,7 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
                         }
                         dir_int_set(vec, index, element);
 
-                        IGNORE(fprintf(stderr, "set index %d to ", index);
+                        OMIT(fprintf(stderr, "set index %d to ", index);
                                value_fprint(stderr,
                                             dir_value(parser_root(state)),
                                             element);
@@ -15974,19 +16028,19 @@ parse_index(const char **ref_line, parser_state_t *state,
     } else
     if (parse_int_val(&line, &n))
     {   *out_val = value_int_new(n);
-        IGNORE(printf("%s: parsed int %ld\n", codeid(), n);)
+        OMIT(printf("%s: parsed int %ld\n", codeid(), n);)
         ok = TRUE;
     } else
     {   char id[FTL_ID_MAX];
         size_t id_filled = 0;
         if (parse_string(&line, &id[0], sizeof(id), &id_filled))
-        {   IGNORE(printf("%s: parsed string '%s'\n", codeid(), &id[0]);)
+        {   OMIT(printf("%s: parsed string '%s'\n", codeid(), &id[0]);)
             *out_val = value_string_new(&id[0], id_filled);
             ok = TRUE;
         } else
         {   if (parse_id(&line, &id[0], sizeof(id)) && parse_space(ref_line))
             {   *out_val = value_string_new_measured(&id[0]);
-                IGNORE(printf("%s: parsed ID %s\n", codeid(), &id[0]);)
+                OMIT(printf("%s: parsed ID %s\n", codeid(), &id[0]);)
                 ok = TRUE;
             }
         }
@@ -16041,7 +16095,7 @@ get_index_dir(const value_t *ival, dir_t **out_parent)
             */
             const value_t *code;
             const value_t *unbound;
-            IGNORE(printf("closure has empty env dir\n");)
+            OMIT(printf("closure has empty env dir\n");)
             /* give closure an empty directory */
             value_closure_pushdir(ival, dir_id_new(), /*end*/FALSE);
             /* return environment with empty directory in it */
@@ -16151,7 +16205,7 @@ parse_index_path(const char **ref_line, parser_state_t *state,
     const value_t *new_id = NULL;
 
     ok = parse_index_expr(ref_line, state, &new_id) && parse_space(ref_line);
-    IGNORE(printf("%s: index was %s ...%s\n",
+    OMIT(printf("%s: index was %s ...%s\n",
                   codeid(), ok? "before": "not at", *ref_line);)
 
     while (ok && parse_dot(ref_line) &&
@@ -16164,7 +16218,7 @@ parse_index_path(const char **ref_line, parser_state_t *state,
             parser_value_print(state, new_id);
             /*printf("' in %s\n", value_type_name(parent));*/
             fprintf(stderr, "'\n");
-            IGNORE(DIR_SHOW_ST("parent env: ", state, parent);)
+            OMIT(DIR_SHOW_ST("parent env: ", state, parent);)
             ok = FALSE;
         }
 
@@ -16417,7 +16471,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
     /* lhs_is_env will be true if [<id-dir>] is parsed - and lhs will be a
      * value_env_t (otherwise it could be any value_t) */
 
-    IGNORE(DPRINTF("env expr base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
+    OMIT(DPRINTF("env expr base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
 
     if (ok) {
         if (value_is_codebody(lhs))
@@ -16433,7 +16487,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
         }
     }
 
-    IGNORE(printf("is%s closure\n", is_closure?"":" not"););
+    OMIT(printf("is%s closure\n", is_closure?"":" not"););
     if (!is_closure)
     {
         *out_val = lhs;
@@ -16559,7 +16613,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
         if (ok)
         {
-            IGNORE(DPRINTF("env expr: %sDIR - env %sNULL code %sNULL\n",
+            OMIT(DPRINTF("env expr: %sDIR - env %sNULL code %sNULL\n",
                            lhs_is_dir_nonenv? "": "not ",
                            env == NULL? "": "not ", code == NULL? "": "not "););
             if (lhs_is_dir_nonenv || !changed)
@@ -16622,10 +16676,10 @@ parse_index_value(const char **ref_line, parser_state_t *state,
         else
         {   parser_error(state, "index symbol undefined in parent '");
             parser_value_print(state, id);
-            IGNORE(printf("' in %s at %p\n",
+            OMIT(printf("' in %s at %p\n",
                           value_type_name(dir_value(parent)), parent);)
             fprintf(stderr, "'\n");
-            IGNORE(DIR_SHOW("parent env: ", parent);)
+            OMIT(DIR_SHOW("parent env: ", parent);)
         }
     }
     return ok;
@@ -16665,7 +16719,7 @@ parse_index_lhvalue(const char **ref_line, parser_state_t *state,
             dir_set(infodir, name, get);
             (void)value_closure_pushdir(closure, parent, /*env_end*/FALSE);
             (void)value_closure_pushdir(closure, infodir, /*env_end*/FALSE);
-            IGNORE(DIR_SHOW_ST("@parent: ", state, parent);
+            OMIT(DIR_SHOW_ST("@parent: ", state, parent);
                    printf("at %p\n", parent);)
             (void)value_closure_pushunbound(closure, NULL,
                                             value_string_new_measured(argname));
@@ -16722,7 +16776,7 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
 
         if (ok)
         {   if (is_lhv)
-            {   IGNORE(printf("%s: ..>%s\n", codeid(), *ref_line);
+            {   OMIT(printf("%s: ..>%s\n", codeid(), *ref_line);
                 DIR_SHOW_ST("env: ", state, env);)
                 /*ok = parse_index_value(ref_line, state, env, out_val);*/
                 ok = parse_index_lhvalue(ref_line, state, env, out_val);
@@ -16947,7 +17001,7 @@ invoke(const value_t *code, parser_state_t *state)
                     value_func_t *fn = (value_func_t *)codeval;
                     dir_stack_pos_t pos;
 
-                    IGNORE(
+                    OMIT(
                         printf("top : %p\n", parser_env_stack(state)->stack);
                         DIR_SHOW("push: ", dir);
                     )
@@ -17124,7 +17178,7 @@ parse_substitution(const char **ref_line, parser_state_t *state,
     DEBUGTRACE(DPRINTF("substitute: %s\n", *ref_line);)
 
     if (parse_operator_expr(ref_line, state, out_val) && parse_space(ref_line))
-    {   IGNORE(DPRINTF("substitute args: %s\n", *ref_line););
+    {   OMIT(DPRINTF("substitute args: %s\n", *ref_line););
         return parse_substitution_args(ref_line, state, out_val);
     } else
     {   *out_val = &value_null;
@@ -17222,6 +17276,217 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
 
 /*****************************************************************************
  *                                                                           *
+ *          Exceptions                                                       *
+ *          ==========                                                       *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+/* build some default functions that cause execptions */
+
+
+
+/* This function may cause a garbage collection */
+static const value_t *
+fn_throw(const value_t *this_fn, parser_state_t *state)
+{   const value_t *info = parser_builtin_arg(state, 1);
+    const value_t *val = value_false;
+
+    if (info != NULL) {
+        bool thrown = parser_throw(state, info);
+        val = value_bool(thrown);
+        if (!thrown)
+            parser_error(state,  "%s: attempt to throw exception without an "
+                         "enclosing try block\n",
+                         codeid());
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+/* This function may cause a garbage collection */
+static const value_t *
+fn_catch(const value_t *this_fn, parser_state_t *state)
+{   const value_t *exception_code = parser_builtin_arg(state, 1);
+    const value_t *execute_code = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_istype_invokable(exception_code) &&
+        value_istype_invokable(execute_code))
+    {   bool ok = TRUE;
+
+        parser_env_return(state, parser_env_calling_pos(state));
+        val = parser_catch_invoke(state, execute_code, &ok);
+
+        if (!ok) /* an exception was caught - returned in val */
+        {
+            const value_t *exception;
+            exception = substitute(exception_code, val, state,
+                                   /*unstrict*/FALSE);
+            val = invoke(exception, state);
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+typedef struct
+{   dir_t *dir_build;
+} enum_new_arg_t;
+
+
+
+
+
+
+static void *
+new_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{   enum_new_arg_t *newarg = (enum_new_arg_t *)arg;
+    dir_t *dir_new = newarg->dir_build;
+    if (NULL == dir_new)
+    {   if (value_type_equal(name, type_int))
+            dir_new = dir_vec_new();
+        else
+            dir_new = dir_id_new();
+
+        newarg->dir_build = dir_new;
+    }
+    return dir_set(dir_new, name, value)? NULL: (void *)name;
+    /* will stop on first non-null */
+}
+
+
+
+
+
+/* make a copy of a directory */
+static dir_t *
+dir_copy(dir_t *dir)
+{   const value_t *val = NULL;
+    dir_t *newdir = NULL;
+    enum_new_arg_t newarg;
+
+    newarg.dir_build = NULL;
+
+    if (NULL == dir_forall(dir, &new_exec, &newarg))
+    {   newdir = newarg.dir_build;
+
+        if (NULL == newdir)
+            newdir = dir_id_new();
+
+        if (dir_islocked((dir_t *)dir))
+            (void)dir_lock(newdir, NULL);
+    }
+
+    return newdir;
+}
+
+
+
+
+/*! make an environment from the function arguments, add 'name' field
+ *   and throw the result 
+ *   This function may cause a garbage collection
+ */
+static const value_t *
+exception_throw(const value_t *this_fn, parser_state_t *state,
+                const char *name, const char **argnames)
+{   const value_t *val = NULL;
+    const value_t *info = NULL;
+#if 0
+    dir_stack_t *stack = parser_env_stack(state);;
+    dir_stack_pos_t pos = dir_stack_top_pos(stack);
+
+    if (pos != NULL)
+    {   dir_t *newenv = NULL;
+        dir_t *local_env = dir_at_stack_pos(pos);
+        if (NULL != local_env) {
+            newenv = dir_copy(local_env);
+        } else
+        {
+            newenv = dir_id_new();
+            OMIT(fprintf(stderr, "%s: no local vars\n", codeid()););
+        }
+        dir_string_set(newenv, "name", value_string_new_measured(name));
+        info = dir_value(local_copy);
+    } OMIT(else fprintf(stderr, "%s: couldn't find stack top\n", codeid()););
+#else
+    dir_t *newenv = dir_id_new();
+    int argn = 1;
+    while (argnames[0] != NULL) {
+        dir_string_set(newenv, argnames[0], parser_builtin_arg(state, argn));
+        argnames++;
+        argn++;
+    }
+    dir_string_set(newenv, "name", value_string_new_measured(name));
+    info = dir_value(newenv);
+       
+#endif
+    if (info != NULL) {
+        bool thrown = parser_throw(state, info);
+        val = value_bool(thrown);
+        if (!thrown)
+            parser_error(state,  "%s: exception thrown without an "
+                         "enclosing try block\n",
+                         codeid());
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+/* Specific exception commands */
+
+
+/* signal() exception */
+static const value_t *
+fn_exception_signal(const value_t *this_fn, parser_state_t *state)
+{
+    const char *args[] = {"signo", NULL}; // expects 1 argument
+    return exception_throw(this_fn, state, "signal", args);
+}
+
+
+
+
+static void
+cmds_generic_exception(parser_state_t *state, dir_t *cmds)
+{   dir_stack_t *scope = parser_env_stack(state);
+    dir_t *expt_cmds = dir_id_new();
+
+    mod_addfnscope(cmds, "catch",
+              "<excep> <do> - run <do> executing <excep> <ex> on an exception",
+              &fn_catch, 2, scope);
+    mod_addfnscope(cmds, "throw",
+              "<value> - signal an exception with <value>, exit outer 'catch'",
+              &fn_throw, 1, scope);
+    
+    mod_add_dir(cmds, "exception", expt_cmds);
+
+    mod_addfn(expt_cmds, "signal", "signal <signo> - send signal exception",
+              &fn_exception_signal, 1);
+}
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Signal Handling                                                  *
  *          ===============                                                  *
  *                                                                           *
@@ -17231,61 +17496,113 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
 
 
 static bool exiting = FALSE;
+static parser_state_t *global_int_state = NULL;
+
+/* We have to define the function cause_sigint() */
+
+#define EXIT_ON_CTRL_C
 
 
 #ifdef EXIT_ON_CTRL_C
 
-#ifdef __unix__
 
-typedef void interrupt_handler_fn(int signal);
-typedef interrupt_handler_fn *interrupt_state_t;
-
-
-
-static void interrupt_handler(int signal)
+static bool throw_interrupt(parser_state_t *state, int signal)
 {
-   exiting = TRUE;
+    dir_t *root = parser_root(state);
+    const value_t *exceptions =
+        root==NULL? NULL: dir_string_get(root, "exception");
+    const value_t *fn_sig =
+        !value_type_equal(exceptions, type_dir)? NULL:
+        dir_string_get((dir_t *)(exceptions), "signal");
+    const value_t *signal_exception =
+        !value_type_equal(fn_sig, type_closure)? NULL:
+        value_closure_bind(fn_sig, value_int_new(signal));
+    
+    if (signal_exception != NULL) {
+        /*parser_throw(state, signal_exception);*/
+        (void)invoke(signal_exception, state); /* shouldn't normally return */
+        return TRUE;
+    } else
+    {
+        fprintf(stderr, "%s: no registered FTL signal handler\n", codeid());
+        return FALSE;
+    }
 }
 
 
 
-static bool interrupt_handler_init(interrupt_state_t *out_old_handler)
+#if defined(__unix__) || defined(__APPLE__)
+
+typedef void interrupt_handler_fn(int signal);
+
+typedef struct {
+    interrupt_handler_fn *handler;
+    parser_state_t *displaced_state;
+} interrupt_state_t;
+
+
+static void interrupt_handler(int signal)
+{
+    // find state
+    OMIT(fprintf(stderr, "%s: signal %d\n", codeid(), signal););
+    if (global_int_state == NULL || !throw_interrupt(global_int_state, signal))
+        exiting = TRUE;
+}
+
+
+static bool cause_sigint(void)
+{   interrupt_handler(SIGINT);
+    return exiting;
+}
+
+
+
+static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
 {   interrupt_handler_fn *old;
 
     exiting = FALSE;
 
     old = signal(SIGINT, &interrupt_handler);
 
-    IGNORE(fprintf(stderr, "%s: installing interrupt handler %p -> last was "
+    OMIT(fprintf(stderr, "%s: installing interrupt handler %p -> last was "
                    "%p%s%s%s\n",
                    codeid(), &interrupt_handler, old,
                    old==SIG_ERR?" (ERR)":"", old==SIG_DFL?" (DFL)":"",
                    old==SIG_IGN?" (IGN)":"");
     );
+    
+    if (ref_old_handler != NULL) {
+        ref_old_handler->displaced_state = global_int_state;
+        ref_old_handler->handler = old;
+    }
+    
     if (old == SIG_ERR)
         return FALSE;
     else {
-        if (out_old_handler != NULL)
-            *out_old_handler = old;
+        global_int_state = int_state;
         return TRUE;
     }
 }
 
 
-static void interrupt_handler_end(interrupt_state_t old_handler)
+
+
+static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 {
     interrupt_handler_fn *newi;
-    IGNORE(fprintf(stderr, "%s: installing interrupt returned to %p\n",
-                   codeid(), old_handler);
+    OMIT(fprintf(stderr, "%s: installing interrupt returned to %p\n",
+                   codeid(), ref_old_handler->handler);
            fflush(stderr);
     );
-    newi = signal(SIGINT, old_handler);
-    IGNORE(fprintf(stderr, "%s: installing old interrupt complete - "
+    newi = signal(SIGINT, ref_old_handler->handler);
+    OMIT(fprintf(stderr, "%s: installing old interrupt complete - "
                    "was %p%s%s%s\n",
                    codeid(), newi,
                    newi==SIG_ERR?" (ERR)":"", newi==SIG_DFL?" (DFL)":"",
                    newi==SIG_IGN?" (IGN)":""););
     exiting = FALSE;
+    global_int_state = ref_old_handler->displaced_state;
 }
 
 
@@ -17294,33 +17611,49 @@ static void interrupt_handler_end(interrupt_state_t old_handler)
 
 #ifdef _WIN32
 
-typedef PHANDLER_ROUTINE interrupt_handler_fn;
-typedef interrupt_handler_fn *interrupt_state_t;
 
+typedef PHANDLER_ROUTINE interrupt_handler_fn;
+
+typedef struct {
+    interrupt_handler_fn *handler;
+    parser_state_t *displaced_state;
+} interrupt_state_t;
 
 
 BOOL WINAPI interrupt_handler(DWORD dwCtrlType)
 {
-   exiting = TRUE;
-   return TRUE/*handled*/;
+    if (global_int_state == NULL || !throw_interrupt(global_int_state, 2))
+        exiting = TRUE;
+    return TRUE/*handled*/;
+}
+
+
+static bool cause_sigint(void)
+{   return interrupt_handler(0) && exiting;
 }
 
 
 
-static bool interrupt_handler_init(interrupt_state_t *out_old_handler)
+static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
 {   BOOL ok;
 
     exiting = FALSE;
 
     ok = SetConsoleCtrlHandler(&interrupt_handler, /*Add*/TRUE);
 
-    IGNORE(fprintf(stderr, "%s: installing interrupt handler %p\n",
-                   codeid(), &interrupt_handler););
+    OMIT(fprintf(stderr, "%s: installing interrupt handler %p\n",
+                 codeid(), &interrupt_handler););
+    
+    if (ref_old_handler != NULL) {
+        ref_old_handler->handler = NULL; /*not used in windows */
+        ref_old_handler->displaced_state = global_int_state;
+    }
+    
     if (ok)
         return FALSE;
     else {
-        if (out_old_handler != NULL)
-            *out_old_handler = NULL;/*not used in windows */
+        global_int_state = int_state;
         return TRUE;
     }
 }
@@ -17329,24 +17662,40 @@ static bool interrupt_handler_init(interrupt_state_t *out_old_handler)
 static void interrupt_handler_end(interrupt_state_t old_handler)
 {
     BOOL ok;
-    IGNORE(fprintf(stderr, "%s: installing interrupt returned to %p\n",
+    OMIT(fprintf(stderr, "%s: installing interrupt returned to %p\n",
                    codeid(), old_handler); fflush(stderr););
     ok = SetConsoleCtrlHandler(&interrupt_handler, /*Add*/FALSE);
-    IGNORE(fprintf(stderr, "%s: installing old interrupt complete\n",
+    OMIT(fprintf(stderr, "%s: installing old interrupt complete\n",
                    codeid()););
+    global_int_state = ref_old_handler->displaced_state;
     exiting = FALSE;
 }
 
 #endif /* _WIN32 */
+
 
 #else
 
 
 /* no interrupt handling */
 
-typedef void *interrupt_state_t;
-#define interrupt_handler_init(out_old_handler) ((void)(out_old_handler),TRUE)
-#define interrupt_handler_end(old_handler)
+
+typedef void *interrupt_handler_fn;
+
+typedef struct {
+    interrupt_handler_fn *handler;
+    parser_state_t *displaced_state;
+} interrupt_state_t;
+
+#define interrupt_handler_init(ref_old_handler, state) \
+        ((void)(ref_old_handler),TRUE)
+#define interrupt_handler_end(ref_old_handler)
+
+
+static bool cause_sigint(void)
+{   return FALSE; /* not handled */
+}
+
 
 
 
@@ -17363,7 +17712,7 @@ static void interrupt_ignore(void)
 
 static bool interrupt(void)
 {   if (exiting) {
-        fprintf(stdout, "%s: Ctrl-C - will exit\n", codeid());
+        fprintf(stdout, "%s: Ctrl-C exit request detected\n", codeid());
         fflush(stdout);
     }
     return exiting;
@@ -17448,7 +17797,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
 
             DEBUGMOD(DPRINTF("%s: invoke direct code\n", codeid());)
             value_code_buf(value, &buf, &len);
-            IGNORE(printf("executing: '%s'[%d]\n", buf, len);)
+            OMIT(printf("executing: '%s'[%d]\n", buf, len);)
             /* will garbage collection the discarded value */
             if (parse_cmdlist(&buf, state, &value))
                 return value;
@@ -17474,7 +17823,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     if (value_type_equal(value, type_dir))
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
                                               /*env_end*/FALSE);
-        IGNORE(DPRINTF("%s: push enclosing directory %p\n", codeid(), value);)
+        OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value);)
         DEBUGMOD(DPRINTF("%s: push enclosing directory\n", codeid());)
         value = mod_exec(ref_line, state);
         /* return to external environment */
@@ -17596,7 +17945,7 @@ mod_invoke_argv(const char ***ref_argv, int *ref_argn, const char *execpath,
 
         DEBUGMOD(DPRINTF("%s: invoke direct code\n", codeid());)
         value_code_buf(value, &buf, &len);
-        IGNORE(printf("executing: '%s'[%d]\n", buf, len);)
+        OMIT(printf("executing: '%s'[%d]\n", buf, len);)
         /* will garbage collection the discarded value */
         if (parse_cmdlist(&buf, state, &value))
             return value;
@@ -17617,7 +17966,7 @@ mod_invoke_argv(const char ***ref_argv, int *ref_argn, const char *execpath,
     if (value_type_equal(value, type_dir))
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
                                               /*env_end*/FALSE);
-        IGNORE(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
+        OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
         DEBUGMOD(DPRINTF("%s: push enclosing directory\n", codeid()););
         value = mod_execv(ref_argv, ref_argn, execpath, state);
         /* return to external environment */
@@ -17640,9 +17989,10 @@ mod_exec(const char **ref_line, parser_state_t *state)
 {   const value_t *value = NULL;
     dir_t *dir = parser_env(state);
 
-    if (mod_parse_cmd(dir, ref_line, &value) && parse_space(ref_line))
+    if (mod_parse_cmd(dir, ref_line, &value) && parse_space(ref_line)) {
+        DEBUGMODEXEC(fprintf(stderr, "%s: exec - found cmd\n", codeid()););
         return mod_invoke_cmd(ref_line, value, state);
-    else {
+    } else {
         const value_t *pcmdsval =
             dir_stringl_get(dir_stack_dir(state->env),
                             FTLDIR_PARSE, strlen(FTLDIR_PARSE));
@@ -17651,10 +18001,15 @@ mod_exec(const char **ref_line, parser_state_t *state)
             dir_t *pcmds = (dir_t *)pcmdsval;
             const value_t *on_undef = dir_stringl_get(pcmds, FN_UNDEF_HOOK,
                                                       strlen(FN_UNDEF_HOOK));
-            if (on_undef != NULL && on_undef != &value_null)
+            if (on_undef != NULL && on_undef != &value_null) {
+                DEBUGMODEXEC(fprintf(stderr, "%s: exec - found undef handler\n",
+                                     codeid()););
                 return mod_invoke_cmd(ref_line, on_undef, state);
-            else
+            } else {
+                DEBUGMODEXEC(fprintf(stderr, "%s: exec - not found\n",
+                                     codeid()););
                 return NULL;
+            }
         } else
             return NULL;
     }
@@ -17759,7 +18114,8 @@ mod_execv(const char ***ref_argv, int *ref_argn, const char *execpath,
        [<directory>]* <code|binding|fn-in-directory> <vec-args>
            (vector is parsed and given as argument to command)
 
-   This function may cause a garbage collection */
+   This function may cause a garbage collection
+*/
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state)
 {   if (parser_echo(state))
@@ -17771,6 +18127,22 @@ mod_exec_cmd(const char **ref_line, parser_state_t *state)
 
 
 
+
+
+
+static const value_t *mod_exec_cmd_call(parser_state_t *state, void *call_arg)
+{
+    const char **ref_line = (const char **)call_arg;
+    return mod_exec_cmd(ref_line, state);
+}
+
+
+/* execute a command with an enclosing 'try' block */
+static const value_t *
+mod_exec_cmd_caught(const char **ref_line, parser_state_t *state, bool *ref_ok)
+{   return parser_catch_call(state, &mod_exec_cmd_call,
+                             (void *)ref_line, ref_ok);
+}
 
 
 
@@ -17870,7 +18242,7 @@ parser_argv_exec(parser_state_t *state, const char **argv, int argn,
 {   const value_t *val = NULL;
     linesource_t saved;
 
-    IGNORE(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state));)
+    OMIT(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state));)
     linesource_save(parser_linesource(state), &saved);
     linesource_init(parser_linesource(state));
 
@@ -17957,10 +18329,10 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                        bool expect_no_locals, bool interactive)
 {   const value_t *val = NULL;
     linesource_t saved;
-    interrupt_state_t old_state = NULL;
+    interrupt_state_t old_int_state;
     FILE *resultout = interactive? stdout: NULL;
 
-    IGNORE(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state));)
+    OMIT(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state));)
     linesource_save(parser_linesource(state), &saved);
     linesource_init(parser_linesource(state));
 
@@ -17974,12 +18346,14 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
         (void)rcfile_run(state, rcfile_id);
 
     if (interactive)
-        (void)interrupt_handler_init(&old_state);
+        (void)interrupt_handler_init(&old_int_state, state);
 
     while (!linesource_eof(parser_linesource(state)))
-    {   if (interactive && interrupt()) {
+    {
+        if (interactive && interrupt()) {
+            OMIT(fprintf(stderr, "-- exiting\n"););
             if (source == parser_charsource(state)) {
-                fprintf(stderr, "%s: at initial source\n", codeid());
+                fprintf(stderr, "%s: still reading initial source\n", codeid());
                 interrupt_ignore();
             } else {
                 /* retreat to back to the main source */
@@ -18002,6 +18376,8 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 
             /* copy line from source to linesink and get buffer */
             linesource_read(parser_linesource(state), linesink);
+            /* TODO: wrap linesource_read in its own try block? to catch
+             * ctrl-C? */
             charsink_string_buf(linesink, &phrase, &len);
 
             /* expand \ and $ in buffer writing to expandsink and get buffer */
@@ -18017,7 +18393,18 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                     value_unlocal(val);
 
                 /* parse and execute the line */
-                val = mod_exec_cmd(&phrase, state);
+                if (interactive)
+                {   bool ran_ok = TRUE;
+                    val = mod_exec_cmd_caught(&phrase, state, &ran_ok);
+                    if (!ran_ok)
+                    {    fprintf(stderr, "%s: exception - ", codeid());
+                         value_fprint(stderr, dir_value(parser_env(state)),
+                                      val);
+                         fprintf(stderr, "\n");
+                         val = &value_null;
+                    }
+                } else
+                    val = mod_exec_cmd(&phrase, state);
 
                 if (val != NULL)
                 {   if (!parse_empty(&phrase)) {
@@ -18050,12 +18437,14 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
             }
             charsink_string_close(expandsink);
         }
+        OMIT(fprintf(stderr, "-- cmd over\n"););
     }
 
+    OMIT(fprintf(stderr, "-- session over\n"););
     linesource_restore(parser_linesource(state), &saved);
 
     if (interactive)
-        interrupt_handler_end(old_state);
+        interrupt_handler_end(&old_int_state);
 
     return val == NULL? &value_null: val;
 }
@@ -18143,7 +18532,7 @@ static dir_t *print_formats = NULL;
 extern void
 printf_addformat(type_t for_type, const char *fmtchar,
                  const char *help, func_fn_t *exec)
-{   (void)for_type; /* currently ignored */
+{   (void)for_type; /* currently OMITd */
 
     if (NULL == print_formats)
         print_formats = dir_id_new();
@@ -18181,7 +18570,7 @@ parse_format(const char **ref_line, parser_state_t *state,
            (!alt && (alt = parse_key(ref_line,"#"))))
         continue;
 
-    IGNORE(printf("%s: %sleft %ssign %szero\n", codeid(),
+    OMIT(printf("%s: %sleft %ssign %szero\n", codeid(),
                   left?"":"not ", sign?"":"not ", zero?"":"not ");)
 
     (void)parse_int(ref_line, &width);
@@ -18195,7 +18584,7 @@ parse_format(const char **ref_line, parser_state_t *state,
                  parse_key(ref_line, "}");
             if (ok && (fmtfn == NULL || fmtfn == &value_null))
                 ok = FALSE;
-        } else if (isalpha((*ref_line)[0]))
+        } else if (isalpha((unsigned char)((*ref_line)[0])))
         {   char name[2];
             name[0] = (*ref_line)[0];
             name[1] = '\0';
@@ -18284,7 +18673,7 @@ value_string_printfmt(charsink_t *sink,
             len += charsink_write(sink, strbuf, strlen);
         else
         {   size_t i;
-            IGNORE(printf("%s: %sleft - width %d flags %d\n",
+            OMIT(printf("%s: %sleft - width %d flags %d\n",
                           codeid(), 0 != (flags & (1<<ff_left))?"":"not ",
                           width, flags);)
             if (0 != (flags & (1<<ff_left)))
@@ -18846,19 +19235,19 @@ genfn_rdexec(const value_t *this_fn, parser_state_t *state,
             const value_t *res;
             dir_t *new_dir = dir_id_new();
 
-            IGNORE(DIR_SHOW("Orig env: ", parser_env(state));)
+            OMIT(DIR_SHOW("Orig env: ", parser_env(state));)
             /* return to the calling envrionment - two steps (locals, args?) */
             parser_env_return(state, parser_env_calling_pos(state));
             parser_env_return(state, parser_env_calling_pos(state));
             /* TODO: protect variables in the current scope against garbage
                      collection */
 
-            IGNORE(DIR_SHOW("Invoke env: ", parser_env(state));)
+            OMIT(DIR_SHOW("Invoke env: ", parser_env(state));)
             pos = parser_env_push(state, new_dir, /*env_end*/FALSE);
-            IGNORE(DIR_SHOW("Dir after push: ", parser_env(state));)
+            OMIT(DIR_SHOW("Dir after push: ", parser_env(state));)
             res = parser_expand_exec(state, source, initcmds,
                                      /*rcfile_id*/NULL, /*no_locals*/FALSE);
-            IGNORE(DIR_SHOW("Final env: ", parser_env(state));)
+            OMIT(DIR_SHOW("Final env: ", parser_env(state));)
             parser_env_return(state, pos); /* return to calling environment */
             ok = TRUE;
             if (return_env)
@@ -19019,7 +19408,7 @@ genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
             if (ok)
             {   val = value_true;
                 /* update string argument vector */
-                IGNORE(
+                OMIT(
                     printf("%s: new %p[%d] -> %p[%d]\n",
                            codeid(), strbase, len, line,
                            len - (line-strbase)););
@@ -19699,7 +20088,7 @@ cmd_system(const char **ref_line, const value_t *this_cmd,
     const char *str = *ref_line;
     const value_t *res = &value_null;
 
-    IGNORE(printf("system <%s>\n", str);)
+    OMIT(printf("system <%s>\n", str);)
     rc = system(str);
     if (rc != 0)
         res = parser_errorval(state, "system command failed - '%s' (rc %d)\n",
@@ -19722,7 +20111,7 @@ fn_system_rc(const value_t *this_fn, parser_state_t *state)
     const value_t *strval =
           value_string_get_terminated(parser_builtin_arg(state, 1), &str, &len)
 
-    IGNORE(printf("system <%s>\n", str););
+    OMIT(printf("system <%s>\n", str););
 
     if (strval == NULL) {
         parser_report_help(state, this_fn);
@@ -19742,7 +20131,7 @@ cmd_uid(const char **ref_line, const value_t *this_cmd,
     const char *str = *ref_line;
     unsigned uid = 0;
 
-    IGNORE(printf("system <%s>\n", str);)
+    OMIT(printf("system <%s>\n", str);)
     ok = user_uid(str, &uid);
     *ref_line += strlen(*ref_line);
 
@@ -19958,12 +20347,12 @@ fn_timef_gen(const value_t *this_cmd, parser_state_t *state,
                 *          as does %h, %T and %D (at least)
                 *          although %Y %y %m %d %H %M %S seem OK
                 */
-               IGNORE(printf("tm %p format '%s' buflen %d\n",
+               OMIT(printf("tm %p format '%s' buflen %d\n",
                               tinfo, fmtbuf, sizeof(fmtstr));
                       printf("tm year %d hour %d\n",
                              1900+tinfo->tm_year, tinfo->tm_hour););
                len = strftime(&fmtstr[0], sizeof(fmtstr), fmtbuf, tinfo);
-               IGNORE(printf("len %d\n", len););
+               OMIT(printf("len %d\n", len););
                if ((int)len >= 0 && len <= sizeof(fmtstr))
                    val = value_string_new(&fmtstr[0], len);
             }
@@ -19998,7 +20387,7 @@ cmd_getenv(const char **ref_line, const value_t *this_cmd,
     const char *str = *ref_line;
     const value_t *val = &value_null;
 
-    IGNORE(printf("getenv <%s>\n", str);)
+    OMIT(printf("getenv <%s>\n", str);)
     envval = getenv(str);
     if (envval == NULL)
         parser_error(state, "environment variable not set - '%s'\n", str);
@@ -21283,7 +21672,7 @@ fn_int_shl(const value_t *this_fn, parser_state_t *state)
         else if (n2 < 8*sizeof(number_t))
             accum = (number_t) (((unumber_t)n1) << (unsigned)n2);
 
-        IGNORE(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
+        OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
                       " == %"F_NUMBER_T"\n",
                       codeid(), n1, "lsh", opnd, accum);)
         val = value_int_new(accum);
@@ -21313,7 +21702,7 @@ fn_int_shr(const value_t *this_fn, parser_state_t *state)
         else if (n2 < 8*sizeof(number_t))
             accum = (number_t) (((unumber_t)n1) >> (unsigned)n2);
 
-        IGNORE(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
+        OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
                       " == %"F_NUMBER_T"\n",
                       codeid(), n1, "rsh", opnd, accum);)
         val = value_int_new(accum);
@@ -22497,7 +22886,7 @@ bincast(parser_state_t *state, datatype_t *dtype,
     const value_t *newval;
 
     newval = (*dtype->binparse)(reader, &binpos, octet_count, dtype);
-    IGNORE(printf("%s: end pos %d - octets %d\n",
+    OMIT(printf("%s: end pos %d - octets %d\n",
                 codeid(), (int)binpos, (int)octet_count););
     if (binpos != octet_count) {
         parser_error(state, "datatype size (%d bytes) does not match "
@@ -22547,7 +22936,7 @@ static const value_t *fn_binsplit(const value_t *this_fn, parser_state_t *state)
                 datatype_seq_init(&seq_type, intdt, entries);
             const value_t *newval;
 
-            IGNORE(printf("%s: bincast'ing %d -> %d * %d bytes\n",
+            OMIT(printf("%s: bincast'ing %d -> %d * %d bytes\n",
                           codeid(), (int)octet_count, (int)entries,
                           (int)unitbytes););
             newval = bincast(state, seq_intdt, octets, entries * unitbytes);
@@ -22864,41 +23253,10 @@ cmds_generic_macaddr(parser_state_t *state, dir_t *cmds)
 
 
 
-typedef struct
-{   dir_t *dir_build;
-} enum_new_arg_t;
-
-
-
-
-
-
-static void *
-new_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
-{   enum_new_arg_t *newarg = (enum_new_arg_t *)arg;
-    dir_t *dir_new = newarg->dir_build;
-    if (NULL == dir_new)
-    {   if (value_type_equal(name, type_int))
-            dir_new = dir_vec_new();
-        else
-            dir_new = dir_id_new();
-
-        newarg->dir_build = dir_new;
-    }
-    return dir_set(dir_new, name, value)? NULL: (void *)name;
-    /* will stop on first non-null */
-}
-
-
-
-
-
-
-
+/* make a copy of a value that is either a closure or a directory */
 static const value_t *
-fn_new(const value_t *this_fn, parser_state_t *state)
-{   const value_t *dir = parser_builtin_arg(state, 1);
-    const value_t *val = NULL;
+dir_value_copy(const value_t *dir)
+{   const value_t *val = NULL;
     const value_t *code = NULL;
     bool is_closure = value_type_equal(dir, type_closure);
 
@@ -22934,7 +23292,19 @@ fn_new(const value_t *this_fn, parser_state_t *state)
             if (dir_islocked((dir_t *)dir))
                 (void)dir_lock(newdir, NULL);
         }
-    } else
+    }
+
+    return val;
+}
+
+
+
+static const value_t *
+fn_new(const value_t *this_fn, parser_state_t *state)
+{   const value_t *dir = parser_builtin_arg(state, 1);
+    const value_t *val = dir_value_copy(dir);
+
+    if (val == NULL)
         parser_report_help(state, this_fn);
 
     return value_nl(val);
@@ -23201,7 +23571,7 @@ static sort_env_t *sort_global_args = NULL;
 
 static int
 fn_sort_domcmp(const value_t **ref_v1, const value_t **ref_v2)
-{   IGNORE(
+{   OMIT(
         if (sort_global_args == NULL)
         {   printf("%s: error - sort args empty\n", codeid());
             return 0;
@@ -23223,7 +23593,7 @@ fn_sort_domcmp(const value_t **ref_v1, const value_t **ref_v2)
 
 static int
 fn_sort_rngcmp(const value_t **ref_v1, const value_t **ref_v2)
-{   IGNORE(
+{   OMIT(
         if (sort_global_args == NULL)
         {   printf("%s: error - sort args empty\n", codeid());
             return 0;
@@ -23249,7 +23619,7 @@ fn_sort_rngcmp(const value_t **ref_v1, const value_t **ref_v2)
 
 static int
 fn_sort_domcmpwith(const value_t **ref_v1, const value_t **ref_v2)
-{   IGNORE(
+{   OMIT(
         if (sort_global_args == NULL)
         {   printf("%s: error - sort args empty\n", codeid());
             return 0;
@@ -23279,10 +23649,10 @@ fn_sort_domcmpwith(const value_t **ref_v1, const value_t **ref_v2)
 
 static int
 fn_sort_rngcmpwith(const value_t **ref_v1, const value_t **ref_v2)
-{   IGNORE(
+{   OMIT(
         if (sort_global_args == NULL)
         {   printf("%s: error - sort args empty\n", codeid());
-            return 0;
+             return 0;
         } else
         if (*ref_v1 == NULL)
         {   printf("%s: error - first sort arg empty\n", codeid());
@@ -23445,10 +23815,10 @@ fn_select(const value_t *this_fn, parser_state_t *state)
         selectval.state = state;
         selectval.code = code;
         selectval.dir_build = NULL;
-        IGNORE(VALUE_SHOW("select beselecte environment: ",
+        OMIT(VALUE_SHOW("select beselecte environment: ",
                           dir_value(parser_env(state)));)
         pos = parser_env_push(state, argdir, /*env_end*/FALSE);
-        IGNORE(VALUE_SHOW("select environment: ",
+        OMIT(VALUE_SHOW("select environment: ",
                           dir_value(parser_env(state)));)
         (void)dir_forall(env, &select_exec, &selectval);
         (void)parser_env_return(state, pos);
@@ -23832,7 +24202,7 @@ cmd_help(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
             dir_t *outer =
                 dir_at_stack_pos(dir_stack_top_pos(parser_env_stack(state)));
             help_show_args_t help_arg;
-            IGNORE(
+            OMIT(
                 printf(  "env    : %p\n", parser_env(state));
                 printf(  "pos    : %p\n", parser_env_calling_pos(state));
                 DIR_SHOW("current: ", parser_env(state));
@@ -23987,10 +24357,10 @@ fn_forall(const value_t *this_fn, parser_state_t *state)
         parser_env_return(state, parser_env_calling_pos(state));
         forval.state = state;
         forval.code = code;
-        IGNORE(VALUE_SHOW("for before environment: ",
+        OMIT(VALUE_SHOW("for before environment: ",
                           dir_value(parser_env(state)));)
         pos = parser_env_push(state, argdir, /*env_end*/FALSE);
-        IGNORE(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
+        OMIT(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
         (void)dir_forall(env, &forall_exec, &forval);
         (void)parser_env_return(state, pos);
         val = &value_null;
@@ -24051,10 +24421,10 @@ fn_for(const value_t *this_fn, parser_state_t *state)
             parser_env_return(state, parser_env_calling_pos(state));
             forval.state = state;
             forval.code = code;
-            IGNORE(VALUE_SHOW("for before environment: ",
+            OMIT(VALUE_SHOW("for before environment: ",
                               dir_value(parser_env(state)));)
             pos = parser_env_push(state, argdir, /*env_end*/FALSE);
-            IGNORE(VALUE_SHOW("for environment: ",
+            OMIT(VALUE_SHOW("for environment: ",
                               dir_value(parser_env(state)));)
             (void)dir_forall(env, &for_exec, &forval);
             (void)parser_env_return(state, pos);
@@ -24089,9 +24459,9 @@ fn_if(const value_t *this_fn, parser_state_t *state)
 
         if (NULL != exec)
         {   /* return to the calling envrionment */
-            IGNORE(DIR_SHOW("Orig env: ", parser_env(state));)
+            OMIT(DIR_SHOW("Orig env: ", parser_env(state));)
             parser_env_return(state, parser_env_calling_pos(state));
-            IGNORE(DIR_SHOW("Invoke env: ", parser_env(state));)
+            OMIT(DIR_SHOW("Invoke env: ", parser_env(state));)
             val = invoke(exec, state);
         }
     } else
@@ -24123,62 +24493,6 @@ fn_while(const value_t *this_fn, parser_state_t *state)
                !value_bool_is_false(cond))
         {   val = invoke(do_code, state);
             ok = (val != NULL);
-        }
-    } else
-        parser_report_help(state, this_fn);
-
-    return val;
-}
-
-
-
-
-
-
-/* This function may cause a garbage collection */
-static const value_t *
-fn_throw(const value_t *this_fn, parser_state_t *state)
-{   const value_t *info = parser_builtin_arg(state, 1);
-    const value_t *val = value_false;
-
-    if (info != NULL) {
-        bool thrown = parser_throw(state, info);
-        val = value_bool(thrown);
-        if (!thrown)
-            parser_error(state,  "%s: attempt to throw exception without an "
-                         "enclosing try block\n",
-                         codeid());
-    } else
-        parser_report_help(state, this_fn);
-
-    return val;
-}
-
-
-
-
-
-
-/* This function may cause a garbage collection */
-static const value_t *
-fn_catch(const value_t *this_fn, parser_state_t *state)
-{   const value_t *exception_code = parser_builtin_arg(state, 1);
-    const value_t *execute_code = parser_builtin_arg(state, 2);
-    const value_t *val = &value_null;
-
-    if (value_istype_invokable(exception_code) &&
-        value_istype_invokable(execute_code))
-    {   bool ok = TRUE;
-
-        parser_env_return(state, parser_env_calling_pos(state));
-        val = parser_catch_invoke(execute_code, state, &ok);
-
-        if (!ok) /* an exception was caught - returned in val */
-        {
-            const value_t *exception;
-            exception = substitute(exception_code, val, state,
-                                   /*unstrict*/FALSE);
-            val = invoke(exception, state);
         }
     } else
         parser_report_help(state, this_fn);
@@ -24534,7 +24848,7 @@ genfn_mem_read(const value_t *this_fn, parser_state_t *state,
             size_t bytes_able =
                 (*mem->len_able)(mem, ix, /*unable*/FALSE, abilities);
 
-            IGNORE(printf("%s: need %zd got %zd bytes with ability %X\n",
+            OMIT(printf("%s: need %zd got %zd bytes with ability %X\n",
                           codeid(), len, bytes_able, abilities););
             if (len > 0 && bytes_able >= len) {
                 char *str = NULL;
@@ -24718,7 +25032,7 @@ genfn_mem_dump(const value_t *this_fn, parser_state_t *state,
                 size_t bytes_able =
                     (*mem->len_able)(mem, ix, /*unable*/FALSE, abilities);
 
-                IGNORE(printf("%s: need %zd got %zd bytes with ability %X\n",
+                OMIT(printf("%s: need %zd got %zd bytes with ability %X\n",
                               codeid(), len, bytes_able, abilities););
                 if (len > 0 && bytes_able >= len) {
                     char *buf = malloc(len);
@@ -25057,6 +25371,7 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     dir_stack_t *scope = parser_env_stack(state);
 
     cmds_generic_lang(state, cmds);
+    cmds_generic_exception(state, cmds);
     cmds_generic_sys(state, cmds);
     cmds_generic_registry(state, cmds);
     if (NULL != argv)
@@ -25167,7 +25482,7 @@ ftl_init(void)
     values_string_argname_init();
     values_bool_init();
     fprint_init();
-    IGNORE(printf("FTL_MB_LEN_MAX = %d MB_LEN_MAX = %d (%s)\n",
+    OMIT(printf("FTL_MB_LEN_MAX = %d MB_LEN_MAX = %d (%s)\n",
                   FTL_MB_LEN_MAX, MB_LEN_MAX, str(MB_LEN_MAX));)
 }
 
