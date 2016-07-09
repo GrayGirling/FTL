@@ -1,0 +1,38 @@
+set case [cvec, val]:{
+   .rc = NULL;
+   .when = [cond,exec]:{cond {rc=exec!; TRUE}!};
+   .only = [cond]:{when (not cond) {}!};
+   .vec = ([it=val, when=when, only=only, default=when TRUE]:cvec)!;
+   .n = 0;
+   .ln = len vec!;
+   while {n _lt_ ln {not (vec.(n)!)}!} {n = n+1}!;
+   rc
+}
+
+set testcase[n]:{
+    case {<
+        when it == 3 {echo "three"!; 8},
+        when it == "splotten" {echo "SPLOT"!; 9},
+        only (typeof it!) == (typeof 0!),
+        when it == "str" {echo "NEVER"!; 9},
+        when (it _ge_ 4) _and_ (it _lt_160) {echo "four to 160"!;},
+        default {echo "don't know"!; 22}
+    >} n!
+}
+
+
+set dotest[str]:{
+    echo ""!;
+    echo str!;
+    .result = (eval str!)!;
+    io.fprintf io.out "result of %v: %v\n"<str, result>!;
+}
+
+io fprintf io.out "testing:\n%v\n" <code testcase!>
+
+dotest "testcase 100"
+dotest "testcase 3"
+dotest "testcase NULL"
+dotest "testcase \"splotten\""
+dotest "testcase \"str\""
+dotest "testcase testcase"
