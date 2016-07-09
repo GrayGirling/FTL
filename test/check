@@ -35,36 +35,41 @@ help()
     echo "    -v        verbose"
     echo "    -r        record result as correct answer"
     echo "    -l        list possible tests"
-    echo "    -s        show ideal results"
+    echo "    -i        show ideal results"
     echo "    -a        all tests"
 }
 
 do_list=false
 do_record=false
 do_all=false
-do_show=false
+do_idealshow=false
+do_stop=false
 
 runtest()
 {  local testfile="$1"
    local testname=`basename "$testfile" .ftl`
-   local rc=1
-   
+   local rc=0
+
    if [ ! -r "$testfile" ]; then
        err "'$testfile' test file not readable"
-       rc=0
+       rc=1
    else
        local result="$dir_results/$testname"
        local answer="$dir_test/$dir_test_answer/$testname"
+
        mkdir -p "$dir_results"
 
-       if $ftl_cmd $testfile &> "$result"; then
+       $ftl_cmd -e -q < $testfile &> "$result"
+       rc=$?
+
+       if [ $rc -eq 0 ]; then
            if $do_record; then
                cp "$result" "$answer"
                log "'$testname' answer file recorded"
            else
                if [ ! -r "$answer" ]; then
                    err "'$testname' result not recorded yet - use -r"
-                   rc=0
+                   rc=3
                elif diff "$result" "$answer" > $file_diff; then
                    verbage "'$testname' OK"
                else
@@ -72,13 +77,12 @@ runtest()
                    cat $file_diff >&2
                    err "result in $result"
                    err "answer in $answer"
-                   rc=0
+                   rc=4
                fi
            fi
        else
-           err "'$testfile' test execution failed"
+           err "'$testfile' test execution failed - rc $rc"
            cat "$result"
-           rc=0
        fi
    fi
    return $rc
@@ -93,8 +97,10 @@ while $option; do
           do_all=true;;
        -l | --list)
           do_list=true;;
-       -s | --show)
-          do_show=true;;
+       -i | --ideal)
+          do_idealshow=true;;
+       -s | --stop)
+          do_stop=true;;
        -r | --record)
           do_record=true;;
        -v | --verbose)
@@ -107,13 +113,14 @@ while $option; do
        *)
           option=false;;
     esac
-    
+
     if $option; then
        shift
     fi
 done
 
 name="$1"; shift
+rc=0
 
 if $do_help; then
     help >&2
@@ -121,20 +128,22 @@ elif $do_list; then
     cd "$dir_test/$dir_test_outtest">/dev/null
     ls -1 *.ftl
 elif $do_all; then
-    export FTL_PATH= # pick up only fully qualified file names 
+    export FTL_PATH= # pick up only fully qualified file names
     if cd "$dir_test">/dev/null; then
         for name in `ls $dir_test_outtest`; do
             case "$name" in
                 *.ftl)
                     name=`basename "$name"`
-                    runtest "$dir_test_outtest/$name";;
+                    runtest "$dir_test_outtest/$name"
+                    rc=$?;;
             esac
+            $do_stop && [ $rc -ne 0 ] && { echo "FAILED (rc $rc)"; exit $rc; }
         done
     fi
     exit $?
 elif [ -z "$name" ]; then
     help >&2
-elif $do_show; then
+elif $do_idealshow; then
     testname=`basename "$name" .ftl`
     answer="$dir_test/$dir_test_answer/$testname"
 
@@ -144,9 +153,10 @@ elif $do_show; then
         err "'$name' result not recorded yet - use -r"
     fi
 else
-    export FTL_PATH= # pick up only fully qualified file names 
+    export FTL_PATH= # pick up only fully qualified file names
     if cd "$dir_test">/dev/null; then
-        runtest "$dir_test_outtest/$name" 
+        runtest "$dir_test_outtest/$name"
+        rc=$?
     fi
     exit $?
 fi

@@ -1,0 +1,3 @@
+bitaqnd 1 3
+bitaqnd 0 0xffff
+strf "0x%09x" <bitand 0x000fff000 0x123456789!>

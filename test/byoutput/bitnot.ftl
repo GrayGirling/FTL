@@ -1,0 +1,3 @@
+bitnot 0
+bitnot 0xffff
+strf "0x%09x" <bitnot 0x000fff000!>

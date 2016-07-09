@@ -1,8 +1,77 @@
-ftl byoutput/ops.ftl@54: in
-ftl byoutput/ops.ftl:57: undefined symbol 'yfy'
-ftl byoutput/ops.ftl:57: code has trailing text: ...
-ftl byoutput/ops.ftl:58: undefined symbol 'x'
-ftl byoutput/ops.ftl:58: code has trailing text: ...
+set ops <>           
+parse opset ops 6  parse.assoc."fy"  "_ng_"  neg
+parse opset ops 8  parse.assoc."xfy" "_sb_"  sub
+parse opset ops 8  parse.assoc."yfx" "_rsb_" [x,y]:{y-x}  
+parse opset ops 10 parse.assoc."fy"  "_mi_"  neg
+set opdef range ops! 
+parse opeval opdef {20 _sb_ 4}
+parse opeval opdef {15 _rsb_ 30}
+parse opeval opdef {20 _rsb_ 15 _rsb_ 30} 
+parse opeval opdef {20 _sb_ 4 _sb_ 6}     
+parse opeval opdef {_ng_ 20 _sb_ 4}       
+parse opeval opdef {_mi_ 20 _sb_ 4}       
+set ops <>      
+set opdef NULL  
+set opset[pri, as, name, fn]:{
+    parse.opset ops pri parse.assoc.(as) name fn!;
+    opdef = range ops!;
+}
+set fmt.t [f,p,v]:{ if (equal "string" (typename v!)!) {v} {str v!}!}
+set diadic[strf=strf,name,l,r]::{ strf "(%s %t %t)" <name, l, r>! }
+set monadic[strf=strf,name,lr]::{ strf "(%s %t)" <name, lr>! }
+opset 6 "xfy" "xfy" (diadic "xfy")
+opset 6 "yfx" "yfx" (diadic "yfx")
+opset 6 "fy" "fy" (monadic "fy")
+opset 6 "fx" "fx" (monadic "fx")
+opset 6 "yfy" "yfy" (diadic "yfy")
+opset 6 "xfx" "xfx" (diadic "xfx")
+opset 6 "xfy" "xfy" (diadic "xfy")
+opset 6 "yfx" "yfx" (diadic "yfx")
+opset 6 "yf" "yf" (monadic "yf")
+opset 6 "xf" "xf" (monadic "xf")
+opset 8 "fy" "Fy" (monadic "Fy")
+opset 8 "fx" "Fx" (monadic "Fx")
+opset 8 "yfy" "yFy" (diadic "yFy")
+opset 8 "xfx" "xFx" (diadic "xFx")
+opset 8 "xfy" "xFy" (diadic "xFy")
+opset 8 "yfx" "yFx" (diadic "yFx")
+opset 8 "yf" "yF" (monadic "yF")
+opset 8 "xf" "xF" (monadic "xF")
+set opeval[expr]: { parse.opeval opdef expr! }
+set x 42
+opeval {yfy}       
+ftl $*console*@54: in
+ftl $*console*:57: undefined symbol 'yfy'
+ftl $*console*:57: code has trailing text - ''
+opeval {x}         
+ftl $*console*:58: undefined symbol 'x'
+ftl $*console*:58: code has trailing text - ''
+opeval {4}
+opeval {"str"}
+opeval {<3>}
+opeval {(4)}
+opeval {5 xfy 6}
+opeval {5 yfx 6}
+opeval {5 yfy 6}
+opeval {5 xfx 6}
+opeval {fx 7}
+opeval {fy 7}
+opeval {4 xf}
+opeval {4 yf}
+opeval {5 xfy 6 xfy 7} 
+opeval {5 yfx 6 yfx 7} 
+set forops[opdefs, fn]:{
+    forall parse.op [precfns, prec]:{
+        forall precfns [precfn, name]:{
+            fn name prec precfn.assoc precfn.fn!
+        }!
+    }!
+}
+set assocstr[as]:{ (domain (select (equal as) parse.assoc!)!).0 }
+set printf io.fprintf io.out
+forops parse.op [name, prec, assoc, fn]:{
+    printf "%3d: %3s %v\n" <prec, assocstr assoc!, name>!;
+}
 16
 15
 -5
@@ -24,18 +93,33 @@ ftl byoutput/ops.ftl:58: code has trailing text: ...
 "(xfy (xfy 5 6) 7)"
 "(yfx 5 (yfx 6 7))"
   0: xfy "or"
+  0: xfy "_or_"
   1: xfy "and"
+  1: xfy "_and_"
   2:  fy "not"
-  3: xfx "=="
-  3: xfx "!="
-  3: xfx "lt"
-  3: xfx "le"
-  3: xfx "gt"
-  3: xfx "ge"
-  4: xfy "shl"
-  4: xfy "shr"
-  5:  fy "-"
-  6: xfy "+"
-  6: xfy "-"
-  7: xfy "*"
-  7: xfy "/"
+  2:  fy "_not_"
+  3: xfy "_bitor_"
+  4: xfy "_bitxor_"
+  5: xfy "_bitand_"
+  6:  fy "_bitnot_"
+  7: xfx "=="
+  7: xfx "!="
+  7: xfx "lt"
+  7: xfx "_lt_"
+  7: xfx "le"
+  7: xfx "_le_"
+  7: xfx "gt"
+  7: xfx "_gt_"
+  7: xfx "ge"
+  7: xfx "_ge_"
+  8: xfy "shl"
+  8: xfy "_shl_"
+  8: xfy "shr"
+  8: xfy "_shr_"
+  9:  fy "-"
+ 10: xfy "+"
+ 10: xfy "-"
+ 11: xfy "*"
+ 11: xfy "/"
+ 11: xfy "rem"
+ 11: xfy "_rem_"

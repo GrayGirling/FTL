@@ -1,0 +1,47 @@
+set try[fn]:{
+    catch [ex]:{io.fprintf io.err "Exception: ** %v **\n"<ex>!; "caught"} fn!
+}
+try { echo "hi"!; "good"}
+hi
+try { echo "hi"!; throw "A BAD ONE"!; echo "here - never"!; "never"}
+"good"
+hi
+Exception: ** "A BAD ONE" **
+set deep[]:{
+    echo "Deep..."!;
+    deeper {throw "from deeper"!}!
+}
+set deeper[fn]:{
+    echo "Deeper..."!;
+    fn!;
+    echo "Baad"!;
+    "bad"
+}
+try { echo "off we go"!; deep!; echo "Nooooo"!; "aweful" }
+"caught"
+off we go
+Deep...
+Deeper...
+Exception: ** "from deeper" **
+set intry[fn]:{
+    echo "Inner try..."!;
+    catch [ex]:{ echo "Caught inside"!; throw (strf "wrap (%v)"<ex>!)!;} fn!;
+    echo "Oh dear"!;
+    "in problem"
+}
+try { echo "off we go again"!;
+      deeper {intry {throw "from wayback"!}!}!;
+      echo "Nooooo"!;
+      "aweful"
+}
+"caught"
+off we go again
+Deeper...
+Inner try...
+Caught inside
+Exception: ** "wrap (\"from wayback\")" **
+set new_except[name, env]:{throw (env::[name=name])!}
+try {exception.signal 3!}
+Exception: ** [signo=3, name="signal"] **
+"caught"
+"caught"
