@@ -1,0 +1,6 @@
+> bitand 1 3
+1
+> bitand 0 0xffff
+0
+> strf "0x%09x" <bitand 0x000fff000 0x123456789!>
+"0x000456000"

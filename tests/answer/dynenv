@@ -1,0 +1,87 @@
+> set data [ads=3,b=9]
+> set dgetall []:{echo "(getall)"!;data}
+> set dget   [n]:{echo "(get)"!;data.(n)}
+> set dset [n,v]:{echo "(set)"!;data.(n)=v;TRUE}
+> set dcount  []:{echo "(count)"!;len data!}
+> set dyn         dynenv dgetall dcount dset dget!
+> set dyn_nocount dynenv dgetall NULL  dset  dget!
+> set dyn_noset   dynenv dgetall dcount NULL dget!
+> set dyn_noget   dynenv dgetall dcount dset NULL!
+> eval dyn
+(getall)
+[ads=3, b=9]
+> len dyn
+(count)
+2
+> set dyn.ads 77
+(set)
+> set dyn.b 88
+(set)
+> eval dyn.ads
+(get)
+77
+> eval dyn.b
+(get)
+88
+> eval dyn
+(getall)
+[ads=77, b=88]
+> eval dyn_nocount
+(getall)
+[ads=77, b=88]
+> len dyn_nocount
+(getall)
+2
+> set dyn_nocount.ads 8
+(set)
+> set dyn_nocount.b 100
+(set)
+> eval dyn_nocount.ads
+(get)
+8
+> eval dyn_nocount.b
+(get)
+100
+> eval dyn_nocount
+(getall)
+[ads=8, b=100]
+> eval dyn_noset
+(getall)
+[ads=8, b=100]
+> len dyn_noset
+(count)
+2
+> set dyn_noset.ads 10
+ftl: name "ads" has a constant value
+ftl $*console*:31: can't set a value for "ads" here
+> set dyn_noset.b 120
+ftl: name "b" has a constant value
+ftl $*console*:32: can't set a value for "b" here
+> eval dyn_noset.ads
+(get)
+8
+> eval dyn_noset.b
+(get)
+100
+> eval dyn_noset
+(getall)
+[ads=8, b=100]
+> eval dyn_noget
+(getall)
+[ads=8, b=100]
+> len dyn_noget
+(count)
+2
+> set dyn_noget.ads 33
+(set)
+> set dyn_noget.b 44
+(set)
+> eval dyn_noget.ads
+(getall)
+33
+> eval dyn_noget.b
+(getall)
+44
+> eval dyn_noget
+(getall)
+[ads=33, b=44]

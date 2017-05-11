@@ -1,6 +1,0 @@
-bitnot 0
-bitnot 0xffff
-strf "0x%09x" <bitnot 0x000fff000!>
--1
--65536
-"0xffffffffff000fff"

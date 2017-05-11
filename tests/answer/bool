@@ -1,0 +1,45 @@
+> eval TRUE
+TRUE
+> eval FALSE
+FALSE
+> TRUE {echo "prints"!}           
+prints
+FALSE
+> FALSE {echo "doesn't print"!}   
+FALSE
+> TRUE {echo "prints"!;TRUE}! {echo "prints again"!}       
+prints
+prints again
+FALSE
+> TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}     
+prints
+FALSE
+> FALSE {echo "doesn't print"!; TRUE}! {echo "doesn't print"!}   
+FALSE
+> FALSE {echo "doesn't print"!; FALSE}! {echo "doesn't print"!}  
+FALSE
+> invert TRUE
+FALSE
+> invert FALSE
+TRUE
+> equal TRUE TRUE
+TRUE
+> equal TRUE FALSE
+FALSE
+> equal FALSE TRUE
+FALSE
+> equal FALSE FALSE
+TRUE
+> eval TRUE == TRUE
+TRUE
+> eval TRUE == FALSE
+FALSE
+> eval FALSE == TRUE
+FALSE
+> eval FALSE == FALSE
+TRUE
+> set ifeval[bool]:{ if bool {"if-TRUE"} {"if-FALSE"}! }
+> ifeval TRUE
+"if-TRUE"
+> ifeval FALSE
+"if-FALSE"

@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
+ * Copyright (c) 2005-2016, Gray Girling
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -412,11 +414,11 @@ linesource_read(linesource_t *source, charsink_t *line);
 
 extern void
 linesource_pushline(linesource_t *lines, const char *name,
-            const char *cmd_str);
+                    const char *cmd_str);
 
 extern int
 vreport(charsink_t *sink, linesource_t *source,
-    const char *format, va_list ap);
+        const char *format, va_list ap);
 
 extern int
 report(charsink_t *sink, linesource_t *source, const char *format, ...);
@@ -441,32 +443,11 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
              bool with_chars);
 
 
-/*          Types                                        */
-
-typedef enum
-{   type_null = 1,
-    type_type,
-    type_int,
-    type_ipaddr,
-    type_macaddr,
-    type_string,
-    type_code,
-    type_dir,
-    type_closure,
-    type_stream,
-    type_cmd,
-    type_func,
-    type_coroutine,
-    type_mem,
-} type_t;
-
-
-extern const char *
-type_name(type_t kind);
-
 /*          Values                                       */
 
 typedef struct value_s value_t;
+typedef const struct value_type_s *type_t;
+
 
 extern const char *
 value_type_name(const value_t *val);
@@ -502,22 +483,47 @@ value_fprint(FILE *out, const value_t *root, const value_t *val);
 
 #define VALUE_SHOW(msg, val) VALUE_SHOW_RT(msg, NULL, val)
 
+/*          Type Values                                      */
+
+
+typedef struct value_type_s value_type_t;
+typedef int type_id_t;
+
+extern type_t type_type;
+
+extern const char *
+type_name(type_t kind);
+
+
 /*          NULL Values                                      */
 
+extern type_t type_null;
 extern value_t value_null;
 
 extern const value_t *
 value_nl(const value_t *value);
 
-/*          Type Values                                      */
+/*          Integer Values                                   */
+
+extern type_t type_int;
+extern const value_t *value_zero;
+extern const value_t *value_one;
 
 extern value_t *
-value_type_new(type_t type_id);
+value_int_new(number_t number);
 
-extern bool
-value_type_id(const value_t *value, type_t *out_type_id);
+extern value_t *
+value_uint_new(unumber_t number);
+
+extern void
+value_int_update(const value_t **ref_value, number_t n);
+
+extern number_t
+value_int_number(const value_t *value);
 
 /*          IP Address Values                                    */
+
+extern type_t type_ipaddr;
 
 typedef unsigned char addr_ip_t[4];
 
@@ -544,6 +550,7 @@ parse_ipaddr(const char **ref_line, addr_ip_t *out_ipaddr);
 
 /*           Address Values                                  */
 
+extern type_t type_macaddr;
 typedef unsigned char addr_mac_t[6];
 
 extern int
@@ -561,23 +568,6 @@ value_macaddr_get(const value_t *value, unsigned char *ref_macaddr);
 extern bool
 parse_macaddr(const char **ref_line, addr_mac_t *out_macaddr);
 
-/*          Integer Values                                   */
-
-extern const value_t *value_zero;
-extern const value_t *value_one;
-
-extern value_t *
-value_int_new(number_t number);
-
-extern value_t *
-value_uint_new(unumber_t number);
-
-extern void
-value_int_update(const value_t **ref_value, number_t n);
-
-extern number_t
-value_int_number(const value_t *value);
-
 /*          Boolean Values                                   */
 
 extern const value_t *value_true;
@@ -591,6 +581,7 @@ extern bool value_istype_bool(const value_t *val);
 
 /*          String Values                                    */
 
+extern type_t type_string;
 /* make a new string - taking a copy of the string area */
 extern value_t *
 value_string_new(const char *string, size_t len);
@@ -634,6 +625,8 @@ value_string_chars(const value_t *string);
 
 /*          Code body Values                                     */
 
+extern type_t type_code;
+
 extern value_t *
 value_code_new(const value_t *string, const char *defsource, int lineno);
 
@@ -642,6 +635,8 @@ value_code_buf(const value_t *value, const char **out_buf, size_t *out_len);
 
 
 /*          Stream Values                                                    */
+
+extern type_t type_stream;
 
 typedef void
 stream_close_fn_t(value_t *stream);
@@ -700,6 +695,8 @@ extern value_t *
 value_stream_outmem_new(char *str, size_t len);
 
 /*          Directories                                      */
+
+extern type_t type_dir;
 
 typedef struct dir_s dir_t;
 
@@ -990,8 +987,6 @@ dir_struct_update(const value_t **ref_value,
           struct_spec_t *spec, bool is_const, void *structmem);
 
 
-
-
 /*          Array Directories                                */
 
 typedef struct
@@ -1169,6 +1164,8 @@ dir_stack_last_pos(dir_stack_t *dir);
 
 /*          Closure Environments                                 */
 
+extern type_t type_closure;
+
 typedef struct value_env_s value_env_t;
 
 extern value_env_t *
@@ -1233,6 +1230,8 @@ value_as_dir(const value_t *val, dir_t **out_dir); /* complains if uncast */
 
 /*          Coroutine Values                                 */
 
+extern type_t type_coroutine;
+
 typedef struct value_coroutine_s value_coroutine_t;
 typedef void suspend_fn_t(unsigned long milliseconds);
 
@@ -1264,7 +1263,7 @@ parser_env_copy(parser_state_t *parser_state);
 
 extern dir_t *
 parser_opdefs(const parser_state_t *parser_state);
-    
+
 extern const value_t *
 parser_builtin_arg(parser_state_t *parser_state, int argno);
 
@@ -1272,11 +1271,12 @@ extern dir_stack_t *
 parser_env_stack(const parser_state_t *parser_state);
 
 extern dir_stack_pos_t
-parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool env_end);
+parser_env_push(parser_state_t *parser_state, dir_t *newdir,
+                bool outer_visible);
 
 extern bool /* ok */
 parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
-               dir_t *newdir, bool env_end);
+                       dir_t *newdir, bool outer_visible);
 
 /* Restore environment stack back to previous (outer) level */
 extern void
@@ -1287,10 +1287,17 @@ extern dir_stack_pos_t
 parser_env_calling_pos(const parser_state_t *parser_state);
 
 extern bool
-parser_echo(const parser_state_t *parser_state);
+parser_echoto(const parser_state_t *parser_state, FILE **out_log,
+              const char **out_fmt);
 
 extern void
-parser_echo_set(parser_state_t *parser_state, bool on);
+parser_echo_setlog(parser_state_t *parser_state, FILE *log, const char *fmt);
+
+#define parser_echo(state) \
+    (parser_echoto(state, NULL, NULL))
+    
+#define parser_echo_set(state, on) \
+    (parser_echo_setlog(state, (on)? stderr: NULL), NULL)
 
 extern suspend_fn_t *
 parser_suspend_get(const parser_state_t *parser_state);
@@ -1334,7 +1341,7 @@ parser_error_count(parser_state_t *parser_state);
 extern int
 parser_report_help(parser_state_t *parser_state, const value_t *cmd);
 
-/* throw an exception returning TRUE iff it succeeded */ 
+/* throw an exception returning TRUE iff it succeeded */
 extern bool
 parser_throw(parser_state_t *parser_state, const value_t *exception);
 
@@ -1351,7 +1358,7 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
  */
 extern const value_t *
 parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok);
-    
+
 extern void
 parser_collect(parser_state_t *state);
 
@@ -1482,8 +1489,10 @@ parse_one_ending(const char **ref_line, parser_state_t *state, dir_t *delims,
 
 /*          Command Values                               */
 
+extern type_t type_cmd;
+
 typedef const value_t *cmd_fn_t(const char **ref_line, const value_t *this_cmd,
-                        parser_state_t *state);
+                                parser_state_t *state);
 
 extern value_t *
 value_cmd_new(cmd_fn_t *exec, const value_t *fn_exec, const char *help);
@@ -1493,6 +1502,8 @@ value_cmd_help(const value_t *cmd);
 
 
 /*          Function Values                              */
+
+extern type_t type_func;
 
 typedef const value_t *func_fn_t(const value_t *this_func,
                  parser_state_t *state);
@@ -1507,6 +1518,8 @@ extern const char *
 value_func_help(const value_t *func);
 
 /*          Memory                                       */
+
+extern type_t type_mem;
 
 extern value_t *
 value_mem_bin_new(const value_t *binstr, number_t base,
@@ -1524,33 +1537,40 @@ value_mem_rebase_new(const value_t *unbase_mem_val,
 
 /*          Modules                                          */
 
+/*! Add a new command (cmd) to a module directory */
 extern value_t *
 mod_add(dir_t *dir, const char *name, const char *help, cmd_fn_t *exec);
 
+/*! Add a new function to a module directory */
 extern value_t *
 mod_addfn(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
       int args);
 
+/*! Add a new function with bound implicit args to a module directory */
 extern value_t *
 mod_addfn_imp(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
           int args, void *implicit_args);
 
+/*! Add a new directory to a module directory */
 extern void
 mod_add_dir(dir_t *dir, const char *name, dir_t *mod);
 
+/*! Add a new value to a module directory */
 extern void
 mod_add_val(dir_t *dir, const char *name, const value_t *val);
 
+/*! Parse a value to execute taken from a given module */
 extern bool
 mod_parse_cmd(dir_t *dir, const char **ref_line, const value_t **out_cmd);
 
+/*! Retrieve any implicit argument defined for this function in its module */
 extern void *
 mod_get_implicit(const value_t *this_fn);
 
 /*          Value Parsing                            */
 
 
-    
+
 #define value_is_invokable(_val)         \
    (value_type_equal(_val, type_code) || \
     value_type_equal(_val, type_closure))

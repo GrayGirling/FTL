@@ -1,0 +1,22 @@
+> typename "some text"
+"string"
+> typeof "some text"
+$basetype.string
+> eval basetype.string
+$basetype.string
+> help all basetype
+all basetype <subcommand> - commands:
+    type - type value
+    nul - type value
+    string - type value
+    code - type value
+    closure - type value
+    int - type value
+    dir - type value
+    cmd - type value
+    fn - type value
+    stream - type value
+    ip - type value
+    mac - type value
+    coroutine - type value
+    mem - type value

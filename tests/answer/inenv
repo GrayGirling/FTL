@@ -1,0 +1,26 @@
+> inenv [a=3,b=8,c=9] "d"
+FALSE
+> inenv [a=3,b=8,c=9] "c"
+TRUE
+> inenv [a=3]::[b=8,c=9] "a"
+TRUE
+> inenv [a=3]::[b=8,c=9] "c"
+TRUE
+> inenv []:[] "inenv"
+TRUE
+> inenv <1,2,3> 4
+FALSE
+> inenv <1,2,3> 2
+TRUE
+> inenv <1,2,3>::<7,8> 2
+TRUE
+> inenv <1,2,3, 6=7,8> 1
+TRUE
+> inenv <1,2,3, 6=7,8> 4
+FALSE
+> inenv <1,2,3, 6=7,8> 7
+TRUE
+> inenv <1..4> 0
+TRUE
+> inenv <1..4> 4
+FALSE

@@ -1,0 +1,23 @@
+> set bin "\xff\xff\xff\xff\x80\x00\x00\x01\x01\x00\x00\xff"
+> int_fmt_hexbits 255
+-1
+> binsplit TRUE TRUE 4 bin
+<-1, 0x1000080, 0xffffffffff000001>
+> binsplit TRUE FALSE 4 bin
+<0xffffffff, 0x1000080, 0xff000001>
+> binsplit FALSE TRUE 4 bin
+<-1, 0xffffffff80000001, 0x10000ff>
+> binsplit FALSE FALSE 4 bin
+<0xffffffff, 0x80000001, 0x10000ff>
+> binsplit TRUE TRUE 2 bin
+<-1, -1, 128, 0x100, 1, 0xffffffffffffff00>
+> binsplit TRUE FALSE 2 bin
+<0xffff, 0xffff, 128, 0x100, 1, 0xff00>
+> binsplit FALSE TRUE 2 bin
+<-1, -1, 0xffffffffffff8000, 1, 0x100, 255>
+> binsplit FALSE FALSE 2 bin
+<0xffff, 0xffff, 0x8000, 1, 0x100, 255>
+> binsplit TRUE TRUE 1 bin
+<-1, -1, -1, -1, -128, 0, 0, 1, 1, 0, 0, -1>
+> binsplit TRUE FALSE 1 bin
+<255, 255, 255, 255, 128, 0, 0, 1, 1, 0, 0, 255>

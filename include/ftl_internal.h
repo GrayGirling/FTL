@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
+ * Copyright (c) 2005-2016, Gray Girling
+ *
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +44,12 @@
 
 #include "ftl.h"
 
+/*          Configuration                      		                     */
+
+/* #define FTL_VAL_HAS_LINENO */
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -55,6 +63,7 @@ extern "C" {
 #define FTL_MALLOC malloc
 #define FTL_FREE   free
 
+
 /*          Character Sinks              		                     */
 
 
@@ -64,7 +73,7 @@ struct charsink_s
 {   putc_fn_t *putc;
 } /* charsink_t */;
 
-    
+
 typedef struct charsink_string_s
 {   charsink_t sink;
     char *charvec;
@@ -77,10 +86,10 @@ charsink_string_init(charsink_string_t *charbuf);
 
 extern void
 charsink_string_close(charsink_t *sink);
-    
-  
+
+
 /*          Values 					                     */
-  
+
 typedef void value_delete_fn_t(value_t *value);
 
 /* set the heap version of that values dependent on this value belong to */
@@ -89,26 +98,48 @@ typedef void value_markver_fn_t(const value_t *value, int version);
 typedef int value_print_fn_t(outchar_t *out,
 			     const value_t *root, const value_t *value);
 
+typedef const value_t *value_parse_fn_t(const char **ref_line,
+                                        const value_t *this_cmd,
+                                        parser_state_t *state);
+
 typedef int value_cmp_fn_t(const value_t *v1, const value_t *v2);
 
 struct value_s
 {   struct value_s *link;
     struct value_s *heap_next;  /*< next value allocated in heap */
-    value_print_fn_t *print;
-    value_delete_fn_t *del;
-    value_markver_fn_t *mark_version;
-    value_cmp_fn_t *compare;
     int heap_version;		/*< last heap version this was a member of */
-    type_t kind;		/*< type of this value */
-    unsigned char local;        /*< if local this is not free for collection */
+#ifdef FTL_VAL_HAS_LINENO
     int lineno;                 /*< used only for debugging */
+#endif
+    unsigned char local;        /*< if local this is not free for collection */
+    unsigned char on_heap;      /*< if set don't delete it with kind->del */
+    const value_type_t *kind;	/*< type of this value */
 } /* value_t */;
 
+/*! Initialize a value data structure
+ *    @param  val      value data structure to be initialized
+ *    @param  kind     pointer to value_type_t type value
+ *    @param  local    value must not currently be garbage collected
+ *    @param  on_heap  value is not to be deleted explicitly
+ */
 extern /*internal*/ value_t *
-(value_init)(value_t *val, type_t kind, value_print_fn_t *print_fn,
-	     value_cmp_fn_t *compare_fn, value_delete_fn_t *delete_fn,
-	     value_markver_fn_t *mark_version_fn);
+(value_init)(value_t *val, type_t kind, bool on_heap);
 
+
+/*! To try to isolate uncommitted values (i.e. ones that are valid but which
+ *  should not be garbage collected yet, we use the notion of a value being
+ *  'local' (local == not reachable from garbage collection root).  Most new
+ *  values are allocated 'local' and should be unset as soon as they have
+ *  either been used in the garbage-collection-safe tree, or known not to be
+ *  required, they can be un-localed.
+ *  Ideally every new value will be un-localed before it leaves the scope of the
+ *  routine that consumes it.
+ *  The hope here is to enable the garbage collector to be run relatively
+ *  asynchronously (e.g. when memory is low).
+ *  Note that local values will never be collected by the garbage collector if
+ *  they are not unlocalled, so that any which are still local at the time of
+ *  an exception (which uses longjmp) may never be retrieved.
+ */
 STATIC_INLINE void
 _value_unlocal(const value_t *val, int lineno)
 {   /* we will need to discard the const - it applies only to the real content
@@ -130,7 +161,53 @@ _value_unlocal(const value_t *val, int lineno)
 
 extern void
 value_delete(value_t **ref_val);
-  
+
+/*          Types 					                     */
+
+typedef int type_name_fn_t();
+
+
+struct value_type_s
+{
+    value_t val;
+    type_id_t id;               /*< of FTL parent type */
+    const char *name;           /*< of FTL parent type */
+    value_print_fn_t *print;    /*< convert value into string */
+    value_parse_fn_t *parse;    /*< convert string into value */
+    value_delete_fn_t *del;     /*< delete this + uniquely owned parts */
+    value_markver_fn_t *mark_version; /*< for garbage collection */
+    value_cmp_fn_t *compare;    /*< used when this type is first to compare */
+} /* value_type_t */;
+
+extern type_id_t type_id_new(void);
+
+extern /*internal*/ value_t *
+type_init(value_type_t *kind, bool on_heap,
+          type_id_t type_id, const char *name,
+          value_print_fn_t *val_print_fn, value_parse_fn_t *val_parse_fn,
+          value_cmp_fn_t *val_compare_fn,
+          value_delete_fn_t *val_delete_fn,
+          value_markver_fn_t *val_mark_version_fn);
+
+/*! determine whether other values are referred to in values of this type
+ */
+extern bool type_values_simple(type_t kind);
+
+extern value_t *
+type_clone(bool on_heap,
+           type_id_t cloned_type_id, const char *name,
+           value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+           value_cmp_fn_t *compare, value_delete_fn_t *delete_fn,
+           value_markver_fn_t *mark_version);
+
+extern value_t *
+type_new(bool on_heap,
+         const char *name,
+         value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+         value_cmp_fn_t *compare_fn,
+         value_delete_fn_t *delete_fn,
+         value_markver_fn_t *mark_version_fn);
+
 /*          Directories					                     */
 
 /* create a new name-value binding - name and value assumed to have
@@ -150,7 +227,7 @@ typedef void *dir_forall_fn_t(dir_t *dir, dir_enum_fn_t *enumfn, void *arg);
 
 struct dir_s
 {   value_t value;           /* directory used as a value */
-    bool env_end;            /* true when dir is not to be looked beyond */ 
+    bool env_end;            /* true when dir is not to be looked beyond */
     dir_add_fn_t    *add;    /* add a new name-value pair */
     dir_lookup_fn_t *lookup; /* find address of value */
     dir_get_fn_t    *get   ; /* find corresponding value */
@@ -161,11 +238,11 @@ struct dir_s
 #define dir_value(dir) (&(dir)->value)
 
 extern /*internal*/ value_t *
-dir_init(dir_t *dir, dir_add_fn_t *add_fn, dir_lookup_fn_t *lookup_fn,
+dir_init(dir_t *dir, type_t dir_subtype,
+         dir_add_fn_t *add_fn, dir_lookup_fn_t *lookup_fn,
 	 dir_get_fn_t *get_fn, dir_forall_fn_t *forall_fn,
-	 value_print_fn_t *print_fn, value_delete_fn_t *delete_fn,
-	 value_markver_fn_t *mark_fn);
-  
+         bool on_heap);
+
 /*          Memory					                     */
 
 typedef struct value_mem_s value_mem_t;
@@ -267,10 +344,10 @@ struct value_mem_s
 
 
 extern value_t *
-value_mem_init(value_mem_t *mem, value_delete_fn_t *delete_fn,
-   	       value_markver_fn_t *mark_version_fn,
+value_mem_init(value_mem_t *mem, type_t mem_subtype,
                mem_read_fn_t *read_fn, mem_write_fn_t *write_fn,
-               mem_len_able_fn_t *len_able_fn, mem_len_able_fn_t *base_able_fn);
+               mem_len_able_fn_t *len_able_fn, mem_len_able_fn_t *base_able_fn,
+               bool on_heap);
 
 
 #ifdef __cplusplus

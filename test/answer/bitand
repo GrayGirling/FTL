@@ -1,6 +1,0 @@
-bitaqnd 1 3
-ftl $*console*:1: unknown command 'bitaqnd 1 3'
-bitaqnd 0 0xffff
-ftl $*console*:2: unknown command 'bitaqnd 0 0xffff'
-strf "0x%09x" <bitand 0x000fff000 0x123456789!>
-"0x000456000"

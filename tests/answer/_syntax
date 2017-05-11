@@ -1,0 +1,66 @@
+> set v1 <0, 1, 2, 3>
+> eval v1.0
+0
+> eval v1.3
+3
+> set v2 <0 .. 3>
+> eval v2.0
+0
+> eval v2.3
+3
+> eval <0, 1, 2, 3>.0
+0
+> eval <0, 1, 2, 3>.3
+3
+> eval <0..3>.0
+0
+> eval <0..3>.3
+3
+> eval v1.-1
+ftl $*console*:21: index symbol undefined in parent '-1'
+> eval v1.4
+ftl $*console*:22: index symbol undefined in parent '4'
+> eval v2.-1
+-1
+> eval v2.4
+ftl $*console*:25: index symbol undefined in parent '4'
+> eval <0, 1, 2, 3>.-1
+ftl $*console*:27: index symbol undefined in parent '-1'
+> eval <0, 1, 2, 3>.4
+ftl $*console*:28: index symbol undefined in parent '4'
+> eval <0..3>.-1
+-1
+> eval <0..3>.4
+ftl $*console*:31: index symbol undefined in parent '4'
+> eval v1.<0>
+<0>
+> eval v2.<0>
+<0>
+> eval <0, 1, 2, 3>.<0>
+<0>
+> eval v1.<3, 2>
+<3, 2>
+> eval v2.<3, 2>
+<3, 2>
+> eval <0, 1, 2, 3>.<3, 2>
+<3, 2>
+> eval v1.[a=2, b=3]
+[a=2, b=3]
+> eval v2..[a=2, b=3]
+ftl $*console*:44: trailing text in expression - '..[a=2, b=3]'
+ftl $*console*:44: warning - trailing text .....[a=2, b=3]
+> eval <0, 1, 2, 3>..[a=2, b=3]
+ftl $*console*:45: trailing text in expression - '..[a=2, b=3]'
+ftl $*console*:45: warning - trailing text .....[a=2, b=3]
+> eval [a] 1
+[a=1]
+> eval [b=3, a] 1
+[a=1,b=3]
+> eval [b=3]::[a] 1
+[a=1,b=3]
+> eval [a]::[b=3] 1
+[a=1,b=3]
+> eval [a]::{} 1
+[a=1]::{}
+> eval [a]:{} 1
+[a=1]:{}

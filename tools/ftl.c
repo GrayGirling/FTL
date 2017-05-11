@@ -474,6 +474,7 @@ main(int argc, char **argv)
     const char *app_argv[APP_ARGC_MAX];
     int app_argc;
     bool echo_lines = FALSE;
+    FILE *echo_log = stdout;
     bool quiet = FALSE;
     
     ftl_init();
@@ -484,7 +485,7 @@ main(int argc, char **argv)
     {   parser_state_t *state = parser_state_new(dir_id_new());
 
 	if (NULL != state)
-	{   parser_echo_set(state, echo_lines);
+	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
 	    cmds_generic(state, app_argc, &app_argv[0]);
 	    if (cmds_ftl(state))
 	    {	bool do_args = app_argc > 1;

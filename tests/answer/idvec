@@ -1,0 +1,110 @@
+> eval []
+[]
+> eval [z=NULL]
+[z=NULL]
+> eval ["z"=NULL]
+[z=NULL]
+> eval [1=NULL] 
+ftl: value has wrong type - type is int, expected string
+[]
+> eval [a=0,b=1]
+[a=0,b=1]
+> eval ["z"=NULL,"z"=4] 
+[z=4]
+> eval [z=NULL,z=1,z=2]
+[z=2]
+> eval ["z"=NULL,"z "=4]
+[z=NULL,"z "=4]
+> len []
+0
+> len [z=NULL]
+1
+> len ["z"=NULL]
+1
+> len [1=NULL] 
+ftl: value has wrong type - type is int, expected string
+0
+> len [a=0,b=1]
+2
+> len ["z"=NULL,"z"=4]
+1
+> len [z=NULL,z=1,z=2]
+1
+> len ["z"=NULL,"z "=4]
+2
+> eval [a]
+[a]
+> eval [a, b]
+[a, b]
+> eval [a, a]   
+[a, a]
+> eval [a=1, b]
+[a=1, b]
+> eval [a=1, a] 
+[a=1, a]
+> eval [a, b=1] 
+ftl $*console*:24: expected ']'
+ftl $*console*:24: failed to evaluate expression
+ftl $*console*:24: warning - trailing text ...=1] 
+> eval [a=1]::[b=2]
+[b=2,a=1]
+> eval [d=2,e=3]::[c=1]::[a=-1,b=0]
+[a=-1,b=0,c=1,d=2,e=3]
+> eval [a]::[b=1]    
+[b=1, a]
+> eval [a=1]::[b]    
+[a=1, b]
+> eval [a=1]::[b,c,d]
+[a=1, b, c, d]
+> eval [a=1]::[b]::[c,d] 
+ftl $*console*:31: can't join two environments with unbound variables - not yet supported
+ftl $*console*:31: failed to evaluate expression
+ftl $*console*:31: warning - trailing text ... 
+> eval [a=1,b=2]::[a=5]
+[a=5,b=2]
+> len [a=1]::[b=2]
+2
+> len [d=2,e=3]::[c=1]::[a=-1,b=0]
+5
+> len [a=1]::[b]    
+1
+> len [a=1]::[b,c,d]
+1
+> len [a=1]::[b]::[c,d] 
+ftl $*console*:38: can't join two environments with unbound variables - not yet supported
+ftl $*console*:38: can't invoke closure - no argument for "_1"
+ftl $*console*:38: warning - trailing text ... 
+> len [a=1,b=2]::[a=5]
+2
+> eval [a=0]:[]
+[a=0]:root
+> eval []:[a=0]
+[a=0]:root
+> eval [a=0]:[b=1]
+[b=1,a=0]:root
+> eval [b=1]:[a=0]
+[a=0,b=1]:root
+> eval [a]:[] 
+[a]:root
+> eval []:[a]
+[a]:root
+> eval [a=1]::[b=2]:[c=3] 
+[c=3,b=2,a=1]:root
+> eval ([echo=4]:{}).echo   
+4
+> eval [a=1]::[c=2]::[c=3]  
+[c=3,a=1]
+> eval [a] 4
+[a=4]
+> eval [a=1]::[b]      2
+[b=2,a=1]
+> eval [a=1]::[b,c,d]  2
+[b=2,a=1, c, d]
+> eval [a=1]::[b,c,d]  2 3
+[c=3,b=2,a=1, d]
+> eval [a=1]::[b,c,d]  2 3 4
+[d=4,c=3,b=2,a=1]
+> eval [a=1]::[b,c,d]  2 3 4 5 
+ftl $*console*:57: too many arguments (no unbound symbols in closure) - missing ';'?
+[d=4,c=3,b=2,a=1]
+ftl $*console*:57: failed to evaluate expression

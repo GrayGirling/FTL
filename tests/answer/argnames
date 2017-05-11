@@ -1,0 +1,7 @@
+> argnames [b=1,a]::{a+b}
+<"a">
+> argnames add
+<"_1", "_2">
+> set argument_count[fn]:{len (argnames fn!)!}
+> argument_count add
+2

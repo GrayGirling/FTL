@@ -1,0 +1,16 @@
+> set dir bind [a] 33!
+> eval dir
+[a=33]
+> set inc bind add 1!
+> echo inc defd
+inc defd
+> argname inc
+"_2"
+> argnames inc
+<"_2">
+> echo inc
+inc
+> inc 3
+4
+> echo done
+done

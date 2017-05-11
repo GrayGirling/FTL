@@ -1,0 +1,6 @@
+> bitor 1 2
+3
+> bitor 0xffff0000 0xffff
+4294967295
+> strf "0x%09x" <bitor 0x000fff000 0x123456789!>
+"0x123fff789"
