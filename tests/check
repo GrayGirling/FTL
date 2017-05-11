@@ -9,10 +9,11 @@ dir_cmdparent=`cd "$cmd_dir/..">/dev/null;pwd`
 dir_results="/tmp/ftltest"
 file_diff="/tmp/ftltest.diff"
 
-dir_test="$dir_cmdparent/test"
+dir_test="$dir_cmdparent/tests"
 dir_test_outtest="byoutput"
 dir_test_answer="answer"
 ftl_cmd="$dir_cmdparent/ftl"
+gdb_cmd=gdb
 
 cmd_show=less
 
@@ -31,12 +32,14 @@ err()
 }
 
 help()
-{   echo "syntax: $cmd_name [-v][-r][-l][-s][-a] | [test_name]"
+{   echo "syntax: $cmd_name [-g][-v][-x|-r|-l][-s][-a] | [test_name]"
     echo "    -v        verbose"
     echo "    -r        record result as correct answer"
+    echo "    -x        just execute and echo the test"
     echo "    -l        list possible tests"
     echo "    -i        show ideal results"
     echo "    -a        all tests"
+    echo "    -g        run test under GDB"
 }
 
 do_list=false
@@ -44,6 +47,9 @@ do_record=false
 do_all=false
 do_idealshow=false
 do_stop=false
+do_run=false
+do_gdb=false
+
 
 runtest()
 {  local testfile="$1"
@@ -56,11 +62,20 @@ runtest()
    else
        local result="$dir_results/$testname"
        local answer="$dir_test/$dir_test_answer/$testname"
-
+       
        mkdir -p "$dir_results"
 
-       $ftl_cmd -e -q < $testfile &> "$result"
-       rc=$?
+       if $do_gdb; then
+           $verbose && \
+               echo "{ echo \"run -e -q < $testfile > $result 2>&1\"; cat - ; } | $gdb_cmd"
+           { echo "run -e -q < $testfile > $result 2>&1"; cat - ; } | \
+               $gdb_cmd $ftl_cmd
+           rc=$PIPESTATUS[1]
+       else
+           $verbose && echo "$ftl_cmd -e -q < $testfile 2>&1 > $result"
+           command $ftl_cmd -e -q < $testfile > $result 2>&1 
+           rc=$?
+       fi
 
        if [ $rc -eq 0 ]; then
            if $do_record; then
@@ -88,6 +103,32 @@ runtest()
    return $rc
 }
 
+
+livetest()
+{  local testfile="$1"
+   local testname=`basename "$testfile" .ftl`
+   local rc=0
+
+   if [ ! -r "$testfile" ]; then
+       err "'$testfile' test file not readable"
+       rc=1
+   else
+       if $do_gdb; then
+           $verbose && \
+               echo "{ echo \"run -e -q < $testfile\"; cat - ; } | $gdb_cmd"
+           { echo "run -e -q < $testfile"; cat - ; } | $gdb_cmd $ftl_cmd
+           rc=$PIPESTATUS[1]
+       else
+           $verbose && echo "$ftl_cmd -e -q < $testfile"
+           $ftl_cmd -e -q < $testfile
+           rc=$?
+       fi
+   fi
+   return $rc
+}
+
+
+
 do_help=false
 option=true
 
@@ -103,6 +144,10 @@ while $option; do
           do_stop=true;;
        -r | --record)
           do_record=true;;
+       -x | --execute)
+          do_run=true;;
+       -g | --gdb)
+          do_gdb=true;;
        -v | --verbose)
           verbose=true;;
        -h | --help)
@@ -129,16 +174,28 @@ elif $do_list; then
     ls -1 *.ftl
 elif $do_all; then
     export FTL_PATH= # pick up only fully qualified file names
+    runtype=runtest
+    $do_run && runtype=livetest
     if cd "$dir_test">/dev/null; then
+        summary_good=
+        summary_bad=
         for name in `ls $dir_test_outtest`; do
             case "$name" in
                 *.ftl)
                     name=`basename "$name"`
                     runtest "$dir_test_outtest/$name"
-                    rc=$?;;
+                    rc=$?
+                    if [ $rc -eq 0 ]; then
+                        summary_good="$summary_good $name"
+                    else
+                        summary_bad="$summary_bad $name"
+                    fi
+                    ;;
             esac
             $do_stop && [ $rc -ne 0 ] && { echo "FAILED (rc $rc)"; exit $rc; }
         done
+        echo "Tests that FAILED:    $summary_bad"
+        echo "Tests that SUCCEEDED: $summary_good"
     fi
     exit $?
 elif [ -z "$name" ]; then
@@ -152,10 +209,19 @@ elif $do_idealshow; then
     else
         err "'$name' result not recorded yet - use -r"
     fi
+elif $do_run; then
+    export FTL_PATH= # pick up only fully qualified file names
+    if cd "$dir_test">/dev/null; then
+        testname="`basename "$name" .ftl`.ftl"
+        livetest "$dir_test_outtest/$testname"
+        rc=$?
+    fi
+    exit $?
 else
     export FTL_PATH= # pick up only fully qualified file names
     if cd "$dir_test">/dev/null; then
-        runtest "$dir_test_outtest/$name"
+        testname="`basename "$name" .ftl`.ftl"
+        runtest "$dir_test_outtest/$testname"
         rc=$?
     fi
     exit $?

@@ -106,20 +106,19 @@ typedef int value_cmp_fn_t(const value_t *v1, const value_t *v2);
 
 struct value_s
 {   struct value_s *link;
-    struct value_s *heap_next;  /*< next value allocated in heap */
-    int heap_version;		/*< last heap version this was a member of */
+    struct value_s *heap_next;  /**< next value allocated in heap */
+    int heap_version;		    /**< last heap version this was a member of */
 #ifdef FTL_VAL_HAS_LINENO
-    int lineno;                 /*< used only for debugging */
+    int lineno;                 /**< used only for debugging */
 #endif
-    unsigned char local;        /*< if local this is not free for collection */
-    unsigned char on_heap;      /*< if set don't delete it with kind->del */
-    const value_type_t *kind;	/*< type of this value */
+    unsigned char local;        /**< if local this is not free for collection */
+    unsigned char on_heap;      /**< if set don't delete it with kind->del */
+    const value_type_t *kind;	/**< type of this value */
 } /* value_t */;
 
 /*! Initialize a value data structure
  *    @param  val      value data structure to be initialized
  *    @param  kind     pointer to value_type_t type value
- *    @param  local    value must not currently be garbage collected
  *    @param  on_heap  value is not to be deleted explicitly
  */
 extern /*internal*/ value_t *
@@ -170,13 +169,13 @@ typedef int type_name_fn_t();
 struct value_type_s
 {
     value_t val;
-    type_id_t id;               /*< of FTL parent type */
-    const char *name;           /*< of FTL parent type */
-    value_print_fn_t *print;    /*< convert value into string */
-    value_parse_fn_t *parse;    /*< convert string into value */
-    value_delete_fn_t *del;     /*< delete this + uniquely owned parts */
-    value_markver_fn_t *mark_version; /*< for garbage collection */
-    value_cmp_fn_t *compare;    /*< used when this type is first to compare */
+    type_id_t id;               /**< of FTL parent type */
+    const char *name;           /**< of FTL parent type */
+    value_print_fn_t *print;    /**< convert value into string */
+    value_parse_fn_t *parse;    /**< convert string into value */
+    value_delete_fn_t *del;     /**< delete this + uniquely owned parts */
+    value_markver_fn_t *mark_version; /**< for garbage collection */
+    value_cmp_fn_t *compare;    /**< used when this type is first to compare */
 } /* value_type_t */;
 
 extern type_id_t type_id_new(void);
@@ -340,7 +339,7 @@ struct value_mem_s
     mem_base_able_fn_t *base_able;
 } /* value_mem_t */;
 
-#define value_mem_value(mem) (&(mem)->value)
+#define value_mem_value(_mem) (&(_mem)->value)
 
 
 extern value_t *

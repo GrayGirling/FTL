@@ -55,7 +55,7 @@ ftl $*console*:10: warning - trailing text ...4>
 <4, 12 .. -12>
 > equal NULL (typeof <4, 2 .. 12>!) 
 FALSE
-> equal (type{dir}!) (typeof <>!)   
+> equal (type "dir"!) (typeof <>!)   
 TRUE
 > len <4, 8 .. -12> 
 0

@@ -225,7 +225,7 @@ parse_args(int argc, char **argv,
 	    if ((parse_key(&arg, "-r") || parse_key(&arg, "--randomseed")) &&
 		parse_empty(&arg))
 	    {   if (++argn < argc)
-		{   unsigned int seed = strtoul(argv[argn], NULL, 0);
+		{   unsigned int seed = (unsigned)strtoul(argv[argn], NULL, 0);
 		    IGNORE(DPRINTF("seed: %d\n", seed));
 		    srand(seed);
 		} else

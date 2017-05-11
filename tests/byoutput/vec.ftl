@@ -31,7 +31,7 @@ eval <4, 8 .. -12>
 intseq 4 8 (-12)
 
 equal NULL (typeof <4, 2 .. 12>!) # TRUE
-equal (type{dir}!) (typeof <>!)   # TRUE
+equal (type "dir"!) (typeof <>!)   # TRUE
 len <4, 8 .. -12> # error
 
 len <>

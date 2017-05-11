@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
+ * Copyright (c) 2005-2016, Gray Girling
  *
  * All rights reserved.
  *
@@ -216,55 +217,6 @@
 
 /*****************************************************************************
  *                                                                           *
- *          Headers                                                          *
- *          =======                                                          *
- *                                                                           *
- *****************************************************************************/
-
-
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-#include <ctype.h>
-#include <wchar.h>
-#include <signal.h>
-#include <assert.h>
-#include <time.h>
-#include <wctype.h>
-#include <stddef.h> /* for ptrdiff_t */
-#include <setjmp.h>
-
-#ifdef _WIN32
-
-#include <windows.h>
-#include <winerror.h>
-#ifndef EINVAL
-#define EINVAL WSAEINVAL
-#endif
-#ifndef EBADF
-#define EBADF WSAEBADF
-#endif
-
-#else
-#include <errno.h>
-#endif
-
-
-#include "libdyn.h"
-#include "filenames.h"
-#include "ftl.h"
-#include "ftl_internal.h"
-#include "ftlext.h"
-#define STRING(_x) #_x
-
-#ifdef USE_FTL_XML
-#include "ftl_xml.h"
-#endif
-
-
-/*****************************************************************************
- *                                                                           *
  *          Configuration                                                    *
  *          =============                                                    *
  *                                                                           *
@@ -278,13 +230,31 @@
 /* #define EXIT_ON_CTRL_C */
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 18
+#define VERSION_MIN 19
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
 #endif
 
-/*#define LOCAL_GARBAGE*/ /* collect garbage only when it's marked non-local */
+/*#define LOCAL_GARBAGE*/
+/**< collect garbage only only if it's value is marked non-local */
+/**<  If the above is defined we will pay attention to a type's 'local' marker.
+ *   (otherwise is just isn't used and variables are never treated as 'local').
+ *
+ *   To try to isolate uncommitted values (i.e. ones that are allocated but
+ *   which should not be garbage collected yet, we use the notion of a value
+ *   being 'local' (local == not reachable from garbage collection root).  Most
+ *   new values are allocated 'local' and should be unset as soon as they have
+ *   either been used in the garbage-collection-safe tree, or known not to be
+ *   required, they can be un-localed.
+ *   Ideally every new value will be un-localed before it leaves the scope of
+ *   the routine that consumes it.
+ *   The hope here is to enable the garbage collector to be run relatively
+ *   asynchronously (e.g. when memory is low).
+ *   Note that local values will never be collected by the garbage collector if
+ *   they are not unlocalled, so that any which are still local at the time of
+ *   an exception (which uses longjmp) may never be retrieved.
+ */
 
 /*#define FTL_BOOL_ISINT*/
 
@@ -380,6 +350,59 @@
 #define HAS_GETHOSTBYNAME
 /* #define HAS_SOCKETS */
 
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Headers                                                          *
+ *          =======                                                          *
+ *                                                                           *
+ *****************************************************************************/
+
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+#include <ctype.h>
+#include <wchar.h>
+#include <signal.h>
+#include <assert.h>
+#include <time.h>
+#include <wctype.h>
+#include <stddef.h> /* for ptrdiff_t */
+#include <setjmp.h>
+
+#ifdef _WIN32
+
+#include <windows.h>
+#include <winerror.h>
+#ifndef EINVAL
+#define EINVAL WSAEINVAL
+#endif
+#ifndef EBADF
+#define EBADF WSAEBADF
+#endif
+
+#else
+#include <errno.h>
+#endif
+
+
+#include "libdyn.h"
+#include "filenames.h"
+#include "ftl.h"
+#include "ftl_internal.h"
+#include "ftlext.h"
+#define STRING(_x) #_x
+
+#ifdef USE_FTL_XML
+#include "ftl_xml.h"
+#endif
+
 #ifdef HAS_GETHOSTBYNAME
 #if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
 #include <winsock.h>
@@ -387,9 +410,7 @@
 #include <netdb.h>
 #include <sys/socket.h>        /* for AF_INET */
 #endif
-#endif
-
-
+#endif /* HAS_GETHOSTBYNAME */
 
 
 
@@ -415,26 +436,32 @@
 
 #define FORCEDEBUG
 
-/* #define DEBUGGC DO */
-/* #define DEBUGVALINIT DO */
-/* #define DEBUGCONSOLE DO */
-/* #define DEBUGEXPD DO */
-/* #define DEBUGSERIES DO */
-/* #define DEBUGTRACE DO */
-/* #define DEBUGDIR DO */
-/* #define DEBUGENV DO */
-/* #define DEBUGMOD DO */
-/* #define DEBUGSOCK DO */
-/* #define DEBUGOP DO */
-/* #define DEBUGRCFILE DO */
-/* #define DEBUGEXECV DO */
-/* #define DEBUGMODEXEC DO */
-/* #define DEBUGCMP DO */
-/* #define DEBUGMEMDIFF DO */
+// #define DEBUGGC DO 
+// #define DEBUGGCU DO
+// #define DEBUGVALINIT DO 
+// #define DEBUGVALLINK DO
+// #define DEBUGCHARS DO 
+// #define DEBUGCONSOLE DO 
+// #define DEBUGEXPD DO 
+// #define DEBUGSERIES DO 
+// #define DEBUGTRACE DO
+// #define DEBUGDIR DO
+// #define DEBUGENV DO 
+// #define DEBUGMOD DO 
+// #define DEBUGSOCK DO 
+// #define DEBUGOP DO 
+// #define DEBUGRCFILE DO 
+// #define DEBUGEXECV DO 
+// #define DEBUGMODEXEC DO 
+// #define DEBUGCMP DO 
+// #define DEBUGMEMDIFF DO 
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUGGC
+#undef DEBUGGCU
 #undef DEBUGVALINIT
+#undef DEBUGVALLINK
+#undef DEBUGCHARS
 #undef DEBUGCONSOLE
 #undef DEBUGEXPD
 #undef DEBUGSERIES
@@ -456,8 +483,17 @@
 #ifndef DEBUGGC
 #define DEBUGGC OMIT
 #endif
+#ifndef DEBUGGCU
+#define DEBUGGCU OMIT
+#endif
 #ifndef DEBUGVALINIT
 #define DEBUGVALINIT OMIT
+#endif
+#ifndef DEBUGVALLINK
+#define DEBUGVALLINK OMIT
+#endif
+#ifndef DEBUGCHARS
+#define DEBUGCHARS OMIT
 #endif
 #ifndef DEBUGCONSOLE
 #define DEBUGCONSOLE OMIT
@@ -509,7 +545,27 @@
 #define CODEID "ftl"
 #define CODEIDNAME_MAX 64
 
+#if DEBUGVALINIT(1+)0 > 0 && defined(FTL_VAL_HAS_LINENO)
+#error enable FTL_VAL_HAS_LINENO in ftl_internal.h for DEBUGVALINIT
+#endif
 
+
+
+/* checking pointers */
+#define PTRVALID(_var) (NULL != (_var))
+#define HEAPVALID(_var) (true)
+
+#ifdef __APPLE__
+#undef PTRVALID
+#define PTRVALID(_var) \
+    (assert((((ptrdiff_t)(_var)) & 0xFFFF000000000000) == 0),NULL != (_var))
+#if 0
+#undef HEAPVALID
+#define HEAPVALID(_var) \
+    (assert((((ptrdiff_t)(_var)) & 0xFFFFF00000000000) == 0x700000000000),\
+     true)
+#endif
+#endif
 
 
 
@@ -1128,7 +1184,7 @@ charsink_stream_new(FILE *out)
 extern void
 charsink_stream_delete(charsink_t **ref_sink)
 {   charsink_stream_t *stream = (charsink_stream_t *)*ref_sink;
-    if (stream != NULL)
+    if (PTRVALID(stream))
     {   charsink_stream_close(*ref_sink);
         FTL_FREE(stream);
         *ref_sink = NULL;
@@ -1229,7 +1285,7 @@ charsink_socket_new(int fd, int send_flags)
 extern void
 charsink_socket_delete(charsink_t **ref_sink)
 {   charsink_socket_t *socket = (charsink_socket_t *)*ref_sink;
-    if (socket != NULL)
+    if (PTRVALID(socket))
     {   charsink_socket_close(*ref_sink);
         FTL_FREE(socket);
         *ref_sink = NULL;
@@ -1590,8 +1646,8 @@ charsource_init(charsource_t *source,
         {   va_start(args, name_format);
             (void)vsnprintf(namebuf, namelen+1, name_format, args);
             va_end(args);
-            OMIT(printf("%s: name '%s' -> [%d] '%s'\n",
-                          codeid(), name_format, namelen, namebuf););
+            DEBUGCHARS(DPRINTF("%s: chars - name '%s' -> [%d] '%s'\n",
+                               codeid(), name_format, namelen, namebuf););
         }
     }
 }
@@ -1602,7 +1658,12 @@ charsource_init(charsource_t *source,
 
 extern void
 charsource_close(charsource_t *source)
-{   if (NULL != source && NULL != source->close)
+{
+    DEBUGCHARS(DPRINTF("%s: chars - close '%s'%s\n",
+                       codeid(), source == NULL? "<NULL>": source->name,
+                       (NULL != source &&
+                        NULL != source->close)? "": " (no fn)"););
+    if (NULL != source && NULL != source->close)
         (*source->close)(source);
 }
 
@@ -1615,6 +1676,8 @@ charsource_delete(charsource_t **ref_source)
 {   if (NULL != *ref_source)
     {   charsource_t *source = *ref_source;
 
+        DEBUGCHARS(DPRINTF("%s: chars - delete '%s'%s\n",
+                           codeid(), source == NULL? "<NULL>": source->name););
         charsource_close(source);
 
         if (NULL != source->name)
@@ -1657,7 +1720,10 @@ charsource_lineno(charsource_t *source)
 STATIC_INLINE int
 charsource_getc_local(charsource_t *source)
 {   if (source == NULL)
+    {   DEBUGCHARS(DPRINTF("%s: chars - '%s' getc EOF\n",
+                           codeid(), source == NULL? "<NULL>": source->name););
         return EOF;
+    }
     else
     {   int ch = (*source->rdch)(source);
         if (ch == '\n')
@@ -1767,8 +1833,11 @@ charsource_stream_init(charsource_file_t *source,
 
 static void charsource_file_close(charsource_t *base_source)
 {   charsource_file_t *source = (charsource_file_t *)base_source;
-    fclose(source->stream);
-    source->stream = NULL;
+    if (PTRVALID(source->stream))
+    {
+        fclose(source->stream);
+        source->stream = NULL;
+    }
 }
 
 
@@ -2857,6 +2926,7 @@ typedef void *history_file_t ;
 
 
 
+/* Throw terminal interrupt exception */
 static bool cause_sigint(void); /* forward reference to Ctrl-C handler */
 
 
@@ -2897,7 +2967,7 @@ charsource_readline_rdch(charsource_t *base_source)
                        // probably we won't have a try block
                 */
             } while (nextline == NULL && errno == EAGAIN);
-                
+
             OMIT(fprintf(stderr, "ln: %s%d %s rc %d\n",
                          nextline==NULL? "NONE " :"",
                          nextline==NULL? 0: (int)strlen(nextline),
@@ -3526,8 +3596,8 @@ linesource_pushline(linesource_t *lines, const char *name,
 
 /*****************************************************************************
  *                                                                           *
- *          Types                                                            *
- *          =====                                                            *
+ *          Builtin Type IDs                                                 *
+ *          ================                                                 *
  *                                                                           *
  *****************************************************************************/
 
@@ -3535,79 +3605,41 @@ linesource_pushline(linesource_t *lines, const char *name,
 
 
 
-
-extern const char *
-type_name(type_t kind)
-{   switch (kind)
-    {   case type_null:
-            return "nul";
-        case type_type:
-            return "type";
-        case type_string:
-            return "string";
-        case type_code:
-            return "code";
-        case type_closure:
-            return "closure";
-        case type_int:
-            return "int";
-        case type_dir:
-            return "dir";
-        case type_cmd:
-            return "cmd";
-        case type_func:
-            return "function";
-        case type_stream:
-            return "stream";
-        case type_ipaddr:
-            return "ipaddr";
-        case type_macaddr:
-            return "macaddr";
-        case type_coroutine:
-            return "coroutine";
-        case type_mem:
-            return "mem";
-        default:
-            return "<UnknownType>";
-    }
-}
-
-
-
-
-
+/* deprecated: only parses the names of built-in types
+ *             can not return the correct subtype of a given type
+ */
 extern bool
-parse_type(const char **ref_line, type_t *out_type_id)
+parse_type_id(const char **ref_line, type_t *out_type)
 {   bool ok = TRUE;
 
     if (parse_key(ref_line, type_name(type_null)))
-        *out_type_id = type_null;
+        *out_type = type_null;
     else if (parse_key(ref_line, type_name(type_type)))
-        *out_type_id = type_type;
+        *out_type = type_type;
     else if (parse_key(ref_line, type_name(type_string)))
-        *out_type_id = type_string;
+        *out_type = type_string;
     else if (parse_key(ref_line, type_name(type_code)))
-        *out_type_id = type_code;
+        *out_type = type_code;
     else if (parse_key(ref_line, type_name(type_closure)))
-        *out_type_id = type_closure;
+        *out_type = type_closure;
     else if (parse_key(ref_line, type_name(type_int)))
-        *out_type_id = type_int;
+        *out_type = type_int;
     else if (parse_key(ref_line, type_name(type_dir)))
-        *out_type_id = type_dir;
+        *out_type = type_dir;
     else if (parse_key(ref_line, type_name(type_cmd)))
-        *out_type_id = type_cmd;
+        *out_type = type_cmd;
     else if (parse_key(ref_line, type_name(type_func)))
-        *out_type_id = type_func;
+        *out_type = type_func;
     else if (parse_key(ref_line, type_name(type_stream)))
-        *out_type_id = type_stream;
+        *out_type = type_stream;
     else if (parse_key(ref_line, type_name(type_ipaddr)))
-        *out_type_id = type_ipaddr;
+        *out_type = type_ipaddr;
     else if (parse_key(ref_line, type_name(type_macaddr)))
-        *out_type_id = type_macaddr;
+        *out_type = type_macaddr;
     else if (parse_key(ref_line, type_name(type_coroutine)))
-        *out_type_id = type_coroutine;
+        *out_type = type_coroutine;
     else if (parse_key(ref_line, type_name(type_mem)))
-        *out_type_id = type_mem;
+        *out_type = type_mem;
     else
         ok = FALSE;
 
@@ -3621,7 +3653,7 @@ parse_type(const char **ref_line, type_t *out_type_id)
 
 STATIC_INLINE bool
 type_equal(type_t kind1, type_t kind2)
-{   return kind1 == kind2;
+{   return kind1 == kind2 || kind1->id == kind2->id;
 }
 
 
@@ -3680,13 +3712,14 @@ type_equal(type_t kind1, type_t kind2)
 
 
 
+#define HEAP_VERSION_UNUSED 0x0
 
 
 
 
 typedef struct
-{   value_t *heap;              /*< list of values allocated from the heap */
-    int version;                /*< current heap version */
+{   value_t *heap;              /**< list of values allocated from the heap */
+    int version;                /**< current heap version */
 } value_heap_t;
 
 
@@ -3712,20 +3745,17 @@ static value_printstack_t prtstk;
 
 
 extern /*internal*/ value_t *
-(value_init)(value_t *val, type_t kind, value_print_fn_t *print,
-             value_cmp_fn_t *compare, value_delete_fn_t *delete_fn,
-             value_markver_fn_t *mark_version)
+(value_init)(value_t *val, type_t kind, bool on_heap)
 {   val->kind = kind;
     val->link = NULL;
-    val->del = delete_fn;
-    val->print = print;
-    val->compare = compare;
-    val->mark_version = mark_version;
-    val->heap_version = 0;
-    val->local = (mark_version != NULL);
+    DEBUGVALLINK(DPRINTF("%p: new %s link NULL\n",
+                         &val->link, value_type_name(val)););
+    val->on_heap = on_heap;
+    val->local = on_heap && !type_values_simple(kind);
     /* all non-constant values are initially local */
+    val->heap_version = HEAP_VERSION_UNUSED;
 
-    if (NULL != delete_fn)
+    if (on_heap && HEAPVALID(val))
     {   /* place on value heap */
         val->heap_next = value_heap.heap;
         value_heap.heap = val;
@@ -3733,7 +3763,7 @@ extern /*internal*/ value_t *
         val->heap_next = NULL;
 
     DEBUGGC(DPRINTF("New %s value %p %sdeleteable\n",
-                    type_name(kind), val,  NULL==delete_fn? "not ":"");)
+                    type_name(kind), val,  on_heap? "":"not ");)
     return val;
 }
 
@@ -3751,13 +3781,13 @@ value_info(value_t *val, int lineno)
 
 extern const value_t *
 value_cinfo(const value_t *val, int lineno)
-{   ((value_t *)(val))->lineno = lineno;
+{   ((value_t *)/*unconst*/(val))->lineno = lineno;
     return val;
 }
 
 
-#define value_init(val, kind, print, compare, delete, mark_version)     \
-    value_info(value_init(val, kind, print, compare, delete, mark_version), \
+#define value_init(val, kind, on_heap)                               \
+    value_info(value_init(val, kind, on_heap),                       \
                __LINE__)
 #else
 
@@ -3817,7 +3847,7 @@ value_type_name(const value_t *val)
 
 extern bool
 value_type_equal(const value_t *val, type_t kind)
-{   return val != NULL && type_equal(val->kind, kind);
+{   return PTRVALID(val) && type_equal(val->kind, kind);
 }
 
 
@@ -3860,7 +3890,8 @@ value_castable(const value_t *val, type_t kind)
 
 extern int
 value_print(outchar_t *out, const value_t *root, const value_t *val)
-{   if (out != NULL && val != NULL && val->print != NULL)
+{   if (out != NULL && val != NULL && PTRVALID(val->kind) &&
+        PTRVALID(val->kind->print))
     {   if (prtstk.depth >= PRINTSTACK_MAX)
             return outchar_printf(out, "...");
         else
@@ -3874,7 +3905,7 @@ value_print(outchar_t *out, const value_t *root, const value_t *val)
             else
             {   int len;
                 prtstk.entry[prtstk.depth++] = val;
-                len = (*val->print)(out, root, val);
+                len = (*val->kind->print)(out, root, val);
                 prtstk.depth--;
                 return len;
             }
@@ -3903,8 +3934,9 @@ value_fprint(FILE *out, const value_t *root, const value_t *val)
 
 static void
 value_delete_alloced(value_t *value)
-{   if (NULL != value)
-    {   FTL_FREE(value);
+{   if (value != NULL && HEAPVALID(value))
+    {
+        FTL_FREE(value);
     }
 }
 
@@ -3921,8 +3953,9 @@ value_delete_alloced(value_t *value)
 extern void
 value_delete(value_t **ref_val)
 {   value_t *val = *ref_val;
-    if (val != NULL && val->del != NULL)
-    {   (*val->del)(val);
+    if (PTRVALID(val) && val->on_heap &&
+        PTRVALID(val->kind) && PTRVALID(val->kind->del))
+    {   (*val->kind->del)(val);
         *ref_val = NULL;
     }
 }
@@ -3948,13 +3981,13 @@ value_cmp(const value_t *v1, const value_t *v2)
         DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) v2 same address\n",
                          v1, type_name(v1->kind)););
         return 0;
-    } else if (NULL == v1->compare) {
+    } else if (NULL == v1->kind || NULL == v1->kind->compare) {
         DEBUGCMP(DPRINTF("cmp: v1 no comparison fn\n"););
         return /* really we want "incomparable" value */-1;
     } else {
         DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) cmp v2 (%p:%s) using fn\n",
                          v1, type_name(v1->kind), v2, type_name(v2->kind)););
-        return (*v1->compare)(v1, v2);
+        return (*v1->kind->compare)(v1, v2);
     }
 }
 
@@ -3977,15 +4010,25 @@ value_cmp(const value_t *v1, const value_t *v2)
 
 
 
+/*! Mark the value and (if it's type has a mark_version function) the other
+ *  values referred to in the value.
+ *  To mark a value simply record the current heap vesion in its 'heap_version'
+ *  field.  Items on the heap which are not so marked can be freed by garbage
+ *  collection.
+ */
 static void
 value_mark_version(value_t *val, int heap_version)
-{   if (val != NULL && !value_marked(val, heap_version))
+{   if (PTRVALID(val) && !value_marked(val, heap_version))
     {   val->heap_version = heap_version;
         DEBUGGC(DPRINTF("Mark %s value %p ver %d %s\n",
                         value_type_name(val), val, heap_version,
-                        val->mark_version == NULL?"": "(recurse)");)
-        if (val->mark_version != NULL)
-        {   (*val->mark_version)(val, heap_version);
+                        val->kind == NULL ||
+                        val->kind->mark_version == NULL?"": "(recurse)");)
+        /* TODO: shouldn't we mark other bits of the value even if it is not on
+         * the heap too? */
+        if (PTRVALID(val->kind) &&
+            PTRVALID(val->kind->mark_version))
+        {   (*val->kind->mark_version)(val, heap_version);
         }
     }
 }
@@ -3997,7 +4040,7 @@ value_mark_version(value_t *val, int heap_version)
 static void
 value_heap_init(void)
 {   value_heap.heap = (value_t *)NULL;
-    value_heap.version = 0;
+    value_heap.version = HEAP_VERSION_UNUSED+1;
 }
 
 
@@ -4020,7 +4063,7 @@ value_list_locals(void)
 {   int heap_version = value_heap.version;
     value_t *val = value_heap.heap;
 
-    while (val != NULL)
+    while (PTRVALID(val))
     {   if (value_islocal(val) && heap_version != val->heap_version)
         {   fprintf(stderr, "%s: Local %s value %p at %d versions ago",
                     codeid(), value_type_name(val), val,
@@ -4040,7 +4083,7 @@ static void
 value_mark_local(int heap_version)
 {   value_t **ref_value = &value_heap.heap;
 
-    while (*ref_value != NULL)
+    while (PTRVALID(*ref_value))
     {   value_t *val = *ref_value;
 
         if (val->heap_version != heap_version && value_islocal(val))
@@ -4060,7 +4103,7 @@ value_heap_collect(void)
 {   int heap_version = value_heap.version;
     value_t **ref_value = &value_heap.heap;
 
-    while (*ref_value != NULL)
+    while (PTRVALID(*ref_value))
     {   value_t *val = *ref_value;
 
         if (val->heap_version != heap_version)
@@ -4073,11 +4116,167 @@ value_heap_collect(void)
             DEBUGGC(DPRINTF("Collect %s value %p ver %d (!=%d)\n",
                             value_type_name(val), val, val->heap_version,
                             heap_version);)
+            DEBUGGCU(if (val->heap_version == HEAP_VERSION_UNUSED)
+                         DPRINTF("Collect %s value %p had UNUSED ver %d "
+                                 "(!=%d)\n",
+                                 value_type_name(val), val, val->heap_version,
+                                 heap_version);)
             value_delete(&val);
         } else
             ref_value = &(val->heap_next);
     }
 }
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Type Values                                                      *
+ *          ===========                                                      *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+#define ROOT_DIR_TYPE "basetype"
+
+#define value_type_value(typeval) (&(typeval)->val)
+
+static type_id_t type_id_generator = 0; // last type ID generated
+
+static value_type_t type_type_val;
+type_t type_type = &type_type_val;
+
+
+extern type_id_t type_id_new(void)
+{
+    return ++type_id_generator;
+}
+
+
+static int
+value_type_print(outchar_t *out, const value_t *root, const value_t *value)
+{   const value_type_t *typeval = (const value_type_t *)value;
+    (void)root;
+    return outchar_printf(out, "$"ROOT_DIR_TYPE".%s", typeval->name);
+}
+
+
+
+/*! Compare this type (v1) with another type
+ */
+static int /* <0 for less than, ==0 for equal, >0 for greater */
+value_type_compare(const value_t *v1, const value_t *v2)
+{   if (v1 == v2)
+        return 0;
+    else if (v1->kind == NULL || v1->kind != type_type)
+        return -1;
+    else if (v2->kind == NULL || v2->kind != type_type)
+        return 1;
+    return ((value_type_t *)v1)->id - ((value_type_t *)v2)->id;
+}
+
+
+
+extern /*internal*/ value_t *
+value_type_init(value_type_t *kind, bool on_heap,
+                type_id_t type_id, const char *name,
+                value_print_fn_t *val_print_fn, value_parse_fn_t *val_parse_fn,
+                value_cmp_fn_t *val_compare_fn,
+                value_delete_fn_t *val_delete_fn,
+                value_markver_fn_t *val_mark_version_fn)
+{   (void)value_init(value_type_value(kind), type_type, on_heap);
+    kind->name = name;
+    kind->id = type_id;
+    kind->print = val_print_fn;
+    kind->parse = val_parse_fn;
+    kind->compare = val_compare_fn;
+    kind->del = val_delete_fn;
+    kind->mark_version = val_mark_version_fn;
+
+    DEBUGGC(DPRINTF("New type %s type %p (id %d) %sdeleteable\n",
+                    name, kind, type_id, on_heap? "":"not "););
+    return value_type_value(kind);
+}
+
+
+
+
+
+/*! determine whether other values are referred to in values of this type
+ */
+extern bool type_values_simple(type_t kind)
+{   return !(PTRVALID(kind) &&
+             PTRVALID(kind->mark_version));
+}
+
+
+
+
+
+
+extern value_t *
+type_clone(bool on_heap,
+           type_id_t cloned_type_id, const char *name,
+           value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+           value_cmp_fn_t *compare_fn,
+           value_delete_fn_t *delete_fn,
+           value_markver_fn_t *mark_version)
+{   value_type_t *typeval = (value_type_t *)FTL_MALLOC(sizeof(value_type_t));
+
+    if (PTRVALID(typeval))
+        return value_type_init(typeval, on_heap, cloned_type_id, name,
+                               print_fn, parse_fn, compare_fn, delete_fn,
+                               mark_version);
+    else
+        return NULL;
+}
+
+
+
+
+extern value_t *
+type_new(bool on_heap,
+         const char *name,
+         value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+         value_cmp_fn_t *compare_fn,
+         value_delete_fn_t *delete_fn,
+         value_markver_fn_t *mark_version_fn)
+{
+    return type_clone(on_heap, type_id_new(), name,
+                      print_fn, parse_fn, compare_fn, delete_fn,
+                      mark_version_fn);
+}
+
+
+
+
+
+static void
+values_type_init(void)
+{
+    type_id_generator = 0;
+    value_type_init(&type_type_val, /*on_heap*/FALSE,
+                    type_id_new(), "type", &value_type_print,
+                    /*value_type_parse*/NULL,
+                    &value_type_compare, &value_delete_alloced,
+                    /*mark_version*/NULL);
+}
+
+
+
+
+
+extern const char *
+type_name(type_t kind)
+{   return kind == NULL? "<BAD type>": kind->name;
+}
+
 
 
 
@@ -4094,8 +4293,9 @@ value_heap_collect(void)
 
 
 
+static value_type_t type_null_val;
+type_t type_null = &type_null_val;
 value_t value_null;
-
 
 static int
 value_null_print(outchar_t *out, const value_t *root, const value_t *value)
@@ -4111,15 +4311,18 @@ value_null_compare(const value_t *v1, const value_t *v2)
 
 
 static value_t *
-value_null_init(value_t *value, value_delete_fn_t *delete_fn)
-{   return value_init(value, type_null, &value_null_print, &value_null_compare,
-                      delete_fn, /*mark*/NULL);
+value_null_init(value_t *value, bool on_heap)
+{   return value_init(value, type_null, on_heap);
 }
 
 
 static void
 values_null_init(void)
-{   value_null_init(&value_null, /* delete */NULL);
+{
+    value_type_init(&type_null_val, /*on_heap*/FALSE, type_id_new(), "nul",
+                    &value_null_print, /*parse*/NULL,
+                    &value_null_compare, &value_delete_alloced, /*mark*/NULL);
+    value_null_init(&value_null, /*on_heap*/FALSE);
 }
 
 
@@ -4139,107 +4342,6 @@ value_nl(const value_t *value)
 
 /*****************************************************************************
  *                                                                           *
- *          Type Values                                                      *
- *          ===========                                                      *
- *                                                                           *
- *****************************************************************************/
-
-
-
-
-
-typedef struct
-{   value_t value;           /* integer used as a value */
-    type_t type_id;
-} value_type_t;
-
-
-
-
-#define value_type_value(typeval) (&(typeval)->value)
-
-
-
-
-static int
-value_type_print(outchar_t *out, const value_t *root, const value_t *value)
-{   const value_type_t *typeval = (const value_type_t *)value;
-    (void)root;
-    return outchar_printf(out, type_name(typeval->type_id));
-}
-
-
-
-
-static int /* <0 for less than, ==0 for equal, >0 for greater */
-value_type_compare(const value_t *v1, const value_t *v2)
-{   return ((const value_type_t *)v1)->type_id -
-           ((const value_type_t *)v2)->type_id;
-}
-
-
-
-static value_t *
-value_type_init(value_type_t *typeval, type_t type_id,
-                value_delete_fn_t *delete_fn)
-{   typeval->type_id = type_id;
-    return value_init(value_type_value(typeval), type_type, &value_type_print,
-                      &value_type_compare, delete_fn, /*mark*/NULL);
-}
-
-
-
-
-extern value_t *
-value_type_new(type_t type_id)
-{   value_type_t *typeval = (value_type_t *)FTL_MALLOC(sizeof(value_type_t));
-
-    if (NULL != typeval)
-        return value_type_init(typeval, type_id, &value_delete_alloced);
-    else
-        return NULL;
-}
-
-
-
-
-
-extern bool
-value_type_id(const value_t *value, type_t *out_type_id)
-{   if (value_istype(value, type_type))
-    {   *out_type_id = ((value_type_t *)value)->type_id;
-        return TRUE;
-    } else
-        return FALSE;
-}
-
-
-
-
-
-static const value_t *
-value_type_parse(const char **ref_line, const value_t *this_cmd,
-                 parser_state_t *state)
-{   type_t id;
-    if (parse_type(ref_line, &id))
-        return value_type_new(id);
-    else
-        return &value_null;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-/*****************************************************************************
- *                                                                           *
  *          Integer Values                                                   *
  *          ==============                                                   *
  *                                                                           *
@@ -4248,6 +4350,9 @@ value_type_parse(const char **ref_line, const value_t *this_cmd,
 
 
 
+
+static value_type_t type_int_val;
+type_t type_int = &type_int_val;
 
 
 
@@ -4319,17 +4424,16 @@ value_int_compare(const value_t *v1, const value_t *v2)
 
 
 static value_t *
-value_int_init(value_int_t *no, unumber_t number, value_delete_fn_t *delete_fn)
+value_int_init(value_int_t *no, unumber_t number, bool on_heap)
 {   no->number = number;
-    return value_init(&no->value, type_int, &value_int_print,
-                      &value_int_compare, delete_fn, /*mark*/NULL);
+    return value_init(&no->value, type_int, on_heap);
 }
 
 
 
 #if 0 != DEBUGVALINIT(1+)0
-#define value_int_init(no, number, delete_fn) \
-    value_info((value_int_init)(no, number, delete_fn), __LINE__)
+#define value_int_init(no, number, on_heap) \
+    value_info((value_int_init)(no, number, on_heap), __LINE__)
 #endif
 
 
@@ -4341,8 +4445,8 @@ extern value_t *
 value_int_new(number_t number)
 {   value_int_t *no = (value_int_t *)FTL_MALLOC(sizeof(value_int_t));
 
-    if (NULL != no)
-        return value_int_init(no, number, &value_delete_alloced);
+    if (PTRVALID(no))
+        return value_int_init(no, number, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -4354,8 +4458,8 @@ extern value_t *
 value_uint_new(unumber_t number)
 {   value_int_t *no = (value_int_t *)FTL_MALLOC(sizeof(value_int_t));
 
-    if (NULL != no)
-        return value_int_init(no, number, &value_delete_alloced);
+    if (PTRVALID(no))
+        return value_int_init(no, number, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -4534,6 +4638,8 @@ parse_int_base(const char **ref_line, parser_state_t *state,
     bool ok;
     const char *line = *ref_line;
 
+    DEBUGTRACE(DPRINTF("(int: '%s'\n", *ref_line);)
+    
     if (parse_key(&line, "("))
     {   const value_t *intval;
         parse_space(&line);
@@ -4549,7 +4655,7 @@ parse_int_base(const char **ref_line, parser_state_t *state,
     if (ok)
         *ref_line = line;
 
-    DEBUGTRACE(DPRINTF("int %s: %s\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUGTRACE(DPRINTF(")int %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -4884,8 +4990,12 @@ const value_t *value_one = &value_int_one.value;
 
 extern void
 values_int_init(void)
-{   value_int_init(&value_int_zero,  0, /* delete */NULL);
-    value_int_init(&value_int_one,   1, /* delete */NULL);
+{
+    value_type_init(&type_int_val, /*on_heap*/FALSE, type_id_new(), "int",
+                    &value_int_print, &value_int_parse,
+                    &value_int_compare, &value_delete_alloced, /*mark*/NULL);
+    value_int_init(&value_int_zero,  0, /* on_heap */FALSE);
+    value_int_init(&value_int_one,   1, /* on_heap */FALSE);
 }
 
 
@@ -4914,6 +5024,8 @@ typedef struct
 
 
 
+static value_type_t type_ipaddr_val;
+type_t type_ipaddr = &type_ipaddr_val;
 
 
 
@@ -4951,17 +5063,37 @@ value_ipaddr_compare(const value_t *v1, const value_t *v2)
 
 
 
+static const value_t *
+value_ipaddr_parse(const char **ref_line, const value_t *this_cmd,
+                   parser_state_t *state)
+{   addr_ip_t ip;
+    if (parse_ipaddr(ref_line, &ip))
+        return value_ipaddr_new(&ip);
+    else
+        return &value_null;
+}
+
+
+
 static value_t *
-value_ipaddr_init(value_ipaddr_t *ip, int a, int b, int c, int d,
-                  value_delete_fn_t *delete_fn)
+value_ipaddr_init(value_ipaddr_t *ip, int a, int b, int c, int d, bool on_heap)
 {   ip->addr[0] = a;
     ip->addr[1] = b;
     ip->addr[2] = c;
     ip->addr[3] = d;
-    return value_init(&ip->value, type_ipaddr, &value_ipaddr_print,
-                      &value_ipaddr_compare, delete_fn, /*mark*/NULL);
+    return value_init(&ip->value, type_ipaddr, on_heap);
 }
 
+
+
+
+static void
+values_ipaddr_init(void)
+{
+    value_type_init(&type_ipaddr_val, /*on_heap*/FALSE, type_id_new(), "ip",
+                    &value_ipaddr_print, &value_ipaddr_parse,
+                    &value_ipaddr_compare, &value_delete_alloced, /*mark*/NULL);
+}
 
 
 
@@ -4972,8 +5104,8 @@ value_ipaddr_new_quad(int a, int b, int c, int d)
 {   value_ipaddr_t *ip = (value_ipaddr_t *)
                          FTL_MALLOC(sizeof(value_ipaddr_t));
 
-    if (NULL != ip)
-        return value_ipaddr_init(ip, a, b, c, d, &value_delete_alloced);
+    if (PTRVALID(ip))
+        return value_ipaddr_init(ip, a, b, c, d, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -5030,7 +5162,7 @@ parse_ipaddr(const char **ref_line, addr_ip_t *out_ip)
         if (parse_item(&line, ":@/", 3, &ipname[0], sizeof(ipname)))
         {   struct hostent *ent = gethostbyname(&ipname[0]);
 
-            if (NULL != ent &&
+            if (PTRVALID(ent) &&
                 ent->h_addrtype == AF_INET &&
                 ent->h_length == sizeof(addr_ip_t))
             {   addr_ip_t *retip = (addr_ip_t *)ent->h_addr;
@@ -5072,18 +5204,6 @@ parse_ipaddr(const char **ref_line, addr_ip_t *out_ip)
 
 
 
-static const value_t *
-value_ipaddr_parse(const char **ref_line, const value_t *this_cmd,
-                   parser_state_t *state)
-{   addr_ip_t ip;
-    if (parse_ipaddr(ref_line, &ip))
-        return value_ipaddr_new(&ip);
-    else
-        return &value_null;
-}
-
-
-
 
 
 
@@ -5110,6 +5230,9 @@ typedef struct
 
 
 
+
+static value_type_t type_macaddr_val;
+type_t type_macaddr = &type_macaddr_val;
 
 
 
@@ -5152,15 +5275,14 @@ value_macaddr_compare(const value_t *v1, const value_t *v2)
 
 static value_t *
 value_macaddr_init(value_macaddr_t *mac, int a, int b, int c,
-                   int d, int e, int f,  value_delete_fn_t *delete_fn)
+                   int d, int e, int f,  bool on_heap)
 {   mac->addr[0] = a;
     mac->addr[1] = b;
     mac->addr[2] = c;
     mac->addr[3] = d;
     mac->addr[4] = e;
     mac->addr[5] = f;
-    return value_init(&mac->value, type_macaddr, &value_macaddr_print,
-                      &value_macaddr_compare, delete_fn, /*mark*/NULL);
+    return value_init(&mac->value, type_macaddr, on_heap);
 }
 
 
@@ -5173,9 +5295,8 @@ value_macaddr_new_sextet(int a, int b, int c, int d, int e, int f)
 {   value_macaddr_t *mac = (value_macaddr_t *)
                            FTL_MALLOC(sizeof(value_macaddr_t));
 
-    if (NULL != mac)
-        return value_macaddr_init(mac, a, b, c, d, e, f,
-                                  &value_delete_alloced);
+    if (PTRVALID(mac))
+        return value_macaddr_init(mac, a, b, c, d, e, f, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -5212,7 +5333,7 @@ value_macaddr_get(const value_t *value, unsigned char *out_macaddr)
 extern bool
 parse_macaddr(const char **ref_line, addr_mac_t *mac_addr)
 {   const char *line = *ref_line;
-    unumber_t mac1, mac2, mac3, mac4, mac5, mac6;
+    unumber_t mac1 = 0, mac2 = 0, mac3 = 0, mac4 = 0, mac5 = 0, mac6 = 0;
     bool ok = parse_hex(&line, &mac1) && parse_key(&line, ":") &&
               parse_hex(&line, &mac2) && parse_key(&line, ":") &&
               parse_hex(&line, &mac3) && parse_key(&line, ":") &&
@@ -5251,6 +5372,20 @@ value_macaddr_parse(const char **ref_line, const value_t *this_cmd,
 
 
 
+static void
+values_macaddr_init(void)
+{
+    value_type_init(&type_macaddr_val, /*on_heap*/FALSE, type_id_new(), "mac",
+                    &value_macaddr_print, &value_macaddr_parse,
+                    &value_macaddr_compare, &value_delete_alloced,
+                    /*mark*/NULL);
+}
+
+
+
+
+
+
 
 
 /*****************************************************************************
@@ -5266,8 +5401,12 @@ value_macaddr_parse(const char **ref_line, const value_t *this_cmd,
 
 
 
-typedef struct value_stringbase_s value_stringbase_t;
+static value_type_t type_string_val;
+type_t type_string = &type_string_val; 
 
+
+
+typedef struct value_stringbase_s value_stringbase_t;
 
 
 
@@ -5497,29 +5636,6 @@ value_string_compare(const value_t *v1, const value_t *v2)
 
 
 
-STATIC_INLINE value_t *
-value_stringbase_init(value_stringbase_t *str, value_string_get_fn_t *get,
-                      value_delete_fn_t *delete_fn,
-                      value_markver_fn_t *mark_version)
-{   str->get = get;
-    return value_init(&str->value, type_string, &value_string_print,
-                      &value_string_compare, delete_fn, mark_version);
-}
-
-
-
-
-
-#if 0 != DEBUGVALINIT(1+)0
-#define value_stringbase_init(str, get, delete_fn, mark_version) \
-    value_info((value_stringbase_init)(str, get, delete_fn, mark_version), \
-               __LINE__)
-#endif
-
-
-
-
-
 extern const char *
 value_string_chars(const value_t *string)
 {   const char *str;
@@ -5527,6 +5643,15 @@ value_string_chars(const value_t *string)
     value_string_get(string, &str, &len);
     return str;
 }
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5544,6 +5669,14 @@ value_string_chars(const value_t *string)
 
 
 
+static value_type_t type_stringlit_val;
+// a new implementation of type_string for malloc'd literal strings
+
+static value_type_t type_cstringlit_val;
+// a new implementation of type_string for static literal strings
+
+
+
 
 
 typedef struct
@@ -5556,16 +5689,12 @@ typedef struct
 #define value_string_value(str) value_stringbase_value(&(str)->base)
 
 
-value_string_t value_string_empty_str;
-
-const value_t *value_string_empty = value_string_value(&value_string_empty_str);
-
 
 
 
 static void
 value_string_delete(value_t *value)
-{   if (value_istype(value, type_string))
+{   if (value_istype(value, &type_stringlit_val))
     {   value_string_t *str = (value_string_t *)value;
         if (NULL != str->string)
             FTL_FREE((void *)str->string);
@@ -5595,11 +5724,11 @@ value_string_get_fn(const value_stringbase_t *value,
 
 STATIC_INLINE value_t *
 value_cstring_init(value_string_t *str, const char *string, size_t len,
-                   value_delete_fn_t *delete_fn)
+                   bool on_heap)
 {   str->string = string;
     str->len = len;
-    return value_stringbase_init(&str->base, &value_string_get_fn,
-                                 delete_fn, /*mark*/NULL);
+    str->base.get = &value_string_get_fn;
+    return value_init(&str->base.value, &type_cstringlit_val, on_heap);
 }
 
 
@@ -5607,8 +5736,8 @@ value_cstring_init(value_string_t *str, const char *string, size_t len,
 
 
 #if 0 != DEBUGVALINIT(1+)0
-#define value_cstring_init(str, string, len, delete_fn) \
-    value_info((value_cstring_init)(str, string, len, delete_fn), __LINE__)
+#define value_cstring_init(str, string, len, on_heap) \
+    value_info((value_cstring_init)(str, string, len, on_heap), __LINE__)
 #endif
 
 
@@ -5624,8 +5753,7 @@ value_cstring_new(const char *string, size_t len)
     if (NULL != string)
     {   str = (value_string_t *)FTL_MALLOC(sizeof(value_string_t));
         if (NULL != str)
-        {   newstr = value_cstring_init(str, string, len,
-                                        &value_delete_alloced);
+        {   newstr = value_cstring_init(str, string, len, /*on_heap*/TRUE);
         }
     }
     return newstr;
@@ -5637,11 +5765,13 @@ value_cstring_new(const char *string, size_t len)
 
 
 STATIC_INLINE value_t *
-value_string_init(value_string_t *str, char *string, size_t len,
-                  value_delete_fn_t *delete_fn)
+value_string_init(value_string_t *str, char *string, size_t len, bool on_heap)
 {   if (NULL != string)
         string[len] = '\0';
-    return value_cstring_init(str, string, len, delete_fn);
+    str->string = string;
+    str->len = len;
+    str->base.get = &value_string_get_fn;
+    return value_init(&str->base.value, &type_stringlit_val, on_heap);
 }
 
 
@@ -5649,8 +5779,8 @@ value_string_init(value_string_t *str, char *string, size_t len,
 
 
 #if 0 != DEBUGVALINIT(1+)0
-#define value_string_init(str, string, len, delete_fn) \
-    value_info((value_string_init)(str, string, len, delete_fn), __LINE__)
+#define value_string_init(str, string, len, on_heap) \
+    value_info((value_string_init)(str, string, len, on_heap), __LINE__)
 #endif
 
 
@@ -5673,8 +5803,7 @@ value_string_new(const char *string, size_t len)
             if (NULL != strcopy)
             {   memcpy(strcopy, string, len);
                 strcopy[len] = '\0';
-                newstr = value_string_init(str, strcopy, len,
-                                           &value_string_delete);
+                newstr = value_string_init(str, strcopy, len, /*on_heap*/TRUE);
             } else
             {   FTL_FREE(str);
                 str = NULL;
@@ -5696,7 +5825,7 @@ extern value_t *
 value_string_alloc_new(size_t len, char **out_string)
 {   value_t *newstr = NULL;
 
-    if (out_string != NULL) {
+    if (PTRVALID(out_string)) {
         value_string_t *str = (value_string_t *)
                               FTL_MALLOC(sizeof(value_string_t));
         if (NULL != str)
@@ -5706,8 +5835,7 @@ value_string_alloc_new(size_t len, char **out_string)
 
             if (NULL != strcopy)
             {   strcopy[len] = '\0';
-                newstr = value_string_init(str, strcopy, len,
-                                           &value_string_delete);
+                newstr = value_string_init(str, strcopy, len, /*on_heap*/TRUE);
             } else
             {   FTL_FREE(str);
                 str = NULL;
@@ -5745,7 +5873,7 @@ value_wcstring_new(const wchar_t *wcstr, size_t wcstr_chars)
                 {   size_t reallen = wcstombs(strcopy, wcstr, len+1);
                     if (reallen != (size_t)(-1))
                         newstr = value_string_init(str, strcopy, reallen,
-                                                   &value_string_delete);
+                                                   /*on_heap*/TRUE);
                     else
                     {   FTL_FREE(str);
                         FTL_FREE(strcopy);
@@ -5802,15 +5930,6 @@ value_string_get_terminated(const value_t *strval,
 
 
 
-static void
-values_string_init(void)
-{   value_cstring_init(&value_string_empty_str,  "", 0, /*delete*/NULL);
-}
-
-
-
-
-
 
 /*****************************************************************************
  *                                                                           *
@@ -5836,6 +5955,8 @@ typedef struct
 #define value_substring_value(v) value_stringbase_value(&(v)->base)
 
 
+
+static value_type_t type_substring_val;  // a new implementation of type_string
 
 
 
@@ -5888,20 +6009,29 @@ value_substring_markver(const value_t *value, int heap_version)
 
 STATIC_INLINE value_t *
 value_substring_init(value_substring_t *str, value_stringbase_t *refstr,
-                     size_t offset, size_t len)
+                     size_t offset, size_t len, bool on_heap)
 {   value_t *initval;
     str->ref    = refstr;
     str->offset = offset;
     str->len    = len;
-    initval = value_stringbase_init(&str->base,
-                                    &value_substring_get_fn,
-                                    &value_delete_alloced,
-                                    &value_substring_markver);
+    str->base.get = &value_substring_get_fn;
+    initval = value_init(value_stringbase_value(&str->base),
+                         &type_substring_val, on_heap);
     value_unlocal(value_stringbase_value(refstr));
     return initval;
 }
 
 
+
+
+
+
+
+#if 0 != DEBUGVALINIT(1+)0
+#define value_substring_init(str, refstr, offset, len, on_heap)         \
+    value_info((value_substring_init)(str, refstr, offset, len, on_heap),  \
+               __LINE__)
+#endif
 
 
 
@@ -5916,7 +6046,7 @@ value_substring_new(const value_t *string, size_t offset, size_t len)
     {   str = (value_substring_t *)FTL_MALLOC(sizeof(value_substring_t));
         if (NULL != str)
             newstr = value_substring_init(str, (value_stringbase_t *)string,
-                                          offset, len);
+                                          offset, len, /*on_heap*/TRUE);
     }
     return newstr;
 }
@@ -5925,6 +6055,58 @@ value_substring_new(const value_t *string, size_t offset, size_t len)
 
 
 
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          String Values                                                    *
+ *          =============                                                    *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+value_string_t value_string_empty_str;
+
+const value_t *value_string_empty = value_string_value(&value_string_empty_str);
+
+
+
+static void
+values_string_init(void)
+{
+    type_id_t string_type_id = type_id_new();
+
+    value_cstring_init(&value_string_empty_str,  "", 0, /*on_heap*/FALSE);
+
+    value_type_init(&type_string_val, /*on_heap*/FALSE, string_type_id,
+                    "string",
+                    &value_string_print, /*&value_string_parse*/NULL,
+                    &value_string_compare, &value_delete_alloced,
+                    /*mark*/NULL);
+
+    value_type_init(&type_cstringlit_val, /*on_heap*/FALSE, string_type_id,
+                    "string",
+                    &value_string_print, /*&value_string_parse*/NULL,
+                    &value_string_compare, &value_delete_alloced,
+                    /*mark*/NULL);
+
+    value_type_init(&type_stringlit_val, /*on_heap*/FALSE, string_type_id,
+                    "string",
+                    &value_string_print, /*&value_string_parse*/NULL,
+                    &value_string_compare, &value_string_delete,
+                    /*mark*/NULL);
+
+    value_type_init(&type_substring_val, /*on_heap*/FALSE, string_type_id,
+                    "string",
+                    &value_string_print, /*&value_string_parse*/NULL,
+                    &value_string_compare, &value_delete_alloced,
+                    &value_substring_markver);
+}
 
 
 
@@ -5951,6 +6133,13 @@ typedef struct
 
 
 
+#define value_code_value(code) (&(code)->value)
+
+
+
+
+static value_type_t type_code_val;
+type_t type_code = &type_code_val;
 
 
 
@@ -5958,7 +6147,7 @@ typedef struct
 static void
 value_code_markver(const value_t *value, int heap_version)
 {   value_code_t *code = (value_code_t *)value;
-    value_mark_version((value_t *)code->string, heap_version);
+    value_mark_version((value_t *)/*unconst*/code->string, heap_version);
 }
 
 
@@ -6014,13 +6203,11 @@ value_code_compare(const value_t *v1, const value_t *v2)
 
 static value_t *
 value_code_init(value_code_t *code, const value_t *string,
-                value_delete_fn_t *delete_fn,
-                const char *sourcename, int lineno)
+                const char *sourcename, int lineno, bool on_heap)
 {   value_t *initval;
     code->string = string;
     code_place_set(&code->place, sourcename, lineno);
-    initval = value_init(&code->value, type_code, &value_code_print,
-                         &value_code_compare, delete_fn, &value_code_markver);
+    initval = value_init(&code->value, type_code, on_heap);
     value_unlocal(string);
     return initval;
 }
@@ -6038,8 +6225,7 @@ value_code_new(const value_t *string, const char *sourcename, int lineno)
     if (value_istype(string, type_string))
     {   code = (value_code_t *)FTL_MALLOC(sizeof(value_code_t));
         if (NULL != code)
-            value_code_init(code, string, &value_code_delete,
-                            sourcename, lineno);
+            value_code_init(code, string, sourcename, lineno, /*on_heap*/TRUE);
     }
     return code==NULL? NULL: &code->value;
 }
@@ -6095,6 +6281,18 @@ value_code_place(const value_t *value, const char **out_posname,
 
 
 
+static void
+values_code_init(void)
+{
+    type_id_t code_type_id = type_id_new();
+
+    value_type_init(&type_code_val, /*on_heap*/FALSE, code_type_id, "code",
+                    &value_code_print, /*&value_code_parse*/NULL,
+                    &value_code_compare, &value_code_delete,
+                    &value_code_markver);
+}
+
+
 
 
 
@@ -6107,7 +6305,6 @@ value_code_place(const value_t *value, const char **out_posname,
  *          =============                                                    *
  *                                                                           *
  *****************************************************************************/
-
 
 
 
@@ -6191,19 +6388,19 @@ value_stream_print(outchar_t *out,
         value_stream_sink(value, &sink))
     {   int n = 0;
 
-        n += outchar_printf(out, "<-");
+        n += outchar_printf(out, "$stream.");
         if (NULL == source)
             n += outchar_printf(out, "EOF");
         else
             n += outchar_printf(out, "'%s'", source->name);
 
         if (NULL != sink)
-            n += outchar_printf(out, "->");
+            n += outchar_printf(out, "");
 
         return n;
     }
     else
-        return outchar_printf(out, "NOSTREAM");
+        return outchar_printf(out, "$stream.NOSTREAM");
 }
 
 
@@ -6214,19 +6411,19 @@ value_stream_print(outchar_t *out,
 
 
 static value_t *
-value_stream_init(value_stream_t *stream, charsource_t *source,
+value_stream_init(value_stream_t *stream, type_t stream_imp_type,
+                  charsource_t *source,
                   charsink_t *sink,
-                  value_delete_fn_t *delete_fn,
                   stream_close_fn_t *close,
                   stream_sink_close_fn_t *sink_close,
-                  stream_sink_delete_fn_t *sink_delete)
+                  stream_sink_delete_fn_t *sink_delete,
+                  bool on_heap)
 {   stream->source = source;
     stream->sink = sink;
     stream->close = close;
     stream->sink_delete = sink_delete;
     stream->sink_close = sink_close;
-    return value_init(&stream->value, type_stream, &value_stream_print,
-                      /*compare*/NULL, delete_fn, /*mark*/NULL);
+    return value_init(&stream->value, stream_imp_type, on_heap);
 }
 
 
@@ -6330,6 +6527,11 @@ typedef struct
 
 
 
+static value_type_t type_stream_file_val;
+type_t type_stream = &type_stream_file_val;
+
+
+
 
 
 #define value_stream_file_stream(fs) (&(fs)->stream)
@@ -6382,9 +6584,9 @@ value_stream_openfile_new(FILE *file, bool autoclose,
             close = &value_stream_openfile_close;
 
         fstream->file = file;
-        return value_stream_init(&fstream->stream, source, sink,
-                                 &value_stream_delete,
-                                 close, sink_close, sink_delete);
+        return value_stream_init(&fstream->stream, &type_stream_file_val,
+                                 source, sink, close,
+                                 sink_close, sink_delete, /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -6476,6 +6678,10 @@ typedef struct
     int fd;
 } value_stream_socket_t;
 
+
+
+
+static value_type_t type_stream_socket_val;
 
 
 
@@ -6595,9 +6801,9 @@ value_stream_opensocket_new(int fd, bool autoclose,
             close = &value_stream_opensocket_close;
 
         fstream->socket = socket;
-        return value_stream_init(&fstream->stream, source, sink,
-                                 &value_stream_delete,
-                                 close, sink_close, sink_delete);
+        return value_stream_init(&fstream->stream, &type_stream_socket_val,
+                                 source, sink, close,
+                                 sink_close, sink_delete, /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -6656,6 +6862,7 @@ typedef struct
 
 
 
+static value_type_t type_stream_instring_val;
 
 
 #define value_stream_instring_stream(ins) (&(ins)->stream)
@@ -6674,10 +6881,11 @@ value_stream_instring_new(const char *name, const char *string, size_t len)
     if (NULL != instrstream)
     {   charsource_t *source = charsource_string_new(name, string, len);
 
-        return value_stream_init(&instrstream->stream, source,
-                                 /*sink*/NULL, &value_stream_delete,
-                                 /*close*/NULL,
-                                 /*sink_close*/NULL, /*sink_delete*/NULL);
+        return value_stream_init(&instrstream->stream,
+                                 &type_stream_instring_val,
+                                 source, /*sink*/NULL,  /*close*/NULL,
+                                 /*sink_close*/NULL, /*sink_delete*/NULL,
+                                 /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -6713,6 +6921,10 @@ typedef struct
 
 
 
+static value_type_t type_stream_outstring_val;
+static value_type_t type_stream_outmem_val;
+
+
 
 
 #define value_stream_outstring_stream(outs) (&(outs)->stream)
@@ -6733,11 +6945,11 @@ value_stream_outstring_new(void)
     {   charsink_t *sink = charsink_string_new();
 
         return value_stream_init(&outstrstream->stream,
-                                 /*source*/NULL,
-                                 /*sink*/sink, &value_stream_delete,
-                                 /*close*/NULL,
+                                 &type_stream_outstring_val,
+                                 /*source*/NULL, /*sink*/sink, /*close*/NULL,
                                  /*sink_close*/&charsink_string_close,
-                                 /*sink_delete*/&charsink_string_delete);
+                                 /*sink_delete*/&charsink_string_delete,
+                                 /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -6757,12 +6969,11 @@ value_stream_outmem_new(char *str, size_t len)
     if (NULL != outstrstream)
     {   charsink_t *sink = charsink_fixstring_new(str, len);
 
-        return value_stream_init(&outstrstream->stream,
-                                 /*source*/NULL,
-                                 /*sink*/sink, &value_stream_delete,
-                                 /*close*/NULL,
+        return value_stream_init(&outstrstream->stream, &type_stream_outmem_val,
+                                 /*source*/NULL, /*sink*/sink, /*close*/NULL,
                                  /*sink_close*/&charsink_fixstring_close,
-                                 /*sink_delete*/&charsink_fixstring_delete);
+                                 /*sink_delete*/&charsink_fixstring_delete,
+                                 /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -6787,6 +6998,95 @@ value_stream_outstring_string(value_stream_outstring_t *stream)
 }
 
 
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Stream Values                                                    *
+ *          =============                                                    *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+
+
+
+static void
+values_stream_init(void)
+{
+    type_id_t stream_type_id = type_id_new();
+
+    value_type_init(&type_stream_file_val, /*on_heap*/FALSE,
+                    stream_type_id, "stream",
+                    &value_stream_print, /*&value_stream_parse*/NULL,
+                    /*&value_stream_compare*/NULL, &value_stream_delete,
+                    /*&value_stream_markver*/NULL);
+
+#ifdef HAS_SOCKETS
+    value_type_init(&type_stream_socket_val, /*on_heap*/FALSE,
+                    stream_type_id, "stream",
+                    &value_stream_print, /*&value_stream_parse*/NULL,
+                    /*&value_stream_compare*/NULL, &value_stream_delete,
+                    /*&value_stream_markver*/NULL);
+#endif
+
+    value_type_init(&type_stream_instring_val, /*on_heap*/FALSE,
+                    stream_type_id, "stream",
+                    &value_stream_print, /*&value_stream_parse*/NULL,
+                    /*&value_stream_compare*/NULL, &value_stream_delete,
+                    /*&value_stream_markver*/NULL);
+
+    value_type_init(&type_stream_outstring_val, /*on_heap*/FALSE,
+                    stream_type_id, "stream",
+                    &value_stream_print, /*&value_stream_parse*/NULL,
+                    /*&value_stream_compare*/NULL, &value_stream_delete,
+                    /*&value_stream_markver*/NULL);
+
+    value_type_init(&type_stream_outmem_val, /*on_heap*/FALSE,
+                    stream_type_id, "stream",
+                    &value_stream_print, /*&value_stream_parse*/NULL,
+                    /*&value_stream_compare*/NULL, &value_stream_delete,
+                    /*&value_stream_markver*/NULL);
+
+#if 0
+        (stream)
+        return value_stream_init(&fstream->stream, &type_stream_val,
+                                 source, sink,
+                                 &value_stream_delete,
+                                 close, sink_close, sink_delete);
+        (instring)
+        return value_stream_init(&instrstream->stream,
+                                 &type_stream_instream_val, source,
+                                 /*sink*/NULL, &value_stream_delete,
+                                 /*close*/NULL,
+                                 /*sink_close*/NULL, /*sink_delete*/NULL);
+        (outstring)
+        return value_stream_init(&outstrstream->stream,
+                                 &type_stream_outstring_val,
+                                 /*source*/NULL,
+                                 /*sink*/sink, &value_stream_delete,
+                                 /*close*/NULL,
+                                 /*sink_close*/&charsink_string_close,
+                                 /*sink_delete*/&charsink_string_delete);
+        (stream outmem)
+        return value_stream_init(&outstrstream->stream,
+                                 &type_stream_outmem_val,
+                                 /*source*/NULL,
+                                 /*sink*/sink, &value_stream_delete,
+                                 /*close*/NULL,
+                                 /*sink_close*/&charsink_fixstring_close,
+                                 /*sink_delete*/&charsink_fixstring_delete);
+#endif
+}
 
 
 
@@ -6840,7 +7140,7 @@ value_dir_bind_print(dir_t *dir, const value_t *name,
 {   dir_bind_print_arg_t *pr = (dir_bind_print_arg_t *)arg;
     outchar_t *out = pr->out;
     const value_t *root = pr->root;
-    bool is_root = (root != NULL && value == root);
+    bool is_root = (PTRVALID(root) && value == root);
 
     if (is_root)
     {   if (pr->bracketed)
@@ -6985,36 +7285,36 @@ dir_fprint(FILE *out, const value_t *root, dir_t *dir)
 
 
 extern bool
-dir_set(dir_t *dir, const value_t *name, const value_t *value)
+dir_set(dir_t *dir, const value_t *nameval, const value_t *value)
 {   bool ok = FALSE;
 
-    DEBUGDIR(printf("dir: set name %p value %p in dir %p\n",
-                    name, value, dir);)
-    if (NULL != dir)
-    {   if (NULL != dir->lookup)
-        {   const value_t **ref_value = (*dir->lookup)(dir, name);
+    DEBUGDIR(printf("%s: dir - set name %p to %p (%s) in dir %p\n",
+                    codeid(), nameval, value, value_type_name(value), dir);)
+    if (PTRVALID(dir))
+    {   if (PTRVALID(dir->lookup))
+        {   const value_t **ref_value = (*dir->lookup)(dir, nameval);
 
-            if (NULL != ref_value)
+            if (PTRVALID(ref_value))
             {   /* update existing value - leave the old value for the
                    garbage collector to pick up: someone else might have
                    a pointer to it */
                 *ref_value = value;
                 ok = TRUE;
             } else
-            if (NULL != dir->add)
-            {   ok = (*dir->add)(dir, name, value);
-                value_unlocal(name);
+            if (PTRVALID(dir->add))
+            {   ok = (*dir->add)(dir, nameval, value);
+                value_unlocal(nameval);
                 value_unlocal(value);
             }
         } else
-        if (NULL != dir->add)
-        {   ok = (*dir->add)(dir, name, value);
-            value_unlocal(name);
+        if (PTRVALID(dir->add))
+        {   ok = (*dir->add)(dir, nameval, value);
+            value_unlocal(nameval);
             value_unlocal(value);
         }
         else
         {   fprintf(stderr, "%s: name ", codeid());
-            value_fprint(stderr, /*root*/NULL, name);
+            value_fprint(stderr, /*root*/NULL, nameval);
             fprintf(stderr, " has a constant value\n");
         }
     }
@@ -7028,8 +7328,11 @@ dir_set(dir_t *dir, const value_t *name, const value_t *value)
 
 extern const value_t *
 dir_get(dir_t *dir, const value_t *name)
-{   if (NULL != dir && NULL != dir->get)
-    {   DEBUGDIR(printf("dir: get name %p from dir %p\n", name, dir);)
+{   if (PTRVALID(dir) &&
+        PTRVALID(dir->get))
+    {   DEBUGDIR(printf("%s: dir - get name %p (%s) from dir %p (%s)\n",
+                        codeid(), name, value_type_name(name),
+                        dir, value_type_name(dir_value(dir)));)
         return (*dir->get)(dir, name);
     } else
         return NULL;
@@ -7044,8 +7347,13 @@ static const value_t *
 dir_get_from_lookup(dir_t *dir, const value_t *name)
 {   const value_t **ref_value = NULL;
 
-    DEBUGDIR(printf("dir: get using lookup dir %p\n", dir);)
-    if (NULL != dir && NULL != dir->lookup)
+    /*DEBUGDIR*/
+    OMIT(printf("%s: dir - get name %p (%s) using %slookup dir %p (%s)\n",
+                    codeid(), name, value_type_name(name),
+                    dir==NULL || dir->lookup == NULL? "bad ": "",
+                    dir, value_type_name(dir_value(dir)));)
+    if (PTRVALID(dir) &&
+        PTRVALID(dir->lookup))
         ref_value = (*dir->lookup)(dir, name);
 
     return ref_value == NULL? NULL: *ref_value;
@@ -7074,7 +7382,7 @@ dir_noadd(dir_t *dir, const value_t *nameval, const value_t *value)
 static void *
 dir_for_count(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   unsigned *lv_len = (unsigned *)arg;
-    if (value != NULL)
+    if (PTRVALID(value))
         /* don't count names with value of NULL */
         (*lv_len)++;
     return NULL;
@@ -7089,8 +7397,9 @@ static unsigned
 dir_count_from_forall(dir_t *dir)
 {   unsigned len = 0;
 
-    DEBUGDIR(printf("dir: count using forall dir %p\n", dir);)
-    if (NULL != dir && NULL != dir->forall)
+    DEBUGDIR(printf("%s: dir - count using forall dir %p\n", codeid(), dir);)
+    if (PTRVALID(dir) &&
+        PTRVALID(dir->forall))
         (void)(*dir->forall)(dir, &dir_for_count, &len);
 
     return len;
@@ -7103,7 +7412,7 @@ dir_count_from_forall(dir_t *dir)
 
 extern dir_lock_state_t *
 dir_lock(dir_t *dir, dir_lock_state_t *old_lock)
-{   if (NULL != dir)
+{   if (PTRVALID(dir))
     {   dir_add_fn_t *old_addfn = dir->add;
         dir_add_fn_t *addfn = (dir_add_fn_t *)old_lock;
         dir->add = addfn;
@@ -7136,13 +7445,13 @@ dir_compare(const value_t *v1, const value_t *v2)
 
 
 extern /*internal*/ value_t *
-dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
+dir_init(dir_t *dir, type_t dir_subtype,
+         dir_add_fn_t *add, dir_lookup_fn_t *lookup,
          dir_get_fn_t *get, dir_forall_fn_t *forall,
-         value_print_fn_t *print, value_delete_fn_t *delete_fn,
-         value_markver_fn_t *mark)
+         bool on_heap)
 {   dir->add = add;
     dir->lookup = lookup;
-    if (NULL == get && NULL != lookup)
+    if (NULL == get && PTRVALID(lookup))
         dir->get = &dir_get_from_lookup;
     else
         dir->get = get;
@@ -7150,9 +7459,7 @@ dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
     dir->count = &dir_count_from_forall;
     dir->env_end = FALSE;
 
-    return value_init(&dir->value, type_dir,
-                      NULL != print? print: &dir_print,
-                      &dir_compare, delete_fn, mark);
+    return value_init(&dir->value, dir_subtype, on_heap);
 }
 
 
@@ -7160,8 +7467,8 @@ dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
 
 
 #if 0 != DEBUGVALINIT(1+)0
-#define dir_init(dir, add, lookup, get, forall, print, delete_fn, mark) \
-    value_info((dir_init)(dir, add, lookup, get, forall, print, delete_fn, mark),\
+#define dir_init(dir, kind, add, lookup, get, forall, on_heap) \
+    value_info((dir_init)(dir, kind, add, lookup, get, forall, on_heap), \
                __LINE__)
 #endif
 
@@ -7171,7 +7478,7 @@ dir_init(dir_t *dir, dir_add_fn_t *add, dir_lookup_fn_t *lookup,
 extern bool
 dir_int_set(dir_t *dir, int index, const value_t *value)
 {   value_int_t nameval;
-    value_int_init(&nameval, index, /*delete*/NULL);
+    value_int_init(&nameval, index, /*on_heap*/FALSE);
     return dir_set(dir, &nameval.value, value);
 }
 
@@ -7203,18 +7510,19 @@ dir_cstring_set(dir_t *dir, const char *name, const value_t *value)
 extern const value_t *
 dir_int_get(dir_t *dir, int n)
 {   value_int_t nameval;
-    value_int_init(&nameval, n, /*delete*/NULL);
+    value_int_init(&nameval, n, /*on_healp*/FALSE);
     return dir_get(dir, &nameval.value);
 }
 
 
 
 
-
+/*! Use a constant NUL-terminated string to index a directory
+ */
 extern const value_t *
 dir_string_get(dir_t *dir, const char *name)
 {   value_string_t nameval;
-    value_cstring_init(&nameval, name, strlen(name), /*delete*/NULL);
+    value_cstring_init(&nameval, name, strlen(name), /*on_heap*/FALSE);
     return dir_get(dir, value_string_value(&nameval));
 }
 
@@ -7224,13 +7532,15 @@ dir_string_get(dir_t *dir, const char *name)
 
 
 
+/*! Use a constant string (with given length) to index a directory
+ */
 extern const value_t *
 dir_stringl_get(dir_t *dir, const char *name, size_t namelen)
 {   value_string_t nameval;
-    value_cstring_init(&nameval, name, namelen, /*delete*/NULL);
+    value_cstring_init(&nameval, name, namelen, /*on_heap*/FALSE);
     OMIT(
         printf("%s: look up '", codeid());
-        value_fprint(stdout, /*root*/NULL, (value_t *)&nameval);
+        value_fprint(stdout, /*root*/NULL, value_string_value(&nameval));
         printf("'\n");)
     return dir_get(dir, value_string_value(&nameval));
 }
@@ -7242,7 +7552,8 @@ dir_stringl_get(dir_t *dir, const char *name, size_t namelen)
 
 extern bool
 dir_enumerable(dir_t *dir)
-{    return (NULL != dir && NULL != dir->forall);
+{    return (PTRVALID(dir) &&
+             PTRVALID(dir->forall));
 }
 
 
@@ -7251,7 +7562,8 @@ dir_enumerable(dir_t *dir)
 
 extern void *
 dir_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
-{    if (NULL != dir && NULL != dir->forall)
+{    if (PTRVALID(dir) &&
+         PTRVALID(dir->forall))
         return (*dir->forall)(dir, enumfn, arg);
      else
         return NULL;
@@ -7264,7 +7576,8 @@ dir_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 
 extern unsigned
 dir_count(dir_t *dir)
-{    if (NULL != dir && NULL != dir->count)
+{    if (PTRVALID(dir) &&
+         PTRVALID(dir->count))
         return (*dir->count)(dir);
      else
         return 0;
@@ -7315,6 +7628,11 @@ typedef struct
 
 
 
+static value_type_t type_dir_id_val;
+type_t type_dir = &type_dir_id_val;
+
+
+
 
 
 #define dir_id_dir(dirid) (&((dirid)->dir))
@@ -7330,7 +7648,7 @@ static void dir_id_delete(value_t *value)
     {   dir_id_t *iddir = (dir_id_t *)value;
         binding_t *bind = iddir->bindlist;
 
-        while (NULL != bind)
+        while (PTRVALID(bind))
         {   binding_t *doomed = bind;
             bind = bind->link;
             FTL_FREE(doomed);
@@ -7347,9 +7665,9 @@ static void dir_id_markver(const value_t *value, int heap_version)
 {   dir_id_t *iddir = (dir_id_t *)value;
     binding_t *bind = iddir->bindlist;
 
-    while (NULL != bind)
+    while (PTRVALID(bind))
     {   value_mark_version(bind->name, heap_version);
-        value_mark_version((value_t *)bind->value, heap_version);
+        value_mark_version((value_t *)/*unconst*/bind->value, heap_version);
         bind = bind->link;
     }
 }
@@ -7366,8 +7684,8 @@ dir_id_add(dir_t *dir, const value_t *name, const value_t *value)
     if (value_istype(name, type_string))
     {   newbind = (binding_t *)FTL_MALLOC(sizeof(binding_t));
 
-        if (newbind != NULL)
-        {   newbind->name = (value_t *)name;
+        if (PTRVALID(newbind))
+        {   newbind->name = (value_t *)/*unconst*/name;
             newbind->value = value;
             newbind->link = NULL;
 
@@ -7375,7 +7693,7 @@ dir_id_add(dir_t *dir, const value_t *name, const value_t *value)
             iddir->list_end = &newbind->link;
         }
     }
-    return NULL != newbind;
+    return PTRVALID(newbind);
 }
 
 
@@ -7394,7 +7712,7 @@ dir_id_lookup(dir_t *dir, const value_t *nameval)
 
         value_string_get(nameval, &name, &namelen);
 
-        while (NULL != bind &&
+        while (PTRVALID(bind) &&
                value_string_get(bind->name, &bindname, &bindnamelen) &&
                (bindnamelen != namelen ||
                 0 != memcmp(bindname, name, namelen)))
@@ -7415,7 +7733,7 @@ dir_id_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
     binding_t *bind = iddir->bindlist;
     void *result = NULL;
 
-    while (NULL != bind && NULL == result)
+    while (PTRVALID(bind) && NULL == result)
     {   result = (*enumfn)(dir, bind->name, bind->value, arg);
         bind = bind->link;
     }
@@ -7428,9 +7746,11 @@ dir_id_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 
 
 static void
-dir_id_init(dir_id_t *iddir)
-{   dir_init(&iddir->dir, &dir_id_add, &dir_id_lookup, /*get*/ NULL,
-             &dir_id_forall, /*print*/ NULL, &dir_id_delete, &dir_id_markver);
+dir_id_init(dir_id_t *iddir, type_t dir_subtype, bool on_heap)
+{
+
+    dir_init(&iddir->dir, dir_subtype, &dir_id_add, &dir_id_lookup,
+             /*get*/ NULL, &dir_id_forall, on_heap);
     iddir->bindlist = NULL;
     iddir->list_end = &iddir->bindlist;
 }
@@ -7444,8 +7764,8 @@ extern dir_t *
 dir_id_new(void)
 {   dir_id_t *iddir = (dir_id_t *)FTL_MALLOC(sizeof(dir_id_t));
 
-    if (NULL != iddir)
-        dir_id_init(iddir);
+    if (PTRVALID(iddir))
+        dir_id_init(iddir, &type_dir_id_val, /*on_heap*/TRUE);
 
     return &iddir->dir;
 }
@@ -7483,6 +7803,9 @@ typedef struct
 
 
 
+static value_type_t type_dir_vec_val;
+
+
 
 #define dir_vec_dir(vec) (&(vec)->dir)
 #define dir_vec_value(vec) dir_value(dir_vec_dir(vec))
@@ -7494,8 +7817,8 @@ static void
 dir_vec_delete(value_t *value)
 {   if (value_istype(value, type_dir))
     {   dir_vec_t *vecdir = (dir_vec_t *)value;
-        if (NULL != vecdir->bindvec)
-        {   FTL_FREE((value_t *)vecdir->bindvec);
+        if (PTRVALID(vecdir->bindvec))
+        {   FTL_FREE((value_t *)/*unconst*/vecdir->bindvec);
             vecdir->bindvec = NULL;
         }
         FTL_FREE(value);
@@ -7511,11 +7834,11 @@ dir_vec_markver(const value_t *value, int heap_version)
 {   dir_vec_t *vecdir = (dir_vec_t *)value;
     const value_t **bind = vecdir->bindvec;
 
-    if (NULL != bind)
+    if (PTRVALID(bind))
     {   const value_t **endbind = vecdir->bindvec + vecdir->n;
 
         while (bind < endbind)
-        {   value_mark_version((value_t *)*bind, heap_version);
+        {   value_mark_version((value_t *)/*unconst*/*bind, heap_version);
             bind++;
         }
     }
@@ -7528,7 +7851,7 @@ dir_vec_markver(const value_t *value, int heap_version)
 static bool
 dir_vec_int_add(dir_t *dir, size_t index, const value_t *value)
 {   dir_vec_t *vecdir = (dir_vec_t *)dir;
-    bool ok = (NULL != vecdir);
+    bool ok = PTRVALID(vecdir);
 
     if (ok)
     {   const value_t **bindvec = vecdir->bindvec;
@@ -7544,13 +7867,13 @@ dir_vec_int_add(dir_t *dir, size_t index, const value_t *value)
             OMIT(printf("extend vec from %d to %d (index %d)\n",
                           old_maxn, new_maxn, index);)
             newbind = (value_t **)FTL_MALLOC(new_maxn*sizeof(value_t *));
-            if (NULL != newbind)
+            if (PTRVALID(newbind))
             {   memcpy(newbind, bindvec, old_maxn*sizeof(value_t *));
                 memset(newbind+old_maxn, 0,
                        (new_maxn-old_maxn)*sizeof(value_t *));
                 vecdir->bindvec = (const value_t **)newbind;
                 vecdir->maxn = new_maxn;
-                if (NULL != bindvec)
+                if (PTRVALID(bindvec))
                     FTL_FREE((value_t **)bindvec);
             } else
                 ok = FALSE;
@@ -7583,7 +7906,7 @@ dir_vec_int_lookup(dir_t *dir, size_t index)
 {   dir_vec_t *vecdir = (dir_vec_t *)dir;
     const value_t **bindvec = vecdir->bindvec;
 
-    if (NULL != bindvec && (int)index >= 0 && index < vecdir->n)
+    if (PTRVALID(bindvec) && (int)index >= 0 && index < vecdir->n)
         return &bindvec[index];
     else
         return NULL;
@@ -7601,7 +7924,7 @@ dir_vec_lookup(dir_t *dir, const value_t *name)
     const value_t **found = NULL;
     const value_t **bindvec = vecdir->bindvec;
 
-    if (value_type_equal(name, type_int) && NULL != bindvec)
+    if (value_type_equal(name, type_int) && PTRVALID(bindvec))
     {   size_t index = (size_t)value_int_number(name);
         if ((int)index >= 0 && index < vecdir->n)
             found = &bindvec[index];
@@ -7620,7 +7943,7 @@ dir_vec_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
     const value_t **bindvec = vecdir->bindvec;
     void *result = NULL;
 
-    if (NULL != bindvec)
+    if (PTRVALID(bindvec))
     {   size_t i = 0;
 
         OMIT(printf("vec has %d entries\n", vecdir->n);)
@@ -7645,7 +7968,7 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
 {   dir_bind_print_arg_t *pr = (dir_bind_print_arg_t *)arg;
     number_t index = value_int_number(name); /* vectors are indexed by ints */
 
-    if (value != NULL)
+    if (PTRVALID(value))
     {
         if (pr->first)
             pr->first = FALSE;
@@ -7688,7 +8011,7 @@ dir_vec_print(outchar_t *out, const value_t *root, const value_t *value)
         pr.delim  = ", ";
         pr.len += outchar_printf(out, "<");
 
-        if (NULL != dir->forall)
+        if (PTRVALID(dir->forall))
             (void)(*dir->forall)(dir, &value_dir_vec_print, &pr);
         else
             pr.len += outchar_printf(out, "<unenumerable-dir>");
@@ -7705,9 +8028,9 @@ dir_vec_print(outchar_t *out, const value_t *root, const value_t *value)
 
 static value_t *
 dir_vec_init(dir_vec_t *vecdir)
-{   value_t *val = dir_init(&vecdir->dir, &dir_vec_add, &dir_vec_lookup,
-                            /*get*/NULL, &dir_vec_forall, &dir_vec_print,
-                            &dir_vec_delete, &dir_vec_markver);
+{   value_t *val = dir_init(&vecdir->dir, &type_dir_vec_val,
+                            &dir_vec_add, &dir_vec_lookup,
+                            /*get*/NULL, &dir_vec_forall, /*on_heap*/FALSE);
     vecdir->bindvec = NULL;
     vecdir->n = 0;
     vecdir->maxn = 0;
@@ -7728,7 +8051,7 @@ extern dir_t *
 dir_vec_new(void)
 {   dir_vec_t *vecdir = (dir_vec_t *)FTL_MALLOC(sizeof(dir_vec_t));
 
-    if (NULL != vecdir)
+    if (PTRVALID(vecdir))
         dir_vec_init(vecdir);
 
     return &vecdir->dir;
@@ -7807,6 +8130,9 @@ typedef struct
 
 
 
+static value_type_t type_dir_dyn_val;
+
+
 
 #define dir_dyn_dir(dirid) (&((dirid)->dir))
 #define dir_dyn_value(dirid) dir_value(dir_dyn_dir(dirid))
@@ -7820,13 +8146,13 @@ static void dir_dyn_markver(const value_t *value, int heap_version)
 {   dir_dyn_t *dyndir = (dir_dyn_t *)value;
 
     if (dyndir->get != &value_null)
-        value_mark_version((value_t *)dyndir->get, heap_version);
+        value_mark_version((value_t *)/*unconst*/dyndir->get, heap_version);
     if (dyndir->set != &value_null)
-        value_mark_version((value_t *)dyndir->set, heap_version);
+        value_mark_version((value_t *)/*unconst*/dyndir->set, heap_version);
     if (dyndir->getall != &value_null)
-        value_mark_version((value_t *)dyndir->getall, heap_version);
+        value_mark_version((value_t *)/*unconst*/dyndir->getall, heap_version);
     if (dyndir->count != &value_null)
-        value_mark_version((value_t *)dyndir->count, heap_version);
+        value_mark_version((value_t *)/*unconst*/dyndir->count, heap_version);
 }
 
 
@@ -7838,15 +8164,15 @@ dir_dyn_add(dir_t *dir, const value_t *name, const value_t *value)
 {   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
     bool ok = FALSE;
 
-    if (dyndir->set != NULL && dyndir->set != &value_null)
+    if (PTRVALID(dyndir->set) && dyndir->set != &value_null)
     {
         const value_t *code = substitute(dyndir->set, name,
                                          dyndir->state, /*unstrict*/FALSE);
-        if (code != NULL) {
+        if (PTRVALID(code)) {
             code = substitute(code, value, dyndir->state, /*unstrict*/FALSE);
-            if (code != NULL) {
+            if (PTRVALID(code)) {
                 const value_t *good = invoke(code, dyndir->state);
-                ok = good != NULL && value_istype_bool(good) &&
+                ok = PTRVALID(good) && value_istype_bool(good) &&
                      good != value_false;
             }
         }
@@ -7862,7 +8188,7 @@ dir_dyn_count(dir_t *dir)
 {   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
     unsigned n = 0;
 
-    if (dyndir->count != NULL && dyndir->count != &value_null)
+    if (PTRVALID(dyndir->count) && dyndir->count != &value_null)
     {
         const value_t *countval = invoke(dyndir->count, dyndir->state);
         if (value_istype(countval, type_int)) {
@@ -7880,10 +8206,10 @@ dir_dyn_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
     const value_t *dirval = NULL;
     const value_t *val = NULL;
 
-    if (dyndir->getall != NULL && dyndir->getall != &value_null)
+    if (PTRVALID(dyndir->getall) && dyndir->getall != &value_null)
         dirval = invoke(dyndir->getall, dyndir->state);
 
-    if (dirval != NULL && dirval != &value_null &&
+    if (PTRVALID(dirval) && dirval != &value_null &&
         value_istype(dirval, type_dir))
     {
         val = dir_forall((dir_t *)dirval, enumfn, arg);
@@ -7899,11 +8225,11 @@ dir_dyn_get(dir_t *dir, const value_t *name)
 {   dir_dyn_t *dyndir = (dir_dyn_t *)dir;
     const value_t *val = NULL;
 
-    if (dyndir->get != NULL && dyndir->get != &value_null)
+    if (PTRVALID(dyndir->get) && dyndir->get != &value_null)
     {
         const value_t *code = substitute(dyndir->get, name,
                                          dyndir->state, /*unstrict*/FALSE);
-        if (code != NULL)
+        if (PTRVALID(code))
             val = invoke(code, dyndir->state);
     }
     return val;
@@ -7917,10 +8243,10 @@ dir_dyn_get_using_getall(dir_t *dir, const value_t *name)
     const value_t *dirval = NULL;
     const value_t *val = NULL;
 
-    if (dyndir->getall != NULL && dyndir->getall != &value_null)
+    if (PTRVALID(dyndir->getall) && dyndir->getall != &value_null)
         dirval = invoke(dyndir->getall, dyndir->state);
 
-    if (dirval != NULL && dirval != &value_null &&
+    if (PTRVALID(dirval) && dirval != &value_null &&
         value_istype(dirval, type_dir))
     {
         val = dir_get((dir_t *)dirval, name);
@@ -7943,14 +8269,14 @@ dir_dyn_init(dir_dyn_t *dyndir, parser_state_t *state,
              const value_t *get_fn, const value_t *set_fn,
              const value_t *getall_fn, const value_t *count_fn)
 {
-    dir_init(&dyndir->dir,
+    dir_init(&dyndir->dir, &type_dir_dyn_val,
              (set_fn == NULL || set_fn == &value_null)? NULL: &dir_dyn_add,
              /*lookup*/NULL,
              (get_fn == NULL || get_fn == &value_null)?
                  &dir_dyn_get_using_getall: &dir_dyn_get,
-             &dir_dyn_forall, /*print*/ NULL, /*delete*/NULL, &dir_dyn_markver);
+             &dir_dyn_forall, /*on_heap*/FALSE);
 
-    if (count_fn != NULL && count_fn != &value_null)
+    if (PTRVALID(count_fn) && count_fn != &value_null)
         dyndir->dir.count = &dir_dyn_count;
     /* else will be derived from getall */
 
@@ -7972,7 +8298,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
             const value_t *getall_fn, const value_t *count_fn)
 {
     bool ok = TRUE;
-    if (get_fn != NULL && get_fn != &value_null && (
+    if (PTRVALID(get_fn) && get_fn != &value_null && (
             !value_istype(get_fn, type_closure) ||
             value_closure_argcount(get_fn) != 1)) {
         ok = FALSE;
@@ -7980,7 +8306,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
                      "%s'get' is not a closure with one unbound variable\n",
                      errprefix);
     }
-    if (set_fn != NULL && set_fn != &value_null && (
+    if (PTRVALID(set_fn) && set_fn != &value_null && (
             !value_istype(set_fn, type_closure) ||
             value_closure_argcount(set_fn) != 2)) {
         ok = FALSE;
@@ -7988,7 +8314,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
                      "%s'set' is not a closure with two unbound variables\n",
                      errprefix);
     }
-    if (count_fn != NULL && count_fn != &value_null && (
+    if (PTRVALID(count_fn) && count_fn != &value_null && (
             !value_istype(count_fn, type_closure) ||
             value_closure_argcount(count_fn) != 0)) {
         ok = FALSE;
@@ -7996,7 +8322,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
                      "%s'count' is not a closure with no unbound variables\n",
                      errprefix);
     }
-    if (getall_fn != NULL && getall_fn != &value_null && (
+    if (PTRVALID(getall_fn) && getall_fn != &value_null && (
             !value_istype(getall_fn, type_closure) ||
             value_closure_argcount(getall_fn) != 0)) {
         ok = FALSE;
@@ -8007,7 +8333,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
     if (ok) {
         dir_dyn_t *dyndir = (dir_dyn_t *)FTL_MALLOC(sizeof(dir_dyn_t));
 
-        if (NULL != dyndir)
+        if (PTRVALID(dyndir))
             dir_dyn_init(dyndir, state, get_fn, set_fn, getall_fn, count_fn);
 
         return &dyndir->dir;
@@ -8052,13 +8378,12 @@ typedef struct
 
 
 
-
-
-
 #define dir_join_dir(dirid) (&((dirid)->dir))
 #define dir_join_value(dirid) dir_value(dir_join_dir(dirid))
 
 
+
+static value_type_t type_dir_join_val;
 
 
 
@@ -8091,7 +8416,7 @@ static bool
 dir_join_add(dir_t *dir, const value_t *name, const value_t *value)
 {   dir_join_t *joindir = (dir_join_t *)dir;
     const value_t *index = dir_get(joindir->ixdir, name);
-    if (index != NULL)
+    if (PTRVALID(index))
         return dir_set(joindir->valdir, index, value);
     else
         return FALSE;
@@ -8107,10 +8432,11 @@ dir_join_lookup(dir_t *dir, const value_t *nameval)
     const value_t *index = dir_get(joindir->ixdir, nameval);
     const value_t **refval = NULL;
 
-    if (index != NULL)
+    if (PTRVALID(index))
     {
         dir_t *lookupdir = joindir->valdir;
-        if (NULL != lookupdir && NULL != lookupdir->lookup)
+        if (PTRVALID(lookupdir) &&
+            PTRVALID(lookupdir->lookup))
             refval = (*lookupdir->lookup)(lookupdir, index);
     }
 
@@ -8136,7 +8462,7 @@ dir_join_enum(dir_t *dir, const value_t *name, const value_t *index,
     dir_join_enum_arg_t *arg = (dir_join_enum_arg_t *)index_arg;
     dir_join_t *joindir = arg->joindir;
 
-    if (index != NULL)
+    if (PTRVALID(index))
     {
         const value_t *value = dir_get(joindir->valdir, index);
         return (*arg->enumfn)(dir_join_dir(joindir), name,
@@ -8168,9 +8494,8 @@ dir_join_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *enum_arg)
 
 static dir_t *
 dir_join_init(dir_join_t *joindir, dir_t *ixdir, dir_t *valdir)
-{   dir_init(&joindir->dir, &dir_join_add, &dir_join_lookup,
-             /*get*/ NULL, &dir_join_forall, /*print*/ NULL,
-             &dir_join_delete, &dir_join_markver);
+{   dir_init(&joindir->dir, &type_dir_join_val, &dir_join_add, &dir_join_lookup,
+             /*get*/ NULL, &dir_join_forall, /*on_heap*/TRUE);
     joindir->ixdir = ixdir;
     joindir->valdir = valdir;
     return &joindir->dir;
@@ -8185,12 +8510,13 @@ extern dir_t *
 dir_join_new(dir_t *ixdir, dir_t *valdir)
 {   dir_t *dir = NULL;
 
-    if (ixdir != NULL && valdir != NULL)
+    if (PTRVALID(ixdir) &&
+        PTRVALID(valdir))
     {
         dir_join_t *joindir = (dir_join_t *)
                                  FTL_MALLOC(sizeof(dir_join_t));
 
-        if (NULL != joindir)
+        if (PTRVALID(joindir))
             dir = dir_join_init(joindir, ixdir, valdir);
     }
 
@@ -8241,9 +8567,8 @@ values_string_argname_init(void)
         OMIT(fprintf(stderr,"%s: arg '%s'[%d]\n", codeid(),
                        argname, strlen(argname)););
         (void)value_cstring_init(&value_string_argname_val[i],
-                                 argname,
-                                 strlen(argname),
-                                 /*delete*/NULL);
+                                 argname, strlen(argname),
+                                 /*on_heap*/FALSE);
     }
 }
 #else
@@ -8389,7 +8714,7 @@ struct_spec_init(struct_spec_t *spec)
 extern void
 struct_spec_end(struct_spec_t *spec)
 {   struct_field_t *field = spec->fields;
-    while (NULL != field)
+    while (PTRVALID(field))
     {   struct_field_t *doomed = field;
         field = field->link;
         FTL_FREE(doomed);
@@ -8420,9 +8745,9 @@ struct_spec_add_field(struct_spec_t *spec, field_kind_t kind,
                       field_set_fn_t *set, field_get_fn_t *get)
 {   struct_field_t *newfield = (struct_field_t *)
                                FTL_MALLOC(sizeof(struct_field_t));
-    if (NULL != newfield)
+    if (PTRVALID(newfield))
     {   value_cstring_init(&newfield->strval, name, strlen(name),
-                           /*delete*/NULL);
+                           /*on_heap*/FALSE);
         newfield->name = name;
         if (NULL == set)
             set = &struct_spec_field_noset;
@@ -8447,7 +8772,7 @@ struct_spec_find_field(struct_spec_t *spec, const char *name, size_t namelen)
 {   struct_field_t *field = spec->fields;
     const char *fieldname;
 
-    while (NULL != field &&
+    while (PTRVALID(field) &&
            (strlen(fieldname = field->name) != namelen ||
             0 != memcmp(fieldname, name, namelen)))
         field = field->link;
@@ -8468,7 +8793,7 @@ struct_spec_forall(struct_spec_t *spec, struct_spec_enum_fn_t fn, void *arg)
 {   struct_field_t *field = spec->fields;
     void *result = NULL;
 
-    while (NULL != field && NULL == result)
+    while (PTRVALID(field) && NULL == result)
     {   result = (*fn)(field, arg);
         OMIT(printf("%s: spec field \"%s\" result %p\n",
                       codeid(), field->name, result);)
@@ -8512,6 +8837,10 @@ typedef struct
 
 
 
+static value_type_t type_dir_struct_val;
+
+
+
 
 
 #define dir_struct_dir(dirstruct) dir_id_dir(&((dirstruct)->get_cache))
@@ -8526,7 +8855,7 @@ typedef struct
 static void
 dir_struct_delete(value_t *value)
 {   dir_struct_t *structdir = (dir_struct_t *)value;
-    if (NULL != structdir->structmem)
+    if (PTRVALID(structdir->structmem))
     {   free(structdir->structmem);
         structdir->structmem = NULL;
     }
@@ -8540,9 +8869,11 @@ dir_struct_delete(value_t *value)
 static void
 dir_struct_markver(const value_t *value, int heap_version)
 {   dir_struct_t *structdir = (dir_struct_t *)value;
-    OMIT(printf("%s: marking struct dir %p ref %p\n",
-                  codeid(), structdir, structdir->ref);)
-    value_mark_version((value_t *)structdir->ref, heap_version);
+    if (PTRVALID(structdir->ref)) {
+        OMIT(printf("%s: marking struct dir %p ref %p\n",
+                      codeid(), structdir, structdir->ref);)
+        value_mark_version((value_t *)/*unconst*/structdir->ref, heap_version);
+    }
     dir_id_markver(dir_id_value(&structdir->get_cache), heap_version);
 }
 
@@ -8560,7 +8891,7 @@ dir_struct_add(dir_t *dir, const value_t *nameval, const value_t *value)
     if (value_string_get(nameval, &name, &namelen))
     {   struct_field_t *field = struct_spec_find_field(&structdir->spec,
                                                        name, namelen);
-        if (NULL != field)
+        if (PTRVALID(field))
         {   (*field->field.set)(structdir->structmem, value);
             ok = TRUE;
         }
@@ -8584,7 +8915,7 @@ dir_struct_get(dir_t *dir, const value_t *nameval)
     if (value_string_get(nameval, &name, &namelen))
     {   struct_field_t *field = struct_spec_find_field(&structdir->spec,
                                                        name, namelen);
-        if (NULL != field)
+        if (PTRVALID(field))
         {   /* get any value_t we've been saving to put return value into */
             dir_t *get_cache = dir_id_dir(&structdir->get_cache);
             const value_t **ref_value = dir_id_lookup(get_cache, nameval);
@@ -8678,10 +9009,10 @@ dir_struct_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 
 static void
 dir_struct_init(dir_struct_t *structdir, struct_spec_t *spec,
-                bool is_const, void *structmem,
-                const value_t *ref, value_delete_fn_t *delete_fn)
+                bool is_const, void *structmem, const value_t *ref,
+                bool on_heap)
 {   dir_t *dir = dir_struct_dir(structdir);
-    dir_id_init(&structdir->get_cache);
+    dir_id_init(&structdir->get_cache, &type_dir_struct_val, on_heap);
     /* but we're going to overwrite some */
     memcpy(&structdir->spec, spec, sizeof(structdir->spec));
     structdir->structmem = structmem;
@@ -8693,10 +9024,6 @@ dir_struct_init(dir_struct_t *structdir, struct_spec_t *spec,
         dir->add = &dir_struct_add;
     dir->lookup = NULL; /* otherwise we'll use this to do adds */
     dir->forall = &dir_struct_forall;
-    if (NULL != delete_fn)
-        dir_value(dir)->del = delete_fn;
-    if (NULL != ref)
-        dir_value(dir)->mark_version = &dir_struct_markver;
 }
 
 
@@ -8709,8 +9036,8 @@ dir_cstruct_new(struct_spec_t *spec, bool is_const, void *static_struct)
 {   dir_struct_t *structdir = (dir_struct_t *)FTL_MALLOC(sizeof(dir_struct_t));
 
     if (NULL != structdir)
-        dir_struct_init(structdir, spec, is_const, static_struct,
-                        /*ref*/NULL, /*delete*/NULL);
+        dir_struct_init(structdir, spec, is_const, static_struct, /*ref*/NULL,
+                        /*on_heap*/FALSE);
 
     return dir_struct_dir(structdir);
 }
@@ -8726,8 +9053,8 @@ dir_struct_new(struct_spec_t *spec, bool is_const, void *malloc_struct)
 {   dir_struct_t *structdir = (dir_struct_t *)FTL_MALLOC(sizeof(dir_struct_t));
 
     if (NULL != structdir)
-        dir_struct_init(structdir, spec, is_const, malloc_struct,
-                        /*ref*/NULL, &dir_struct_delete);
+        dir_struct_init(structdir, spec, is_const, malloc_struct, /*ref*/NULL,
+                        /*on_heap*/TRUE);
 
     return dir_struct_dir(structdir);
 }
@@ -8744,8 +9071,8 @@ dir_struct_cast(struct_spec_t *spec, bool is_const,
 {   dir_struct_t *structdir = (dir_struct_t *)FTL_MALLOC(sizeof(dir_struct_t));
 
     if (NULL != structdir)
-        dir_struct_init(structdir, spec,
-                        is_const, ref_struct, ref, /*delete*/NULL);
+        dir_struct_init(structdir, spec, is_const, ref_struct, ref,
+                        /*on_heap*/FALSE);
 
     return dir_struct_dir(structdir);
 }
@@ -8855,7 +9182,8 @@ typedef struct {
 static unumber_t
 datatype_sizeof(datatype_t *dt)
 {   unumber_t size = 0;
-    if (dt != NULL && dt->binparse != NULL)
+    if (PTRVALID(dt) &&
+        PTRVALID(dt->binparse))
     {
         unumber_t ptr = 0;
         (void)dt->binparse(NULL, &ptr, (unumber_t)-1, dt);
@@ -8905,7 +9233,7 @@ binparse_bits8(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 1;
     if (newpos <= binend) {
-        if (rdr != NULL) {
+        if (PTRVALID(rdr)) {
             ftl_u8_t data;
             if ((*rdr->binget)(rdr, *ref_binpos, &data, sizeof(data))) {
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
@@ -8935,7 +9263,7 @@ binparse_bits16l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 2;
     if (newpos <= binend) {
-        if (rdr != NULL) {
+        if (PTRVALID(rdr)) {
             ftl_u8_t data[2];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 datatype_int_t *inttype = (datatype_int_t *)dtype;
@@ -8965,7 +9293,7 @@ binparse_bits16b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 2;
     if (newpos <= binend) {
-        if (rdr != NULL) {
+        if (PTRVALID(rdr)) {
             ftl_u8_t data[2];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 ftl_u16_t n = (data[0] << 8) | data[1];
@@ -8996,7 +9324,7 @@ binparse_bits32l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 4;
     if (newpos <= binend) {
-        if (rdr != NULL) {
+        if (PTRVALID(rdr)) {
             ftl_u8_t data[4];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 ftl_u32_t n  = (data[3] << 24) | (data[2] << 16) |
@@ -9028,7 +9356,7 @@ binparse_bits32b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 4;
     if (newpos <= binend) {
-        if (rdr != NULL) {
+        if (PTRVALID(rdr)) {
             ftl_u8_t data[4];
             if ((*rdr->binget)(rdr, *ref_binpos, &data[0], sizeof(data))) {
                 ftl_u32_t n = (data[0] << 24) | (data[1] << 16) |
@@ -9100,7 +9428,7 @@ datatype_int_new(bool is_signed, unsigned bytes, bool little_endian)
                             FTL_MALLOC(sizeof(datatype_int_t));
     datatype_t *dt = NULL;
 
-    if (intdt != NULL)
+    if (PTRVALID(intdt))
         dt = datatype_int_init(intdt, is_signed, bytes, little_endian);
 
     return dt;
@@ -9141,16 +9469,16 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
         else {
             if (vec == NULL)
                 vec = dir_vec_new();
-            if (vec != NULL)
+            if (PTRVALID(vec))
                 dir_int_set(vec, entryno, entry);
             entryno++;
         }
     }
 
-    if (vec != NULL)
+    if (PTRVALID(vec))
         val = dir_value(vec);
 
-    /* if (!ok && val != NULL)
+    /* if (!ok && PTRVALID(val))
         value_delete(&val); - we have no delete-from-heap function */
 
     return ok? (val == NULL? &value_null: val): NULL;
@@ -9201,14 +9529,19 @@ typedef struct
 
 
 
+static value_type_t type_dir_dynseq_val;
+
+
+
+
 static void dir_dynseq_delete(value_t *value)
 {   if (value_istype(value, type_dir))
     {   dir_dynseq_t *dynseq = (dir_dynseq_t *)value;
-        if (dynseq->entry_dt != NULL)
+        if (PTRVALID(dynseq->entry_dt))
         {   FTL_FREE(dynseq->entry_dt);
             dynseq->entry_dt = NULL;
         }
-        if (dynseq->rdr != NULL)
+        if (PTRVALID(dynseq->rdr))
         {   FTL_FREE(dynseq->rdr);
             dynseq->rdr = NULL;
         }
@@ -9224,7 +9557,7 @@ dir_dynseq_get(dir_t *dir, const value_t *name)
 {   dir_dynseq_t *dynseq = (dir_dynseq_t *)dir;
     const value_t *found = NULL;
 
-    if (dynseq != NULL && value_type_equal(name, type_int))
+    if (PTRVALID(dynseq) && value_type_equal(name, type_int))
     {   unumber_t n = value_int_number(name);
         unumber_t index = dynseq->first + n * dynseq->stride;
 
@@ -9251,7 +9584,7 @@ dir_dynseq_lookup(dir_t *dir, const value_t *nameval)
     {   dir_dynseq_t *dynseq = (dir_dynseq_t *)dir;
         const value_t *found = NULL;
 
-        if (dynseq != NULL && value_type_equal(name, type_int))
+        if (PTRVALID(dynseq) && value_type_equal(name, type_int))
         {   unumber_t n = value_int_number(name);
             unumber_t index = dynseq->first + n * dynseq->stride;
 
@@ -9290,7 +9623,7 @@ dir_dynseq_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
         const value_t *rdval = (*parse)(dynseq->rdr, &index, dynseq->last,
                                         dynseq->entry_dt);
         /* this updates index */
-        ok = (rdval != NULL);
+        ok = PTRVALID(rdval);
         if (ok)
         {
             value_t *ixval = value_int_new(i);
@@ -9315,7 +9648,8 @@ dir_dynseq_init(dir_dynseq_t *dynseq,
                 unumber_t first, unumber_t last)
 {   dir_t *dsdir = NULL;
 
-    if (entry_dt != NULL && rdr != NULL && last >= first)
+    if (PTRVALID(entry_dt) &&
+        PTRVALID(rdr) && last >= first)
     {
         dynseq->entry_dt = entry_dt;
         dynseq->rdr = rdr;
@@ -9324,9 +9658,10 @@ dir_dynseq_init(dir_dynseq_t *dynseq,
         dynseq->stride = datatype_sizeof(entry_dt);
 
         if (dynseq->stride > 0)
-            dir_init(&dynseq->dir, /*add*/NULL, /*lookup*/NULL,
-                     &dir_dynseq_get, &dir_dynseq_forall, &dir_vec_print,
-                     &dir_dynseq_delete, /*mark*/NULL);
+            dir_init(&dynseq->dir, &type_dir_dynseq_val,
+                     /*add*/NULL, /*lookup*/NULL,
+                     &dir_dynseq_get, &dir_dynseq_forall,
+                     /*on_heap*/TRUE);
 
         dsdir = &dynseq->dir;
     }
@@ -9375,16 +9710,16 @@ binparse_dynseq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t last,
         else {
             if (vec == NULL)
                 vec = dir_vec_new();
-            if (vec != NULL)
+            if (PTRVALID(vec))
                 dir_int_set(vec, entryno, entry);
             entryno++;
         }
     }
 
-    if (vec != NULL)
+    if (PTRVALID(vec))
         val = dir_value(vec);
 
-    /* if (!ok && val != NULL)
+    /* if (!ok && PTRVALID(val))
         value_delete(&val); - we have no delete-from-heap function */
 
     return ok? (val == NULL? &value_null: val): NULL;
@@ -9437,6 +9772,9 @@ typedef struct
 
 
 
+static value_type_t type_dir_argvec_val;
+
+
 
 
 
@@ -9446,7 +9784,7 @@ dir_argvec_get(dir_t *dir, const value_t *name)
     const value_t *found = NULL;
     const char **argv = vecdir->argv;
 
-    if (value_istype(name, type_int) && NULL != argv)
+    if (value_istype(name, type_int) && PTRVALID(argv))
     {   size_t index = (size_t)value_int_number(name);
         if ((int)index >= 0 && index < vecdir->argc)
         {   const char *arg = argv[index];
@@ -9501,9 +9839,9 @@ dir_argvec_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 
 static void
 dir_argvec_init(dir_argvec_t *vecdir, int argc, const char **argv)
-{   dir_init(&vecdir->dir, /*add*/NULL, /*lookup*/NULL, &dir_argvec_get,
-             &dir_argvec_forall, /*print*/NULL, /*delete*/NULL,
-             /*markver*/NULL);
+{   dir_init(&vecdir->dir, &type_dir_argvec_val,
+             /*add*/NULL, /*lookup*/NULL, &dir_argvec_get,
+             &dir_argvec_forall, /*on_heap*/FALSE);
     vecdir->argc = argc;
     vecdir->argv = argv;
 }
@@ -9567,6 +9905,10 @@ struct dir_array_s
 } /* dir_array_t */;
 
 
+
+
+
+static value_type_t type_dir_array_val;
 
 
 
@@ -9651,7 +9993,7 @@ static void
 dir_array_markver(const value_t *value, int heap_version)
 {   dir_array_t *arraydir = (dir_array_t *)value;
     OMIT(printf("%s: marking array dir %p\n", codeid(), arraydir);)
-    value_mark_version((value_t *)arraydir->ref, heap_version);
+    value_mark_version((value_t *)/*unconst*/arraydir->ref, heap_version);
     dir_vec_markver(dir_vec_value(&arraydir->get_cache), heap_version);
 }
 
@@ -9786,7 +10128,7 @@ static void
 dir_array_init(dir_array_t *arraydir, array_spec_t *spec,
                bool is_const, void *arraymem, size_t stride,
                dir_array_get_fn_t *dim,
-               const value_t *ref, value_delete_fn_t *delete_fn)
+               const value_t *ref, bool on_heap)
 {   dir_t *dir = dir_array_dir(arraydir);
     dir_vec_init(&arraydir->get_cache);
     /* but we're going to overwrite some */
@@ -9807,10 +10149,6 @@ dir_array_init(dir_array_t *arraydir, array_spec_t *spec,
         dir->add = NULL;
     else
         dir->add = &dir_array_add;
-    if (NULL != delete_fn)
-        dir_value(dir)->del = delete_fn;
-    if (NULL != ref)
-        dir_value(dir)->mark_version = &dir_array_markver;
 }
 
 
@@ -9824,7 +10162,7 @@ dir_carray_new(array_spec_t *spec, bool is_const,
 
     if (NULL != arraydir)
         dir_array_init(arraydir, spec, is_const, static_array, stride,
-                       /*dim*/NULL, /*ref*/NULL, /*delete*/NULL);
+                       /*dim*/NULL, /*ref*/NULL, /*on_heap*/FALSE);
 
     return dir_array_dir(arraydir);
 }
@@ -9842,7 +10180,7 @@ dir_array_new(array_spec_t *spec, bool is_const,
 
     if (NULL != arraydir)
         dir_array_init(arraydir, spec, is_const, malloc_array, stride,
-                       /*dim*/NULL, /*ref*/NULL, &dir_array_delete);
+                       /*dim*/NULL, /*ref*/NULL, /*on_heap*/TRUE);
 
     return dir_array_dir(arraydir);
 }
@@ -9860,7 +10198,7 @@ dir_array_cast(array_spec_t *spec, bool is_const, const value_t *ref,
 
     if (NULL != arraydir)
         dir_array_init(arraydir, spec, is_const, ref_array, stride,
-                       /*dim*/NULL, ref, /*delete*/NULL);
+                       /*dim*/NULL, ref, /*on_heap*/FALSE);
 
     return dir_array_dir(arraydir);
 }
@@ -9899,7 +10237,7 @@ dir_array_string(array_spec_t *spec, bool is_const,
 
         if (NULL != arraydir)
         {   dir_array_init(arraydir, spec, is_const, /*mem*/NULL, stride,
-                           &dir_array_string_dim, string, /*delete*/NULL);
+                           &dir_array_string_dim, string, /*on_heap*/TRUE);
             dir = dir_array_dir(arraydir);
         }
     }
@@ -9952,6 +10290,10 @@ typedef struct
 } dir_series_t;
 
 
+
+
+
+static value_type_t type_dir_series_val;
 
 
 
@@ -10062,9 +10404,9 @@ dir_series_init(dir_series_t *series,
 
         DEBUGSERIES(DPRINTF("series: %ld +%ld .. %ld\n", first, inc, last););
 
-        dir_init(&series->dir, /*add*/NULL, /*lookup*/NULL,
-                 &dir_series_get, &dir_series_forall, &dir_series_print,
-                 &value_delete_alloced, /*mark*/NULL);
+        dir_init(&series->dir, &type_dir_series_val,
+                 /*add*/NULL, /*lookup*/NULL,
+                 &dir_series_get, &dir_series_forall, /*on_heap*/TRUE);
 
         return &series->dir;
     }
@@ -10173,6 +10515,9 @@ typedef struct
 
 
 
+static value_type_t type_dir_sysenv_val;
+
+
 
 
 #define dir_sysenv_value(dirid) dir_value(&((dirid)->dir))
@@ -10245,7 +10590,7 @@ dir_sysenv_get(dir_t *dir, const value_t *name)
     if (value_type_equal(name, type_string) &&
         value_string_get(name, &namestr, &namestrl))
     {   char *strval = getenv(namestr);
-        if (NULL != strval)
+        if (PTRVALID(strval))
             val = value_string_new_measured(strval);
         OMIT(else printf("%s: sysenv get '%s' not in env\n",
                            codeid(), namestr);)
@@ -10261,9 +10606,9 @@ dir_sysenv_get(dir_t *dir, const value_t *name)
 
 static void
 dir_sysenv_init(dir_sysenv_t *sysdir)
-{   dir_init(&sysdir->dir, &dir_sysenv_add, /*lookup*/ NULL,
-             /*get*/&dir_sysenv_get, /* forall */NULL,
-             /*print*/ NULL, /*delete*/NULL, /*markver*/NULL);
+{   dir_init(&sysdir->dir, &type_dir_sysenv_val, &dir_sysenv_add,
+             /*lookup*/ NULL, /*get*/&dir_sysenv_get,
+             /* forall */NULL, /*on_heap*/FALSE);
 }
 
 
@@ -10275,7 +10620,7 @@ extern dir_t *
 dir_sysenv_new(void)
 {   dir_sysenv_t *sysdir = (dir_sysenv_t *)FTL_MALLOC(sizeof(dir_sysenv_t));
 
-    if (NULL != sysdir)
+    if (PTRVALID(sysdir))
         dir_sysenv_init(sysdir);
 
     return &sysdir->dir;
@@ -10310,6 +10655,9 @@ typedef struct
 } dir_fs_t;
 
 
+
+
+static value_type_t type_dir_fs_val;
 
 
 
@@ -10384,7 +10732,7 @@ dir_fs_get(dir_t *dir, const value_t *name)
     if (value_type_equal(name, type_string) &&
         value_string_get(name, &namestr, &namestrl))
     {   char *strval = getenv(namestr);
-        if (NULL != strval)
+        if (PTRVALID(strval))
             val = value_string_new_measured(strval);
         OMIT(else printf("%s: fs get '%s' not in env\n",
                            codeid(), namestr);)
@@ -10442,7 +10790,7 @@ dir_fs_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 static void
 dir_fs_markver(const value_t *value, int heap_version)
 {   dir_fs_t *fsdir = (dir_fs_t *)value;
-    value_mark_version((value_t *)fsdur->dirnameval, heap_version);
+    value_mark_version((value_t *)/*unconst*/fsdur->dirnameval, heap_version);
 }
 
 
@@ -10451,9 +10799,8 @@ dir_fs_markver(const value_t *value, int heap_version)
 
 static void
 dir_fs_init(dir_fs_t *fsdir, const value_t *dirnameval)
-{   dir_init(&fsdir->dir, &dir_fs_add, /*lookup*/ NULL,
-             /*get*/&dir_fs_get, &dir_fs_forall,
-             /*print*/ NULL, /*delete*/NULL, &dir_fs_markver);
+{   dir_init(&fsdir->dir, &type_dir_fs_val, &dir_fs_add, /*lookup*/ NULL,
+             /*get*/&dir_fs_get, &dir_fs_forall, /*on_heap*/FALSE);
     fsdir->dirnameval = value_string_get_terminated(dirnameval,
                                                     &fsdir->dirname,
                                                     &fsdir->dirnamelen);
@@ -10468,7 +10815,7 @@ extern dir_t *
 dir_fs_new(const char *dirname)
 {   dir_fs_t *fsdir = (dir_fs_t *)FTL_MALLOC(sizeof(dir_fs_t));
 
-    if (NULL != fsdir)
+    if (PTRVALID(fsdir))
         dir_fs_init(fsdir, dirname);
 
     return &fsdir->dir;
@@ -10509,6 +10856,10 @@ typedef struct
 
 
 
+static value_type_t type_dir_lib_val;
+
+
+
 
 #define dir_lib_dir(dirid)   dir_id_dir(&((dirid)->dir))
 #define dir_lib_value(dirid) dir_id_value(&((dirid)->dir))
@@ -10530,7 +10881,7 @@ static void dir_lib_delete(value_t *value)
 
 static void dir_lib_markver(const value_t *value, int heap_version)
 {   dir_lib_t *libdir = (dir_lib_t *)value;
-    value_mark_version((value_t *)libdir->libnameval, heap_version);
+    value_mark_version((value_t *)/*unconst*/libdir->libnameval, heap_version);
     dir_id_markver(dir_lib_value(libdir), heap_version);
 }
 
@@ -10579,13 +10930,9 @@ dir_lib_init(dir_lib_t *libdir,
     if (libdir->lib != DLL_NONE) {
         libsym_enum_args_t arg;
         dir_t *dir = dir_id_dir(&libdir->dir);
-        value_t *val = dir_value(dir);
 
-        dir_id_init(&libdir->dir);
-
+        dir_id_init(&libdir->dir, &type_dir_lib_val, /*on_heap*/TRUE);
         dir->add = NULL;
-        val->mark_version = &dir_lib_markver;
-        val->del = &dir_lib_delete;
 
         libdir->libnameval = value_string_get_terminated(libnameval,
                                                          &libdir->libname,
@@ -10617,7 +10964,7 @@ extern dir_t *
 dir_lib_new(const value_t *libfilename, dir_t *syms, bool fix)
 {   dir_lib_t *libdir = (dir_lib_t *)FTL_MALLOC(sizeof(dir_lib_t));
 
-    if (NULL != libdir)
+    if (PTRVALID(libdir))
         dir_lib_init(libdir, libfilename, syms, fix);
 
     return dir_lib_dir(libdir);
@@ -10720,6 +11067,9 @@ typedef struct
 #define dir_regkeyval_value(dirid) dir_value(&((dirid)->dir))
 
 
+
+
+static value_type_t type_dir_regkeyval_val;
 
 
 
@@ -10980,7 +11330,7 @@ value_keyinfo(key_type_t key_type, void *key_data, size_t datalen)
     OMIT(fprintf(stderr,"%s: key type %d data size %d\n",
                    codeid(), key_type, datalen););
 
-    if (NULL != dir)
+    if (PTRVALID(dir))
     {   unumber_t n;
         dir_cstring_set(dir, "type", value_int_new(key_type));
         switch (key_type)
@@ -11336,14 +11686,14 @@ dir_regkeyval_add(dir_t *dir, const value_t *name, const value_t *value)
 static long /* rc */
 dir_regkeyval_init(dir_regkeyval_t *keydir, key_t root,
                    const char *keyname, size_t keynamelen,
-                   key_access_t access, value_delete_fn_t *delete_fn)
+                   key_access_t access, bool on_heap)
 {   long rc = win_regkeyval_open(root, keyname, keynamelen, access,
                                  &keydir->key);
 
     if (ERROR_SUCCESS == rc)
-        dir_init(&keydir->dir, &dir_regkeyval_add, /*lookup*/ NULL,
-                 &dir_regkeyval_get, &dir_regkeyval_forall,
-                 /*print*/ NULL, delete_fn, /*markver*/NULL);
+        dir_init(&keydir->dir, &type_dir_regkeyval_val,
+                 &dir_regkeyval_add, /*lookup*/ NULL,
+                 &dir_regkeyval_get, &dir_regkeyval_forall, on_heap);
     OMIT(else
               fprintf(stderr, "%s: failed to create registry key environment"
                       " - rc %d\n", codeid(), rc);)
@@ -11383,7 +11733,7 @@ dir_regkeyval_new(key_t root, bool writeable,
     {   if (dir_regkeyval_init(keydir, root, keyname, keynamelen,
                                writeable? regkeyval_ACCESS_READWRITE:
                                           regkeyval_ACCESS_READ,
-                               &dir_regkeyval_delete) != ERROR_SUCCESS)
+                               /*on_heap*/TRUE) != ERROR_SUCCESS)
         {   FTL_FREE(keydir);
             keydir = NULL;
             ok = FALSE;
@@ -11456,10 +11806,10 @@ static void
 dir_stack_markver(const value_t *value, int heap_version)
 {   dir_stack_t *dirstack = (dir_stack_t *)value;
 
-    if (NULL != value)
+    if (PTRVALID(value))
     {   value_t *dir = &dirstack->stack->value;
 
-        while (NULL != dir)
+        while (PTRVALID(dir))
         {   value_mark_version(dir, heap_version);
             dir = dir->link;
         }
@@ -11474,10 +11824,15 @@ dir_stack_markver(const value_t *value, int heap_version)
 
 static bool
 dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
-{   if (NULL != pos && NULL != newdir)
-    {   newdir->value.link = *pos;
+{   if (PTRVALID(pos) &&
+        PTRVALID(newdir))
+    {   DEBUGVALLINK(DPRINTF("%p: stack push at pos in %s\n",
+                             &newdir->value.link,
+                             value_type_name(&newdir->value)););
+        newdir->value.link = *pos;
         dir_env_end_set(newdir, env_end);
-        DEBUGDIR(DPRINTF("dir_stack: set end in dir %p\n", newdir);)
+        DEBUGDIR(DPRINTF("%s: dir_stack - set end in dir %p\n",
+                         codeid(), newdir);)
         *pos = dir_value(newdir);
         value_unlocal(dir_value(newdir));
         return TRUE;
@@ -11497,6 +11852,9 @@ dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end)
 
     if (NULL != dir && NULL != newdir)
     {   return_pos = &newdir->value.link;
+        DEBUGVALLINK(DPRINTF("%p: stack push dir in %s\n",
+                             &newdir->value.link,
+                             value_type_name(&newdir->value)););
         newdir->value.link = dir_value(dir->stack);
         dir_env_end_set(newdir, env_end);
         dir->stack = newdir;
@@ -11613,13 +11971,13 @@ dir_stack_add(dir_t *basedir, const value_t *name, const value_t *value)
     if (NULL != dirstack)
     {   dir_t *dir = dirstack->stack;
 
-        if (NULL != dir && dir->add != NULL)
+        if (NULL != dir && PTRVALID(dir->add))
             ok = (*dir->add)(dir, name, value);
         else
         {   /* create a new dir if top directory missing or unwriteable */
             dir_stack_push(dirstack, dir_id_new(), /*env_end*/FALSE);
             dir = dirstack->stack;
-            if (NULL != dir && dir->add != NULL)
+            if (NULL != dir && PTRVALID(dir->add))
                 ok = (*dir->add)(dir, name, value);
         }
     }
@@ -11639,24 +11997,24 @@ dir_stack_lookup(dir_t *basedir, const value_t *name)
     {   dir_t *dir = dirstack->stack;
 
         ftl_assert(dir != basedir);
-        DEBUGDIR(printf("dir_stack: first lookup name %p in dir %p\n",
-                        name, dir);)
+        DEBUGDIR(printf("%s: dir_stack - first lookup name %p in dir %p\n",
+                        codeid(), name, dir);)
         /* find a directory where this variable is set */
         /* TODO: need to take account of dirs with "get" only (e.g. sys.env) */
-        while (dir != NULL &&
+        while (PTRVALID(dir) &&
                (dir->lookup == NULL ||
                 NULL == (ref_val = (*dir->lookup)(dir, name))))
         {   dir_t *nextdir = (dir_t *)dir->value.link;
 
             ftl_assert(dir != (dir_t *)dir->value.link);
-            if (nextdir != NULL && dir_env_end(nextdir))
+            if (PTRVALID(nextdir) && dir_env_end(nextdir))
             {   DEBUGDIR(DPRINTF("** lookup blocked **\n");)
                 dir = NULL;
             } else
                 dir = nextdir;
 
-            DEBUGDIR(printf("dir_stack: next  lookup name %p in dir %p\n",
-                            name, dir);)
+            DEBUGDIR(printf("%s: dir_stack - next  lookup name %p in dir %p\n",
+                            codeid(), name, dir);)
         }
     }
     return ref_val;
@@ -11675,25 +12033,32 @@ dir_stack_get(dir_t *basedir, const value_t *name)
     {   dir_t *dir = dirstack->stack;
 
         if (dir != basedir)
-        {   DEBUGDIR(DPRINTF("dir_stack: first get name %p in dir %p\n",
-                             name, dir);)
-            while (dir != NULL &&
+        {   DEBUGDIR(DPRINTF("%s: dir_stack - first get name %p (%s) "
+                             "in dir %p (%s)\n",
+                             codeid(), name, value_type_name(name),
+                             dir, value_type_name(dir_value(dir)));)
+            while (PTRVALID(dir) &&
                    (dir->get == NULL ||
                     NULL == (val = (*dir->get)(dir, name))))
             {   dir_t *nextdir = (dir_t *)dir->value.link;
 
                 ftl_assert(dir != (dir_t *)dir->value.link);
-                if (nextdir != NULL && dir_env_end(dir))
+                if (PTRVALID(nextdir) && dir_env_end(dir))
                 {   DEBUGDIR(DPRINTF("** get blocked **\n");)
                     dir = NULL;
                 } else
                     dir = nextdir;
 
-                DEBUGDIR(printf("dir_stack: next  get name %p in dir %p\n",
-                                name, dir);)
+                DEBUGDIR(printf("%s: dir_stack - next  get name %p (%s) "
+                                "in dir %p (%s)\n",
+                                codeid(), name, value_type_name(name),
+                                dir, value_type_name(dir_value(dir)));)
             }
-        } DEBUGDIR(else DPRINTF("dir_stack: first dir in stack %p is itself\n",
-                                dir);)
+        } DEBUGDIR(
+            else DPRINTF("%s: dir_stack - first dir in stack %p (%s) "
+                         "is itself\n",
+                         codeid(), dir, value_type_name(dir_value(dir)));
+        )
     }
     return val;
 }
@@ -11708,6 +12073,10 @@ typedef struct
     void *arg;
 } dir_stack_forall_arg_t;
 
+
+
+
+static value_type_t type_dir_stack_val;
 
 
 
@@ -11742,7 +12111,7 @@ dir_stack_forall(dir_t *basedir, dir_enum_fn_t *enumfn, void *arg)
         stackfor.arg = arg;
         stackfor.enumfn = enumfn;
 
-        while (NULL == result && dir != NULL)
+        while (NULL == result && PTRVALID(dir))
         {   result = dir_forall(dir, &dir_stack_enum, &stackfor);
             if (dir_env_end(dir))
                 dir = NULL;
@@ -11760,10 +12129,10 @@ dir_stack_forall(dir_t *basedir, dir_enum_fn_t *enumfn, void *arg)
 
 
 static dir_t *
-dir_stack_init(dir_stack_t *dirstack, value_print_fn_t *print,
-               value_delete_fn_t *delete_fn, value_markver_fn_t *mark)
-{   dir_init(&dirstack->dir, &dir_stack_add, &dir_stack_lookup, &dir_stack_get,
-             &dir_stack_forall, print, delete_fn, mark);
+dir_stack_init(dir_stack_t *dirstack, type_t dir_stack_subtype, bool on_heap)
+{   dir_init(&dirstack->dir, dir_stack_subtype,
+             &dir_stack_add, &dir_stack_lookup, &dir_stack_get,
+             &dir_stack_forall, on_heap);
     dirstack->stack = NULL;
     return &dirstack->dir;
 }
@@ -11774,8 +12143,9 @@ dir_stack_init(dir_stack_t *dirstack, value_print_fn_t *print,
 
 
 #if 0 != DEBUGVALINIT(1+)0
-#define dir_stack_init(dirstack, print, delete_fn, mark) \
-    dir_info((dir_stack_init)(dirstack, print, delete_fn, mark), __LINE__)
+#define dir_stack_init(dirstack, dir_stack_subtype, on_heap) \
+    dir_info((dir_stack_init)(dirstack, dir_stack_subtype, \
+                              on_heap), __LINE__)
 #endif
 
 
@@ -11788,8 +12158,7 @@ dir_stack_new(void)
 {   dir_stack_t *dirstack = (dir_stack_t *)FTL_MALLOC(sizeof(dir_stack_t));
 
     if (NULL != dirstack)
-        dir_stack_init(dirstack, /*print*/NULL, &value_delete_alloced,
-                       &dir_stack_markver);
+        dir_stack_init(dirstack, &type_dir_stack_val, /*on_heap*/TRUE);
 
     return &dirstack->dir;
 }
@@ -11827,8 +12196,7 @@ dir_stack_copy(dir_stack_t *old)
 {   dir_stack_t *dirstack = (dir_stack_t *)FTL_MALLOC(sizeof(dir_stack_t));
 
     if (NULL != dirstack)
-    {   dir_stack_init(dirstack, /*print*/NULL, &value_delete_alloced,
-                       &dir_stack_markver);
+    {   dir_stack_init(dirstack, &type_dir_stack_val, /*on_heap*/TRUE);
         dir_stack_copyinit(dirstack, old);
     }
     return dirstack;
@@ -11871,6 +12239,11 @@ struct value_env_s
 
 
 
+static value_type_t type_dir_env_val;
+
+
+
+
 
 /* warning: these macros throw away information about the unbound variables */
 
@@ -11890,6 +12263,10 @@ typedef struct
     int len;
     int vals;
 } dir_env_bind_print_arg_t;
+
+
+
+
 
 
 
@@ -11927,7 +12304,7 @@ static value_t *
 value_list_lastbefore(const value_t *list, const value_t *end)
 {   value_t *ptr = list;
 
-    while (NULL != ptr && ptr->link != end)
+    while (PTRVALID(ptr) && ptr->link != end)
         ptr = ptr->link;
 
     return ptr;
@@ -11954,14 +12331,14 @@ value_env_print_relative(outchar_t *out,
     {   value_env_t *envdir = (value_env_t *)value;
         dir_t *dir = value_env_dir(envdir);
 
-        if (NULL != dir->forall)
+        if (PTRVALID(dir->forall))
         {   value_t *unbound = envdir->unbound;
             value_t *found_root;
 
             pr.len += outchar_printf(out, "[");
             found_root = (*dir->forall)(dir, &value_env_bind_print, &pr);
 
-            while (NULL != unbound)
+            while (PTRVALID(unbound))
             {   if (pr.vals > 0)
                     pr.len += outchar_printf(out, ", ");
                 if (value_type_equal(unbound, type_string))
@@ -11974,10 +12351,10 @@ value_env_print_relative(outchar_t *out,
 
             pr.len += outchar_printf(out, "]");
             if (NULL == out_root_relative)
-            {   if (NULL != found_root)
+            {   if (PTRVALID(found_root))
                     pr.len += outchar_printf(out, ":root");
             } else
-                *out_root_relative = (NULL != found_root);
+                *out_root_relative = PTRVALID(found_root);
         }
     }
 
@@ -12006,7 +12383,7 @@ static void
 value_env_unlocal(const value_env_t *envdir)
 {   value_t *unbound = envdir->unbound;
 
-    while (NULL != unbound)
+    while (PTRVALID(unbound))
     {   value_unlocal(unbound);
         unbound = unbound->link;
     }
@@ -12023,7 +12400,7 @@ value_env_markver(const value_t *value, int heap_version)
 
     dir_stack_markver(&envdir->dirs.dir.value, heap_version);
 
-    while (NULL != unbound)
+    while (PTRVALID(unbound))
     {   value_mark_version(unbound, heap_version);
         unbound = unbound->link;
     }
@@ -12034,8 +12411,8 @@ value_env_markver(const value_t *value, int heap_version)
 
 
 static value_env_t *
-value_env_init(value_env_t *env, value_delete_fn_t *delete_fn)
-{   dir_stack_init(&env->dirs, &value_env_print, delete_fn, &value_env_markver);
+value_env_init(value_env_t *env, bool on_heap)
+{   dir_stack_init(&env->dirs, &type_dir_env_val, on_heap);
     env->unbound = NULL;
 
     return env;
@@ -12050,8 +12427,8 @@ extern value_env_t *
 value_env_new(void)
 {   value_env_t *envdir = (value_env_t *)FTL_MALLOC(sizeof(value_env_t));
 
-    if (NULL != envdir)
-        return value_env_init(envdir, &value_delete_alloced);
+    if (PTRVALID(envdir))
+        return value_env_init(envdir, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -12075,7 +12452,7 @@ extern value_env_t *
 value_env_copy(value_env_t *envdir_from)
 {   value_env_t *envdir_to = value_env_new();
 
-    if (NULL != envdir_to)
+    if (PTRVALID(envdir_to))
     {   dir_stack_copyinit(&envdir_to->dirs, &envdir_from->dirs);
         envdir_to->unbound = envdir_from->unbound;
     }
@@ -12090,7 +12467,7 @@ value_env_copy(value_env_t *envdir_from)
 
 extern void
 value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
-{   if (NULL != env)
+{   if (PTRVALID(env))
     {   OMIT(
             printf("%s: push onto stack %p %s ",
                    codeid(), &env->dirs,
@@ -12130,8 +12507,8 @@ value_env_newpushdir(dir_t *newdir, bool env_end, value_t *unbound)
 extern bool
 value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
 {   bool ok = TRUE;
-    if (NULL != env)
-    {   if (NULL != env->unbound)
+    if (PTRVALID(env))
+    {   if (PTRVALID(env->unbound))
             ok = FALSE; /* can't add to env with unbound variables */
         else
         {   dir_stack_push(&env->dirs, value_env_dir(newenv), env_end);
@@ -12151,11 +12528,17 @@ value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
  */
 extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
-{   if (NULL != name && env != NULL)
-    {   if (NULL != pos)
+{   if (PTRVALID(name) &&
+        PTRVALID(env))
+    {   if (PTRVALID(pos))
+        {   DEBUGVALLINK(DPRINTF("%p: push unbound at pos in %s\n",
+                                 &pos->link, value_type_name(pos)););
             pos->link = name;
+        }
         else
-        {   name->link = env->unbound;
+        {   DEBUGVALLINK(DPRINTF("%p: push unbound new in %s\n",
+                                 &name->link, value_type_name(name)););
+            name->link = env->unbound;
             env->unbound = name;
         }
         return name;
@@ -12170,7 +12553,7 @@ value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
 
 STATIC_INLINE value_t *
 value_env_unbound(value_env_t *env)
-{   if (NULL != env)
+{   if (PTRVALID(env))
     {   return env->unbound;
     } else
         return NULL;
@@ -12182,36 +12565,37 @@ value_env_unbound(value_env_t *env)
 
 
 
-/* return a envdir which has the first unbound variable set to value */
+/*! return a envdir which has the first unbound variable set to the given value
+ */
 extern value_t *
 value_env_bind(value_env_t *envdir, const value_t *value)
 {   value_t *newenvdirval = NULL;
     const value_t *unbound = envdir->unbound;
 
-    if (NULL != unbound)
-    {   newenvdirval = (value_t *)value_env_new();
-        if (NULL != newenvdirval)
+    if (PTRVALID(unbound))
+    {   value_env_t *newenvdir = value_env_new();
+        if (PTRVALID(newenvdir))
         {   dir_t *localbind = dir_id_new();
-            value_env_t *newenvdir = (value_env_t *)newenvdirval;
 
+            /* construct an environment with one fewer unbound names */
             newenvdir->unbound = unbound->link;
             newenvdir->dirs.stack = envdir->dirs.stack;
 
-            if (NULL != localbind)
+            if (PTRVALID(localbind))
             {   dir_set(localbind, unbound, value);
                 OMIT(DIR_SHOW("\n** pushing env: ", localbind);
                      DIR_SHOW("\n** onto env: ", value_env_dir(newenvdir));)
                 value_env_pushdir(newenvdir, localbind, /*env_end*/FALSE);
                 OMIT(DIR_SHOW("\n** result: ", value_env_dir(newenvdir));)
+                newenvdirval = value_env_value(newenvdir);
 
             } else
             {   /* will garbage collect localbind and envdir later */
                 value_unlocal(value_env_value(newenvdir));
-                newenvdir = NULL;
             }
         }
     }
-    value_unlocal(value);
+    value_unlocal(value);  // should be in the environment now
 
     return newenvdirval;
 }
@@ -12240,7 +12624,7 @@ value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
     if (*ref_baseenv == NULL)
         *ref_baseenv = plusenv;
 
-    else if (plusenv != NULL)
+    else if (PTRVALID(plusenv))
     {
         dir_t *env = value_env_dir(plusenv);
         dir_t *baseenv_env = value_env_dir(*ref_baseenv);
@@ -12254,7 +12638,8 @@ value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
         if (baseenv_env == NULL && baseenv_unbound == NULL)
             *ref_baseenv = value_env_copy(plusenv);
             /* nothing in the new environment! */
-        else if (unbound != NULL && baseenv_unbound != NULL) {
+        else if (PTRVALID(unbound) &&
+                 PTRVALID(baseenv_unbound)) {
             ok = FALSE; /* can't have unbound variables in both */
         } else {
             value_env_pushdir(*ref_baseenv, env, /*env_end*/FALSE);
@@ -12266,6 +12651,108 @@ value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
     return ok;
 }
 
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Directory Values                                                 *
+ *          ================                                                 *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+static void
+values_dir_init(void)
+{
+    type_id_t dir_type_id = type_id_new();
+
+    /* type_dir correspond to dir_id */
+    value_type_init(&type_dir_id_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, NULL /* &dir_parse */,
+                    &dir_compare, &dir_id_delete,
+                    &dir_id_markver);
+
+    value_type_init(&type_dir_vec_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_vec_print, /*&value_dir_parse*/NULL,
+                    &dir_compare, &dir_vec_delete,
+                    &dir_vec_markver);
+
+    value_type_init(&type_dir_dyn_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced/* never used? */,
+                    &dir_dyn_markver);
+
+    value_type_init(&type_dir_join_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &dir_join_delete,
+                    &dir_join_markver);
+
+    value_type_init(&type_dir_struct_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &dir_struct_delete,
+                    &dir_struct_markver);
+
+    value_type_init(&type_dir_dynseq_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_vec_print, /*&dir_parse*/NULL,
+                    &dir_compare, &dir_dynseq_delete,
+                    /*markver*/ NULL);
+
+    value_type_init(&type_dir_argvec_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced/* never used */,
+                    /*markver*/ NULL);
+
+    value_type_init(&type_dir_array_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &dir_array_delete, &dir_array_markver);
+
+    value_type_init(&type_dir_series_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_series_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced,
+                    /*markver*/ NULL);
+
+    value_type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced/* never used?*/,
+                    /*markver*/ NULL);
+
+#if 0
+    value_type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, /*&dir_sysenv_delete*/NULL,
+                    /*&dir_sysenv_markver*/NULL);
+#endif
+
+    value_type_init(&type_dir_lib_val, /*on_heap*/FALSE,
+                    dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &dir_lib_delete, &dir_lib_markver);
+
+#ifdef HAS_REGISTRY
+    value_type_init(&type_dir_regkeyval_val, /*on_heap*/FALSE,
+                    dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced,
+                    /*markver*/ NULL);
+#endif
+
+    value_type_init(&type_dir_stack_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &dir_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced,
+                    &dir_stack_markver);
+
+    value_type_init(&type_dir_env_val, /*on_heap*/FALSE, dir_type_id, "dir",
+                    &value_env_print, /*&dir_parse*/NULL,
+                    &dir_compare, &value_delete_alloced,
+                    &value_env_markver);
+}
 
 
 
@@ -12295,9 +12782,12 @@ struct value_closure_s
 
 
 
-
-
 #define value_closure_value(closure) (&(closure)->value)
+
+
+
+static value_type_t type_closure_val;
+type_t type_closure = &type_closure_val;
 
 
 
@@ -12307,7 +12797,7 @@ struct value_closure_s
 static void
 value_closure_markver(const value_t *value, int heap_version)
 {   value_closure_t *closure = (value_closure_t *)value;
-    value_mark_version((value_t *)closure->code, heap_version);
+    value_mark_version((value_t *)/*unconst*/closure->code, heap_version);
     value_mark_version(value_env_value(closure->env), heap_version);
 }
 
@@ -12340,7 +12830,7 @@ static int value_closure_print(outchar_t *out,
     value_closure_t *closure = (value_closure_t *)value;
 
     /*n = outchar_printf(out, "(");*/
-    if (NULL != closure->env)
+    if (PTRVALID(closure->env))
     {   bool relative_to_root = FALSE;
         n += value_env_print_relative(out, root, value_env_value(closure->env),
                                       &relative_to_root);
@@ -12354,7 +12844,7 @@ static int value_closure_print(outchar_t *out,
                 n += outchar_printf(out, "::");
         }
     }
-    if (NULL != closure->code)
+    if (PTRVALID(closure->code))
         n += value_print(out, root, closure->code);
     /*n += outchar_printf(out, ")");*/
 
@@ -12379,14 +12869,12 @@ value_closure_compare(const value_t *v1, const value_t *v2)
 
 
 static value_t *
-value_closure_init(value_closure_t *closure, const value_t *code,
-                   value_env_t *env, value_delete_fn_t *delete_fn)
+value_closure_init(value_closure_t *closure, type_t closure_type,
+                   const value_t *code, value_env_t *env, bool on_heap)
 {   value_t *initval;
     closure->code = code;
     closure->env = env;
-    initval = value_init(&closure->value, type_closure, &value_closure_print,
-                         &value_closure_compare, delete_fn,
-                         &value_closure_markver);
+    initval = value_init(&closure->value, closure_type, on_heap);
     value_unlocal(value_env_value(env));
     value_unlocal(code);
     return initval;
@@ -12400,24 +12888,26 @@ value_closure_init(value_closure_t *closure, const value_t *code,
 
 extern value_t *
 value_closure_new(const value_t *code, value_env_t *env)
-{   value_closure_t *closure = NULL;
+{   value_t *closureval = NULL;
 
     if (NULL == code || value_is_codebody(code))
-    {   closure = (value_closure_t *)FTL_MALLOC(sizeof(value_closure_t));
-        if (NULL != closure)
-            value_closure_init(closure, code, env, &value_closure_delete);
+    {   value_closure_t *closure = (value_closure_t *)
+                                   FTL_MALLOC(sizeof(value_closure_t));
+        if (PTRVALID(closure))
+            closureval = value_closure_init(closure, type_closure, code, env,
+                                            /*on_heap*/true);
     } else
     {   fprintf(stderr, "%s: closure code has wrong type - "
                  "type is %s, expected code or builtin\n",
                  codeid(), value_type_name(code));
     }
 
-    if (NULL == closure)
+    if (NULL == closureval)
     {   value_unlocal(code);
         value_env_unlocal(env);
-        return (value_t *)NULL;
-    } else
-        return value_closure_value(closure);
+    }
+    
+    return closureval;
 }
 
 
@@ -12444,10 +12934,10 @@ value_closure_copy(const value_t *oldclosureval)
 
         closure = (value_closure_t *)FTL_MALLOC(sizeof(value_closure_t));
 
-        if (NULL != closure)
-        {   value_closure_init(closure, /*code*/NULL,
+        if (PTRVALID(closure))
+        {   value_closure_init(closure, type_closure, /*code*/NULL,
                                value_env_copy(oldclosure->env),
-                               &value_closure_delete);
+                               /*on_heap*/TRUE);
         }
     }
     return closure==NULL? NULL: &closure->value;
@@ -12489,14 +12979,14 @@ value_closure_unbound(const value_t *value)
 extern bool
 value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end)
 {   bool ok = FALSE;
-    if (NULL != dir)
+    if (PTRVALID(dir))
     {   value_closure_t *closure = (value_closure_t *)value;
 
         ok = TRUE;
         if (NULL == closure->env)
             closure->env = value_env_new();
 
-        if (NULL != closure->env)
+        if (PTRVALID(closure->env))
             value_env_pushdir(closure->env, dir, env_end);
     }
     return ok;
@@ -12509,7 +12999,7 @@ value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end)
 extern bool
 value_closure_pushenv(const value_t *value, value_env_t *env, bool env_end)
 {   bool ok = FALSE;
-    if (NULL != env)
+    if (PTRVALID(env))
     {   value_closure_t *closure = (value_closure_t *)value;
 
         ok = TRUE;
@@ -12613,7 +13103,7 @@ value_closure_argcount(const value_t *closureval)
     if (value_closure_get(closureval, &code, &env, &unbound))
     {
         const value_t *nameval = unbound;
-        while (NULL != nameval) {
+        while (PTRVALID(nameval)) {
             n++;
             nameval = nameval->link;
         }
@@ -12634,6 +13124,21 @@ value_closure_argcount(const value_t *closureval)
 
 
 
+
+
+
+
+extern void
+values_closure_init(void)
+{
+    type_id_t closure_type_id = type_id_new();
+
+    value_type_init(&type_closure_val, /*on_heap*/FALSE,
+                    closure_type_id, "closure",
+                    &value_closure_print, /*&value_closure_parse*/NULL,
+                    &value_closure_compare, &value_closure_delete,
+                    &value_closure_markver);
+}
 
 
 
@@ -12721,11 +13226,13 @@ struct value_coroutine_s
     dir_t *opdefs;              /* operator definitions in force */
     suspend_fn_t *sleep;        /* function used to sleep for n ms */
     int errors;                 /* count of errors */
-    bool echo_cmds;             /* whether commands should be echoed */
+    FILE *echo_log;             /* the stream to use if commands to be echoed */
+    const char *echo_fmt;       /* the format to echo a line with */
     jmp_buf *catch_pos;         /* longjmp() dest for outer catch{} */
     const value_t *catch_arg;   /* argument to exception handler */
-} /* value_coroutine_t, parser_state_t */;
+} /* value_coroutine_t */;
 
+/* typedef value_coroutine_t parser_state_t; */
 
 
 
@@ -12735,12 +13242,18 @@ struct value_coroutine_s
 
 
 
+static value_type_t type_coroutine_val;
+type_t type_coroutine = &type_coroutine_val;
+
+
+
+
 
 static void
 value_coroutine_delete(value_t *value)
 {   parser_state_t *state = (parser_state_t *)value;
     /* close source down */
-    if (NULL != state)
+    if (PTRVALID(state))
         FTL_FREE(state);
 }
 
@@ -12751,9 +13264,9 @@ value_coroutine_delete(value_t *value)
 static void
 value_coroutine_markver(const value_t *value, int heap_version)
 {   parser_state_t *state = (parser_state_t *)value;
-    value_mark_version((value_t *)state->env, heap_version);
-    value_mark_version((value_t *)state->root, heap_version);
-    value_mark_version((value_t *)state->opdefs, heap_version);
+    value_mark_version(dir_stack_value(state->env), heap_version);
+    value_mark_version(dir_value(state->root), heap_version);
+    value_mark_version(dir_value(state->opdefs), heap_version);
 }
 
 
@@ -12790,7 +13303,7 @@ value_coroutine_print(outchar_t *out,
 {   int outlen=0;
     if (value_istype(value, type_coroutine))
     {   parser_state_t *state = (parser_state_t *)value;
-        outlen += outchar_printf(out, "coroutine.{in=%s:%d}",
+        outlen += outchar_printf(out, "$coroutine.{in=%s:%d}",
                                  parser_source(state), parser_lineno(state));
         /*outlen += value_print(out, root, dir_stack_value(state->env));
           outlen += outchar_putc(out, '}');*/
@@ -12803,23 +13316,25 @@ value_coroutine_print(outchar_t *out,
 
 
 
-static void
-value_coroutine_init(parser_state_t *state, value_delete_fn_t *delete_fn,
-                     dir_stack_t *env, dir_t *root, dir_t *opdefs)
-{   value_init(&state->value, type_coroutine, &value_coroutine_print,
-               /*compare*/NULL, delete_fn, &value_coroutine_markver);
+static const value_t *
+value_coroutine_init(parser_state_t *state, dir_stack_t *env, dir_t *root,
+                     dir_t *opdefs, bool on_heap)
+{   const value_t *val =
+        value_init(&state->value, type_coroutine, on_heap);
     linesource_init(&state->source);
     state->env = env;
-    state->echo_cmds = FALSE;
+    state->echo_log = NULL;
+    state->echo_fmt = NULL;
     state->root = root;
     state->opdefs = opdefs;
     state->sleep = &sleep_ms;
     state->errors = 0;
     state->catch_pos = NULL;  /* no outer exception */
     state->catch_arg = NULL;
-    parser_env_push(state, root, /*env_end*/FALSE);
+    parser_env_push(state, root, /*outer_visible*/FALSE);
     value_unlocal(dir_value(root));
     value_unlocal(dir_stack_value(env));
+    return val;
 }
 
 
@@ -12831,11 +13346,33 @@ extern value_coroutine_t *
 value_coroutine_new(dir_t *root, dir_stack_t *env, dir_t *opdefs)
 {   parser_state_t *state = (parser_state_t *)
                             FTL_MALLOC(sizeof(parser_state_t));
-    if (NULL != state)
-        value_coroutine_init(state, &value_coroutine_delete,
-                             env, root, opdefs);
+    if (PTRVALID(state))
+        value_coroutine_init(state, env, root, opdefs, /*on_heap*/TRUE);
     return state;
 }
+
+
+
+
+
+
+
+extern void
+values_coroutine_init(void)
+{
+    type_id_t coroutine_type_id = type_id_new();
+
+    value_type_init(&type_coroutine_val, /*on_heap*/FALSE,
+                    coroutine_type_id, "coroutine",
+                    &value_coroutine_print,
+                    /*&value_closure_parse*/NULL,
+                    /*&value_coroutine_compare*/NULL,
+                    &value_coroutine_delete,
+                    &value_coroutine_markver);
+}
+
+
+
 
 
 
@@ -12929,15 +13466,15 @@ parser_builtin_arg(parser_state_t *parser_state, int argno)
 
 
 extern dir_stack_pos_t
-parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool env_end)
-{   return dir_stack_push((parser_state)->env, newdir, env_end);
+parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool outer_visible)
+{   return dir_stack_push((parser_state)->env, newdir, outer_visible);
 }
 
 
 extern bool /* ok */
 parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
-                       dir_t *newdir, bool env_end)
-{   return dir_stack_push_at_pos(pos, newdir, env_end);
+                       dir_t *newdir, bool outer_visible)
+{   return dir_stack_push_at_pos(pos, newdir, outer_visible);
 }
 
 
@@ -12954,14 +13491,21 @@ parser_env_calling_pos(const parser_state_t *parser_state)
 
 
 extern bool
-parser_echo(const parser_state_t *parser_state)
-{   return (parser_state)->echo_cmds;
+parser_echoto(const parser_state_t *parser_state,
+              FILE **out_log, const char **out_fmt)
+{   if (PTRVALID(out_log))
+        *out_log = parser_state->echo_log;
+    if (PTRVALID(out_fmt))
+        *out_fmt = parser_state->echo_fmt;
+    return PTRVALID(parser_state->echo_log);
 }
 
 
 extern void
-parser_echo_set(parser_state_t *parser_state, bool on)
-{   (parser_state)->echo_cmds = on;
+parser_echo_setlog(parser_state_t *parser_state,
+                   FILE *log, const char *echo_fmt)
+{   parser_state->echo_log = log;
+    parser_state->echo_fmt = echo_fmt;
 }
 
 extern suspend_fn_t *
@@ -13000,7 +13544,7 @@ charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
 extern int
 charsink_parser_value_print(charsink_t *sink, parser_state_t *parser_state,
                             const value_t *val)
-{   if (NULL != sink)
+{   if (PTRVALID(sink))
         return value_print(sink, dir_value(parser_root(parser_state)), val);
     else
         return value_fprint(stderr, dir_value(parser_root(parser_state)), val);
@@ -13056,7 +13600,7 @@ parser_error_longstring(parser_state_t *state, const char *line,
             else
                 parser_report_line(/*state*/NULL/*no pos*/, "%.*s%s\n",
                                    p-line, line, n==1?"...":"");
-        } while (--n > 0 && p != NULL);
+        } while (--n > 0 && PTRVALID(p));
     }
 }
 
@@ -13126,14 +13670,16 @@ static const char *
 parser_help_text(const value_t *cmd)
 {   if (cmd == NULL)
         return NULL;
-    else switch (value_type(cmd))
-    {   case type_cmd:
+    else {
+        type_t val_type = value_type(cmd);
+
+        if (type_equal(val_type, type_cmd))
             return value_cmd_help(cmd);
 
-        case type_func:
+        else if (type_equal(val_type, type_func))
             return value_func_help(cmd);
 
-        case type_closure:
+        else if (type_equal(val_type, type_closure))
         {   const value_t *code;
             dir_t *env;
             const value_t *helpval;
@@ -13149,8 +13695,7 @@ parser_help_text(const value_t *cmd)
             } else
                 return NULL;
         }
-
-        default:
+        else
             return NULL;
     }
 }
@@ -13199,7 +13744,7 @@ parser_restore(parser_state_t *parser_state,
 
 extern bool
 parser_throw(parser_state_t *parser_state, const value_t *exception)
-{   bool ok = (parser_state->catch_pos != NULL);
+{   bool ok = (PTRVALID(parser_state->catch_pos));
 
     if (ok) {
         parser_state->catch_arg = exception;
@@ -13259,7 +13804,7 @@ extern const value_t *
 parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok)
 {
     return parser_catch_call(state, &parser_call_invoke, (void *)code, out_ok);
-}    
+}
 
 
 
@@ -13478,7 +14023,7 @@ parse_ending(const char **ref_line, const char *key)
 {   const char *line = *ref_line;
     const char *end = strstr(line, key);
 
-    if (end != NULL)
+    if (PTRVALID(end))
     {
         *ref_line = end;
         return TRUE;
@@ -14135,12 +14680,12 @@ static opassoc_def_t op_assoc_info[] =
 
 
 
-typedef int op_prec_t; /*< smaller values bind more tightly than larger ones */
+typedef int op_prec_t; /**< smaller values bind more tightly than larger ones */
 
 
 typedef struct
-{   const value_t *fn;  /*< equivalent functional form */
-    op_assoc_t assoc;   /*< associativity */
+{   const value_t *fn;  /**< equivalent functional form */
+    op_assoc_t assoc;   /**< associativity */
 } operator_t;
 
 
@@ -14487,12 +15032,17 @@ struct value_cmd_s
 
 
 
+static value_type_t type_cmd_val;
+type_t type_cmd = &type_cmd_val;
+
+
+
 
 static int
 value_cmd_print(outchar_t *out, const value_t *root, const value_t *value)
 {   int n = 0;
     (void)root;
-    if (value != NULL && value_istype(value, type_cmd))
+    if (PTRVALID(value) && value_istype(value, type_cmd))
     {   value_cmd_t *cmd = (value_cmd_t *)value;
         n += outchar_printf(out, "<cmd:%p,1>", cmd->exec);
     }
@@ -14507,7 +15057,7 @@ static void
 value_cmd_markver(const value_t *value, int heap_version)
 {   value_cmd_t *cmd = (value_cmd_t *)value;
     if (NULL != cmd->fn_exec)
-        value_mark_version((value_t *)cmd->fn_exec, heap_version);
+        value_mark_version((value_t *)/*unconst*/cmd->fn_exec, heap_version);
 }
 
 
@@ -14516,13 +15066,12 @@ value_cmd_markver(const value_t *value, int heap_version)
 
 STATIC_INLINE value_t *
 value_cmd_init(value_cmd_t *cmd, cmd_fn_t *exec, const value_t *fn_exec,
-               const char *help,  value_delete_fn_t *delete_fn)
+               const char *help,  bool on_heap)
 {   value_t *initval;
     cmd->exec = exec;
     cmd->help = help;
     cmd->fn_exec = fn_exec;
-    initval = value_init(&cmd->value, type_cmd, &value_cmd_print,
-                         /*compare*/NULL, delete_fn, &value_cmd_markver);
+    initval = value_init(&cmd->value, type_cmd, on_heap);
     value_unlocal(fn_exec);
     return initval;
 }
@@ -14533,7 +15082,7 @@ value_cmd_init(value_cmd_t *cmd, cmd_fn_t *exec, const value_t *fn_exec,
 
 static void
 value_cmd_delete(value_t *value)
-{   if (value != NULL)
+{   if (PTRVALID(value))
     {   if (value_istype(value, type_cmd))
         {   value_cmd_t *cmd = (value_cmd_t *)value;
             FTL_FREE(cmd);
@@ -14551,7 +15100,7 @@ value_cmd_new(cmd_fn_t *exec, const value_t *fn_exec, const char *help)
 {   value_cmd_t *cmd = (value_cmd_t *)FTL_MALLOC(sizeof(value_cmd_t));
 
     if (NULL != cmd)
-        return value_cmd_init(cmd, exec, fn_exec, help, &value_cmd_delete);
+        return value_cmd_init(cmd, exec, fn_exec, help, /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -14580,6 +15129,20 @@ value_cmd_help(const value_t *cmdval)
             return cmdhelp;
     } else
         return NULL;
+}
+
+
+
+
+static void
+values_cmd_init(void)
+{
+    type_id_t cmd_type_id = type_id_new();
+
+    value_type_init(&type_cmd_val, /*on_heap*/FALSE, cmd_type_id, "cmd",
+                    &value_cmd_print, /*&value_cmd_parse*/NULL,
+                    /*&value_cmd_compare*/NULL, &value_cmd_delete,
+                    &value_cmd_markver);
 }
 
 
@@ -14616,6 +15179,12 @@ struct value_func_s
 
 
 
+static value_type_t type_func_val;
+type_t type_func = &type_func_val;
+
+
+
+
 STATIC_INLINE func_fn_t *
 value_func_exec(value_func_t *func)
 {   return func->exec;
@@ -14640,7 +15209,7 @@ static int
 value_func_print(outchar_t *out, const value_t *root, const value_t *value)
 {   int n = 0;
     (void)root;
-    if (value != NULL && value_istype(value, type_func))
+    if (PTRVALID(value) && value_istype(value, type_func))
     {   value_func_t *func = (value_func_t *)value;
         n += outchar_printf(out, "<func:%p,%d>", func->exec, func->args);
     }
@@ -14652,14 +15221,14 @@ value_func_print(outchar_t *out, const value_t *root, const value_t *value)
 
 
 STATIC_INLINE value_t *
-value_func_init(value_func_t *func, func_fn_t *exec, const char *help,
-                int args, void *implicit, value_delete_fn_t *delete_fn)
+value_func_init(value_func_t *func, type_t func_type,
+                func_fn_t *exec, const char *help,
+                int args, void *implicit, bool on_heap)
 {   func->exec = exec;
     func->help = help;
     func->args = args;
     func->implicit = implicit;
-    return value_init(&func->value, type_func, &value_func_print,
-                      /*compare*/NULL, delete_fn, /*mark*/NULL);
+    return value_init(&func->value, func_type, on_heap);
 }
 
 
@@ -14668,7 +15237,7 @@ value_func_init(value_func_t *func, func_fn_t *exec, const char *help,
 
 static void
 value_func_delete(value_t *value)
-{   if (value != NULL)
+{   if (PTRVALID(value))
     {   if (value_istype(value, type_func))
         {   value_func_t *func = (value_func_t *)value;
             FTL_FREE(func);
@@ -14686,8 +15255,8 @@ value_func_new(func_fn_t *exec, const char *help, int args, void *implicit)
 {   value_func_t *func = (value_func_t *)FTL_MALLOC(sizeof(value_func_t));
 
     if (NULL != func)
-        return value_func_init(func, exec, help, args, implicit,
-                               &value_func_delete);
+        return value_func_init(func, &type_func_val, exec, help, args, implicit,
+                               /*on_heap*/TRUE);
     else
         return NULL;
 }
@@ -14723,8 +15292,6 @@ value_func_implicit(const value_t *func)
 
 
 
-
-
 /*****************************************************************************
  *                                                                           *
  *          LHV Function Values                                              *
@@ -14745,13 +15312,17 @@ struct value_func_lhv_s
 
 
 
+static value_type_t type_func_lhv_val; // type implementation
+
+
+
 
 
 static int
 value_func_lhv_print(outchar_t *out, const value_t *root, const value_t *value)
 {   int n = 0;
     (void)root;
-    if (value != NULL && value_istype(value, type_func))
+    if (PTRVALID(value) && value_istype(value, type_func))
     {   value_func_lhv_t *lhv_func = (value_func_lhv_t *)value;
         /*value_func_t *func = &lhv_func->fn;*/
         n += outchar_printf(out, "{");
@@ -14769,7 +15340,7 @@ value_func_lhv_print(outchar_t *out, const value_t *root, const value_t *value)
 static void
 value_func_lhv_markver(const value_t *value, int heap_version)
 {   value_func_lhv_t *func = (value_func_lhv_t *)value;
-    value_mark_version((value_t *)func->lv_name, heap_version);
+    value_mark_version((value_t *)/*unconst*/func->lv_name, heap_version);
 }
 
 
@@ -14814,15 +15385,14 @@ fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
 
 
 STATIC_INLINE value_t *
-value_func_lhv_init(value_func_lhv_t *func, value_delete_fn_t *delete_fn,
-                    const value_t *lv_name)
+value_func_lhv_init(value_func_lhv_t *func, const value_t *lv_name,
+                    bool on_heap)
 {   value_t *initval;
     func->lv_name = lv_name;
     func->fn.exec = &fn_lhv_setval;
     func->fn.help = "- assign value to name";
     func->fn.args = 1;
-    initval = value_init(&func->fn.value, type_func, &value_func_lhv_print,
-                         /*compare*/NULL, delete_fn, &value_func_lhv_markver);
+    initval = value_init(&func->fn.value, &type_func_lhv_val, on_heap);
     value_unlocal(lv_name);
     return initval;
 }
@@ -14836,9 +15406,43 @@ value_func_lhv_new(const value_t *lv_name)
                              FTL_MALLOC(sizeof(value_func_lhv_t));
 
     if (NULL != func)
-        return value_func_lhv_init(func, &value_func_delete, lv_name);
+        return value_func_lhv_init(func, lv_name, /*on_heap*/TRUE);
     else
         return NULL;
+}
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Function Values                                                  *
+ *          ===============                                                  *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+static void
+values_func_init(void)
+{
+    type_id_t func_type_id = type_id_new();
+
+    value_type_init(&type_func_val, /*on_heap*/FALSE, func_type_id, "fn",
+                    &value_func_print, /*&value_func_parse*/NULL,
+                    /*&value_func_compare*/NULL, &value_func_delete,
+                    /*&value_func_markver*/NULL);
+
+    value_type_init(&type_func_lhv_val, /*on_heap*/FALSE, func_type_id, "fn",
+                    &value_func_lhv_print,
+                    /*&value_func_parse*/NULL,
+                    /*&value_func_lhv_compare*/NULL,
+                    &value_func_delete,
+                    &value_func_lhv_markver);
 }
 
 
@@ -14850,12 +15454,16 @@ value_func_lhv_new(const value_t *lv_name)
 
 /*****************************************************************************
  *                                                                           *
- *          Memory                                                           *
- *          ======                                                           *
+ *          Memory (generic)                                                 *
+ *          ================                                                 *
  *                                                                           *
  *****************************************************************************/
 
 
+
+
+
+/* structure defining struct value_mem_s is in the header ftl_internal.h */
 
 
 
@@ -14865,7 +15473,7 @@ static int
 value_mem_print(outchar_t *out, const value_t *root, const value_t *value)
 {   int n = 0;
     (void)root;
-    if (value != NULL && value_istype(value, type_mem))
+    if (PTRVALID(value) && value_istype(value, type_mem))
     {   n += outchar_printf(out, "<:memory:>");
     }
     return n;
@@ -14875,46 +15483,22 @@ value_mem_print(outchar_t *out, const value_t *root, const value_t *value)
 
 
 
-#if 0
-static void
-value_mem_markver(const value_t *value, int heap_version)
-{
-    value_mem_t *mem = (value_mem_t *)value;
-    value_mark_version((value_t *)mem->field, heap_version);
-}
-#endif
-
-
-
-
 extern value_t *
-value_mem_init(value_mem_t *mem, value_delete_fn_t *delete_fn,
-               value_markver_fn_t *mark_version_fn,
+value_mem_init(value_mem_t *mem, type_t mem_subtype,
                mem_read_fn_t *read_fn, mem_write_fn_t *write_fn,
-               mem_len_able_fn_t *len_able_fn, mem_len_able_fn_t *base_able_fn)
+               mem_len_able_fn_t *len_able_fn, mem_len_able_fn_t *base_able_fn,
+               bool on_heap)
 {   value_t *initval;
     mem->read = read_fn;
     mem->write = write_fn;
     mem->len_able = len_able_fn;
     mem->base_able = base_able_fn;
-    initval = value_init(&mem->value, type_mem, &value_mem_print,
-                         /*compare*/NULL, delete_fn, mark_version_fn);
+    initval = value_init(&mem->value, mem_subtype, on_heap);
     return initval;
 }
 
 
 
-
-#if 0
-extern value_t *value_mem_new(const value_t *lv_name)
-{   value_mem_t *mem = (value_mem_t *)FTL_MALLOC(sizeof(value_mem_t));
-
-    if (NULL != func)
-        return value_mem_init(func, &value_delete_alloced, lv_name);
-    else
-        return NULL;
-}
-#endif
 
 
 
@@ -14944,11 +15528,20 @@ struct value_mem_bin_s {
 
 
 
+static value_type_t type_mem_val;
+type_t type_mem = &type_mem_val;
+
+static value_type_t type_mem_shared_val;
+
+
+
+
+
 static void
 value_mem_bin_markver(const value_t *value, int heap_version)
 {
     value_mem_bin_t *binmem = (value_mem_bin_t *)value;
-    value_mark_version((value_t *)binmem->binstr, heap_version);
+    value_mark_version((value_t *)/*unconst*/binmem->binstr, heap_version);
 }
 
 
@@ -15117,18 +15710,16 @@ value_mem_bin_new(const value_t *binstr, number_t base,
 {   value_mem_bin_t *binmem = (value_mem_bin_t *)
                               FTL_MALLOC(sizeof(value_mem_bin_t));
 
-    if (binmem != NULL) {
+    if (PTRVALID(binmem)) {
         binmem->binstr = binstr;
         binmem->base = base;
         return value_mem_init(&binmem->mem,
-                              sole_user? &value_mem_bin_delete:
-                                         &value_delete_alloced,
-                              &value_mem_bin_markver,
+                              sole_user? &type_mem_val: &type_mem_shared_val,
                               &value_mem_bin_read,
                               readonly? NULL: &value_mem_bin_write,
                               readonly? &value_mem_bin_len_able_ro:
                                         &value_mem_bin_len_able_rw,
-                              &value_mem_bin_base_able);
+                              &value_mem_bin_base_able, /*on_heap*/TRUE);
     } else
         return NULL;
 }
@@ -15146,7 +15737,7 @@ value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
 
     *out_block = NULL;
 
-    if (binmem != NULL) {
+    if (PTRVALID(binmem)) {
         value_t *binstr = value_string_alloc_new(len, out_block);
         OMIT(printf("%s: binstr %p out_block %p\n", codeid(),
                       binstr, out_block););
@@ -15158,13 +15749,12 @@ value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
             if (memset_val != EOF)
                 memset(*out_block, memset_val, len);
             val = value_mem_init(&binmem->mem,
-                                 &value_delete_alloced,
-                                 /*&value_mem_bin_delete - if sole user,*/
-                                 &value_mem_bin_markver,
+                                 &type_mem_shared_val
+                                 /*&type_mem - if sole user*/,
                                  &value_mem_bin_read,
                                  &value_mem_bin_write,
                                  &value_mem_bin_len_able_rw,
-                                 &value_mem_bin_base_able);
+                                 &value_mem_bin_base_able, /*on_heap*/TRUE);
         }
     }
     return val;
@@ -15195,13 +15785,23 @@ struct value_mem_rebase_s {
 };
 
 
+#define value_mem_rebase_value(_rmem) (value_mem_value(&(_rmem)->mem))
+
+
+
+static value_type_t type_mem_rebase_val; // implementation type for rebased mem
+static value_type_t type_mem_rebase_shared_val; // " for shared rebased mem
+
+
 
 
 static void
 value_mem_rebase_markver(const value_t *value, int heap_version)
 {
     value_mem_rebase_t *rbmem = (value_mem_rebase_t *)value;
-    value_mark_version((value_t *)rbmem->unbase_mem, heap_version);
+    value_mark_version(
+        value_mem_value((value_mem_t *)/*unconst*/rbmem->unbase_mem),
+        heap_version);
 }
 
 
@@ -15226,7 +15826,7 @@ value_mem_rebase_read(const value_mem_t *mem, size_t byte_index,
     mem_read_fn_t *read_fn = mem->read;
     bool ok = false;
 
-    if (read_fn != NULL)
+    if (PTRVALID(read_fn))
         ok = (*read_fn)(rbmem->unbase_mem, byte_index - (size_t)rbmem->base,
                         buf, buflen, force_volatile);
 
@@ -15280,7 +15880,8 @@ value_mem_rebase_base_able(const value_mem_t *mem, size_t byte_index,
     mem_base_able_fn_t *base_able_fn = mem->base_able;
 
     if (base_able_fn != NULL)
-        base = (*base_able_fn)(rbmem->unbase_mem, byte_index - (size_t)rbmem->base,
+        base = (*base_able_fn)(rbmem->unbase_mem,
+                               byte_index - (size_t)rbmem->base,
                                unable, ability);
 
     return base;
@@ -15305,19 +15906,62 @@ value_mem_rebase_new(const value_t *unbase_mem_val,
             /* we won't update unbase_mem unless readonly is false */
             rbmem->base = base;
             newmem = value_mem_init(&rbmem->mem,
-                                    sole_user? &value_mem_rebase_delete:
-                                               &value_delete_alloced,
-                                    &value_mem_rebase_markver,
+                                    sole_user? &type_mem_rebase_val:
+                                               &type_mem_rebase_shared_val,
                                     &value_mem_rebase_read,
                                     readonly? NULL: &value_mem_rebase_write,
                                     &value_mem_rebase_len_able,
-                                    &value_mem_rebase_base_able);
+                                    &value_mem_rebase_base_able,
+                                    /*on_heap*/TRUE);
         }
     }
     return newmem;
 }
 
 
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Mem Values                                                       *
+ *          ==========                                                       *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+static void
+values_mem_init(void)
+{
+    type_id_t mem_type_id = type_id_new();
+
+    value_type_init(&type_mem_val, /*on_heap*/FALSE, mem_type_id, "mem",
+                    &value_mem_print, /*&value_mem_parse*/NULL,
+                    /*&value_mem_compare*/NULL, &value_mem_bin_delete,
+                    &value_mem_bin_markver);
+
+    value_type_init(&type_mem_shared_val, /*on_heap*/FALSE, mem_type_id, "mem",
+                    &value_mem_print, /*&value_mem_parse*/NULL,
+                    /*&value_mem_compare*/NULL, &value_delete_alloced,
+                    &value_mem_bin_markver);
+
+    value_type_init(&type_mem_rebase_val, /*on_heap*/FALSE, mem_type_id, "mem",
+                    &value_mem_print, /*&value_mem_parse*/NULL,
+                    /*&value_mem_compare*/NULL, &value_mem_rebase_delete,
+                    &value_mem_rebase_markver);
+
+    value_type_init(&type_mem_rebase_shared_val, /*on_heap*/FALSE,
+                    mem_type_id, "mem",
+                    &value_mem_print, /*&value_mem_parse*/NULL,
+                    /*&value_mem_compare*/NULL, &value_delete_alloced,
+                    &value_mem_rebase_markver);
+}
 
 
 
@@ -15614,17 +16258,16 @@ const value_t *value_false = &value_int_false.value;
 
 
 static value_t *
-value_bool_init(value_int_t *no, bool val, value_delete_fn_t *delete_fn)
+value_bool_init(value_int_t *no, bool val, bool on_heap)
 {   no->number = (number_t)val;
-    return value_init(&no->value, type_int, &value_int_print,
-                      &value_int_compare, delete_fn, /*mark*/NULL);
+    return value_init(&no->value, &type_int, on_heap);
 }
 
 
 static void
 values_bool_init(void)
-{   value_bool_init(&value_int_true,  TRUE, /* delete */NULL);
-    value_bool_init(&value_int_false, FALSE, /* delete */NULL);
+{   value_bool_init(&value_int_true,  TRUE,  /*on_heap*/FALSE);
+    value_bool_init(&value_int_false, FALSE, /*on_heap*/FALSE);
 }
 
 
@@ -15632,6 +16275,8 @@ values_bool_init(void)
 #else
 
 
+static value_type_t    type_bool_val;
+type_t                 type_bool = &type_bool_val;
 
 static value_func_t    value_func_true;
 static value_env_t     value_argenv_true;
@@ -15682,16 +16327,13 @@ value_bool_init(value_closure_t *closure, value_func_t *boolfunc,
     value_t *bval;
     value_t *bhelpstr;
 
-    bfnval = value_func_init(boolfunc, boolfn, help, 1,
-                             /*implicit*/NULL, /*delete*/NULL);
-    (void)value_env_init(boolargenv, /*delete*/NULL);
-    bval = value_closure_init(closure, bfnval, boolargenv,
-                               /*delete*/NULL);
+    bfnval = value_func_init(boolfunc, &type_func_val, boolfn, help, 1,
+                             /*implicit*/FALSE, /*on_heap*/FALSE);
+    (void)value_env_init(boolargenv, /*on_heap*/FALSE);
+    bval = value_closure_init(closure, &type_bool_val,
+                              bfnval, boolargenv, /*on_heap*/FALSE);
     bhelpstr = value_cstring_init(boolhelpstr, help, strlen(help),
-                                  /*delete*/NULL);
-
-    bval->print = &value_bool_print;
-    bval->compare = &value_bool_cmp;
+                                  /*on_heap*/FALSE);
 
     value_mod_cmd_create(bhelpstr, bval, 1);
 
@@ -15737,6 +16379,15 @@ fn_false(const value_t *this_fn, parser_state_t *state)
 static void
 values_bool_init(void)
 {
+    type_id_t closure_type_id = type_closure->id;
+
+    /* bool is a varient of the "fn" type */
+    value_type_init(&type_bool_val, /*on_heap*/FALSE,
+                    closure_type_id, "closure",
+                    &value_bool_print, /*&value_closure_parse*/NULL,
+                    &value_bool_cmp, &value_closure_delete,
+                    &value_closure_markver);
+
     value_bool_init(&value_closure_true, &value_func_true,
                     &value_argenv_true, &value_helpstr_true,
                     &fn_true,  "TRUE value");
@@ -15804,6 +16455,9 @@ extern bool
 parse_index_expr(const char **ref_line, parser_state_t *state,
                  const value_t **out_val);
 
+extern bool
+parse_indexname_expr(const char **ref_line, parser_state_t *state,
+                     const value_t **out_val);
 
 
 
@@ -15832,8 +16486,11 @@ STATIC_INLINE bool parse_pling(const char **ref_line)
 
 
 
-
-/* If successful this function returns a value_t in out_val which is
+/*! Parse the body of a environment value (following the initial '[')
+ *
+ * parses: [<indexname>=<substitution>,]* [<indexname>,]* ']'
+ *
+ * If successful this function returns a value_t in out_val which is
  * constructed from a value_env_t.
  *
  * This function may cause a garbage collection
@@ -15841,17 +16498,16 @@ STATIC_INLINE bool parse_pling(const char **ref_line)
 /**/extern bool
 parse_env(const char **ref_line, parser_state_t *state,
           const value_t **out_val)
-{   /* after '[': [<index>=<substitution>,]* [<index>,]* ']' */
-    bool ok = FALSE;
+{   bool ok = FALSE;
     value_env_t *env = NULL;
     const value_t *index = NULL;
     bool unbound = FALSE;
 
-    DEBUGTRACE(DPRINTF("env: %s\n", *ref_line);)
+    DEBUGTRACE(DPRINTF("(env: '%s'\n", *ref_line);)
     parse_space(ref_line);
 
     ok = TRUE;
-    if (parse_index_expr(ref_line, state, &index) &&
+    if (parse_indexname_expr(ref_line, state, &index) &&
         parse_space(ref_line))
     {   const value_t *val = NULL;
         value_t *pos = NULL; /* end of unbound variable list! */
@@ -15874,10 +16530,10 @@ parse_env(const char **ref_line, parser_state_t *state,
                 unbound = TRUE;
         } while (ok && !unbound &&
                  parse_key(ref_line, ",") && parse_space(ref_line) &&
-                 parse_index_expr(ref_line, state, &index) &&
+                 parse_indexname_expr(ref_line, state, &index) &&
                  parse_space(ref_line));
 
-        OMIT(DPRINTF("env %sunbound%s: %s\n",
+        OMIT(DPRINTF("env %sunbound%s: '%s'\n",
                        ok? "":"(FAIL) ",unbound?"":" (NONE)", *ref_line););
 
         if (ok && unbound)
@@ -15887,7 +16543,7 @@ parse_env(const char **ref_line, parser_state_t *state,
                 pos = value_env_pushunbound((value_env_t *)env,
                                              pos, (value_t *)index);
             } while (parse_key(ref_line, ",") && parse_space(ref_line) &&
-                     (ok = parse_index_expr(ref_line, state, &index)) &&
+                     (ok = parse_indexname_expr(ref_line, state, &index)) &&
                      parse_space(ref_line));
         }
     }
@@ -15896,6 +16552,9 @@ parse_env(const char **ref_line, parser_state_t *state,
             env = value_env_new();  /* empty environment */
         *out_val = (const value_t *)env;
     }
+
+    DEBUGTRACE(DPRINTF(")env %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+
     return ok;
 }
 
@@ -15923,6 +16582,8 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
     bool first = TRUE;
     bool series_possible = TRUE;
 
+    DEBUGTRACE(DPRINTF("(vecarg: '%s'\n", *ref_line);)
+        
     vectmp[0] = NULL;
     vectmp[1] = NULL;
 
@@ -15981,7 +16642,7 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
     if (ok)
     {   if (series)
         {   const value_t *final = NULL;
-            DEBUGSERIES(DPRINTF("up to: %s\n", *ref_line);)
+            DEBUGSERIES(DPRINTF("up to: '%s'\n", *ref_line);)
             if (!parse_empty(ref_line) && *ref_line[0] != '>')
                 ok = (*expr_fn)(ref_line, state, &final);
             if (ok)
@@ -16001,6 +16662,14 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
             *out_val = dir_value(vec);
         }
     }
+    DEBUGTRACE(
+        DPRINTF(")vecarg %s: '%s'", ok?"OK":"FAIL", *ref_line);
+        if (ok) {
+            DPRINTF(" = ");
+            parser_value_print(state, *out_val);
+        }
+        DPRINTF("\n");
+    )
     return ok;
 }
 
@@ -16009,14 +16678,69 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
 
 
 
+#define DEBUG_PARSE_INDEXNAME OMIT
 
-/* This function may cause a garbage collection */
+/* Parse an <indexname> ::= <int> | <string> | <id>
+ * This function may cause a garbage collection
+ */
+static bool
+parse_indexname(const char **ref_line, parser_state_t *state,
+                  const value_t **out_val)
+{   bool ok = FALSE;
+    const char *line = *ref_line;
+    number_t n;
+    
+    DEBUGTRACE(DPRINTF("(indexname: '%s'\n", *ref_line);)
+
+    if (parse_int_val(&line, &n))
+    {   *out_val = value_int_new(n);
+        DEBUG_PARSE_INDEXNAME(printf("%s: parsed int %ld\n", codeid(), n);)
+        ok = TRUE;
+    } else
+    {   char id[FTL_ID_MAX];
+        size_t id_filled = 0;
+        if (parse_string(&line, &id[0], sizeof(id), &id_filled))
+        {   DEBUG_PARSE_INDEXNAME(printf("%s: parsed string '%s'\n", codeid(),
+                                         &id[0]);)
+            *out_val = value_string_new(&id[0], id_filled);
+            ok = TRUE;
+        } else if (parse_id(&line, &id[0], sizeof(id)) && parse_space(ref_line))
+        {   *out_val = value_string_new_measured(&id[0]);
+            DEBUG_PARSE_INDEXNAME(printf("%s: parsed ID %s\n", codeid(),
+                                         &id[0]);)
+            ok = TRUE;
+        }
+    }
+    if (ok)
+    {
+        *ref_line = line;
+    }
+
+    DEBUGTRACE(
+        DPRINTF(")indexname %s: '%s'", ok?"OK":"FAIL", *ref_line);
+        if (ok) {
+            DPRINTF(" = ");
+            parser_value_print(state, *out_val);
+        }
+        DPRINTF("\n");
+    )
+
+    return ok;
+}
+
+
+
+
+/* Parse an <index> ::= [<env>] | '<' <vecarg> '>' | <indexname>
+ * This function may cause a garbage collection
+ */
 static bool
 parse_index(const char **ref_line, parser_state_t *state,
             const value_t **out_val)
 {   bool ok = FALSE;
     const char *line = *ref_line;
-    number_t n;
+    
+    DEBUGTRACE(DPRINTF("(index: '%s'\n", *ref_line);)
 
     if (parse_key(&line, "["))
     {   ok = parse_env(&line, state, out_val) &&
@@ -16026,29 +16750,24 @@ parse_index(const char **ref_line, parser_state_t *state,
     {   ok = parse_vecarg(&line, state, ",", out_val) &&
              parse_key_always(&line, state, ">") && parse_space(&line);
     } else
-    if (parse_int_val(&line, &n))
-    {   *out_val = value_int_new(n);
-        OMIT(printf("%s: parsed int %ld\n", codeid(), n);)
-        ok = TRUE;
-    } else
-    {   char id[FTL_ID_MAX];
-        size_t id_filled = 0;
-        if (parse_string(&line, &id[0], sizeof(id), &id_filled))
-        {   OMIT(printf("%s: parsed string '%s'\n", codeid(), &id[0]);)
-            *out_val = value_string_new(&id[0], id_filled);
-            ok = TRUE;
-        } else
-        {   if (parse_id(&line, &id[0], sizeof(id)) && parse_space(ref_line))
-            {   *out_val = value_string_new_measured(&id[0]);
-                OMIT(printf("%s: parsed ID %s\n", codeid(), &id[0]);)
-                ok = TRUE;
-            }
-        }
+    {
+        ok = parse_indexname(&line, state, out_val);
     }
+
     if (ok)
     {
         *ref_line = line;
     }
+
+    DEBUGTRACE(
+        DPRINTF(")index %s: '%s'", ok?"OK":"FAIL", *ref_line);
+        if (ok) {
+            DPRINTF(" = ");
+            parser_value_print(state, *out_val);
+        }
+        DPRINTF("\n");
+    )
+
     return ok;
 }
 
@@ -16069,6 +16788,28 @@ parse_index_expr(const char **ref_line, parser_state_t *state,
     } else
     {
         ok = parse_index(ref_line, state, out_val);
+    }
+    return ok;
+}
+
+
+
+
+
+
+
+
+/* This function may cause a garbage collection */
+/**/extern bool
+parse_indexname_expr(const char **ref_line, parser_state_t *state,
+                     const value_t **out_val)
+{   bool ok;
+    if (parse_key(ref_line, "("))
+    {   ok = parse_expr(ref_line, state, out_val) &&
+             parse_key(ref_line, ")");
+    } else
+    {
+        ok = parse_indexname(ref_line, state, out_val);
     }
     return ok;
 }
@@ -16149,25 +16890,21 @@ enum_lookup_exec(dir_t *dir, const value_t *name, const value_t *value,
 
 
 
-
+/*! evaluate a potentially complex lookup in the given directory
+ *  where the index might be a directory or a closure
+ */
 extern const value_t *
 dir_dot_lookup(dir_t *dir, const value_t *name)
 {   if (name == NULL)
         return NULL;
     else
-    switch (value_type(name))
-    {   case type_closure:
-        {   const value_t *unbound;
-            const value_t *code;
-            dir_t *ixdir = NULL;
-            (void)value_closure_get(name, &code, &ixdir, &unbound);
-            if (NULL != ixdir)
-                return dir_dot_lookup(dir, dir_value(ixdir));
-            else
-                return name;
-        }
+    {
+        type_t nametype = value_type(name);
 
-        case type_dir:
+        OMIT(DPRINTF("%s: dir lookup name type %p - %s\n",
+                   codeid(), nametype, value_type_name(name)););
+
+        if (type_equal(nametype, type_dir))
         {   enum_lookup_arg_t luarg;
 
             luarg.dir_build = NULL;
@@ -16180,10 +16917,25 @@ dir_dot_lookup(dir_t *dir, const value_t *name)
                 return dir_value(newdir);
             } else
                 return &value_null;
-        }
+        } else
 
-        default:
+        if (type_equal(nametype, type_closure))
+        {   const value_t *unbound;
+            const value_t *code;
+            dir_t *ixdir = NULL;
+            (void)value_closure_get(name, &code, &ixdir, &unbound);
+            if (NULL != ixdir)
+                return dir_dot_lookup(dir, dir_value(ixdir));
+            else
+                return name;
+        }
+        else
+        {
+            OMIT(DPRINTF("%s: dir lookup name in type %p - %s\n",
+                         codeid(), value_type(dir_value(dir)),
+                         value_type_name(dir_value(dir))););
             return dir_get(dir, name);
+        }
     }
 }
 
@@ -16192,21 +16944,55 @@ dir_dot_lookup(dir_t *dir, const value_t *name)
 
 
 
+/*! evaluate simple lookup in the given directory
+ *  where the name must be a string
+ */
+extern const value_t *
+dir_dot_lookup_name(dir_t *dir, const value_t *name)
+{   if (name == NULL)
+        return NULL;
+    else
+    {
+        OMIT(DPRINTF("%s: dir lookup name type %p - %s\n",
+                   codeid(), value_type(name), value_type_name(name));
+             DPRINTF("%s: dir lookup name in type %p - %s\n",
+                     codeid(), value_type(dir_value(dir)),
+                     value_type_name(dir_value(dir)));
+        );
+        return dir_get(dir, name);
+    }
+}
 
-/* This function may cause a garbage collection */
+
+
+
+
+
+/*! parse a series of index expressions
+ *  we have parsed <parent>., or we know the parent -
+ *  we now need to parse <index>[.<index>]*
+ *
+ *  When completed successfully
+ *     *out_parent contains the directory in which the final <index> should be
+ *                 found
+ *     *out_id contains the index to be looked up there
+ *
+ *  This function may cause a garbage collection
+ */
 /**/extern bool
 parse_index_path(const char **ref_line, parser_state_t *state,
                  dir_t *indexed,
                  dir_t **out_parent, const value_t **out_id)
-{   /* we have parsed <parent>., or we know the parent -
-       we now need to parse <id>[.<id>]* */
+{   
     bool ok;
     dir_t *parent = indexed;
     const value_t *new_id = NULL;
 
+    DEBUGTRACE(DPRINTF("(index path: '%s'\n", *ref_line);)
+
     ok = parse_index_expr(ref_line, state, &new_id) && parse_space(ref_line);
     OMIT(printf("%s: index was %s ...%s\n",
-                  codeid(), ok? "before": "not at", *ref_line);)
+              codeid(), ok? "before": "not at", *ref_line);)
 
     while (ok && parse_dot(ref_line) &&
            parse_space(ref_line))
@@ -16216,7 +17002,7 @@ parse_index_path(const char **ref_line, parser_state_t *state,
         if (NULL == ival)
         {   parser_error(state, "undefined index symbol '");
             parser_value_print(state, new_id);
-            /*printf("' in %s\n", value_type_name(parent));*/
+            OMIT(printf("' in %s", value_type_name(dir_value(parent)));)
             fprintf(stderr, "'\n");
             OMIT(DIR_SHOW_ST("parent env: ", state, parent);)
             ok = FALSE;
@@ -16242,6 +17028,67 @@ parse_index_path(const char **ref_line, parser_state_t *state,
         *out_id = new_id;
     }
 
+    DEBUGTRACE(DPRINTF(")index path %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+
+    return ok;
+}
+
+
+
+
+
+
+/*! parse an indexname followed by a series of index expressions
+ *  parse: <indexname>[.<index>]*
+ *  We know the parent environment in which the first indexname can be sought.
+ *  This function may cause a garbage collection
+*/
+/**/extern bool
+parse_index_fullpath(const char **ref_line, parser_state_t *state,
+                     dir_t *env, dir_t **out_parent, const value_t **out_id)
+{   
+    bool ok;
+    const value_t *indexname = NULL;
+
+    ok = parse_indexname_expr(ref_line, state, &indexname) &&
+         parse_space(ref_line);
+    OMIT(printf("%s: indexname was %s ...%s\n",
+              codeid(), ok? "before": "not at", *ref_line);)
+    if (ok)
+    {
+        if (parse_dot(ref_line) && parse_space(ref_line))
+        {
+            const value_t *ival = dir_dot_lookup_name(env, indexname);
+            dir_t *firstparent = NULL;
+
+            if (NULL == ival)
+            {   parser_error(state, "undefined index symbol '");
+                parser_value_print(state, indexname);
+                OMIT(printf("' in %s", value_type_name(dir_value(env)));)
+                fprintf(stderr, "'\n");
+                OMIT(DIR_SHOW_ST("parent env: ", state, env);)
+                ok = FALSE;
+            }
+
+            ival = value_nl(ival);
+            /* garbage collection will look after the discarded values */
+
+            if (ok && !get_index_dir(ival, &firstparent))
+            {   parser_error(state, "can't lookup values in a %s\n",
+                             value_type_name(ival));
+                ok = FALSE;
+            }
+
+            if (ok)
+            {
+                ok = parse_index_path(ref_line, state, firstparent,
+                                      out_parent, out_id);
+            }
+        } else
+        {   *out_parent = env;
+            *out_id = indexname;
+        }
+    }
     return ok;
 }
 
@@ -16257,9 +17104,11 @@ parse_lvalue(const char **ref_line, parser_state_t *state,
              dir_t **out_parent, const value_t **out_id)
 {   if (parse_space(ref_line) && parse_dot(ref_line))
     {   dir_t *localdir = dir_stack_top(parser_env_stack(state));
-        return parse_index_path(ref_line, state, localdir, out_parent, out_id);
+        return parse_index_fullpath(ref_line, state, localdir,
+                                    out_parent, out_id);
     } else
-        return parse_index_path(ref_line, state, indexed, out_parent, out_id);
+        return parse_index_fullpath(ref_line, state, indexed,
+                                    out_parent, out_id);
 }
 
 
@@ -16334,7 +17183,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
 
     parse_space(ref_line);
 
-    DEBUGTRACE(DPRINTF("base: %s\n", *ref_line);)
+    DEBUGTRACE(DPRINTF("(base: '%s'\n", *ref_line);)
     if (NULL != out_isenv)
         *out_isenv = FALSE;
 
@@ -16374,7 +17223,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
             ok = FALSE;
     }
 
-    DEBUGTRACE(DPRINTF("base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
+    DEBUGTRACE(DPRINTF(")base %s: '%s'\n", ok? "OK":"FAILED", *ref_line);)
 
     return ok;
 }
@@ -16448,13 +17297,13 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
 
 
 
-
-/* This function may cause a garbage collection */
+/*! Parse [[<base>|<code>]:[:]]*[<base>|<code>] | <base>
+ *  This function may cause a garbage collection
+ */
 static bool
 parse_closure(const char **ref_line, parser_state_t *state,
               const value_t **out_val)
-{   /* [[<base>|<code>]:[:]]*[<base>|<code>] | <base> */
-    bool ok;
+{   bool ok;
     bool is_closure = TRUE;   /* value (so far) can be represented as closure */
     bool lhs_is_env = FALSE;  /* i.e. lhs was '['...']' & value_env_t */
     bool inherit = TRUE; /* ':' not '::' */
@@ -16465,13 +17314,13 @@ parse_closure(const char **ref_line, parser_state_t *state,
         value_env_t *env = NULL; /* we are constructing this */
         const value_t *code = NULL; /* we construct this too */
 
-    DEBUGTRACE(DPRINTF("env expr: %s\n", *ref_line);)
+    DEBUGTRACE(DPRINTF("(env expr: '%s'\n", *ref_line);)
 
     ok = parse_base_env(ref_line, state, &lhs, &lhs_is_env);
     /* lhs_is_env will be true if [<id-dir>] is parsed - and lhs will be a
      * value_env_t (otherwise it could be any value_t) */
 
-    OMIT(DPRINTF("env expr base %s: %s\n", ok? "OK":"FAILED", *ref_line);)
+    OMIT(DPRINTF("env expr base %s: '%s'\n", ok? "OK":"FAILED", *ref_line);)
 
     if (ok) {
         if (value_is_codebody(lhs))
@@ -16646,7 +17495,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
     if (!ok)
         *out_val = NULL;
 
-    DEBUGTRACE(DPRINTF("env expr %s: %s\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUGTRACE(DPRINTF(")env expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -16659,25 +17508,25 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
 
 
-/* This function may cause a garbage collection */
+/* parse [<indexname>.]*<index>
+ * we have parsed <id>. - we now need to parse [<index>.]*<index> 
+ * This function may cause a garbage collection
+ */
 static bool
 parse_index_value(const char **ref_line, parser_state_t *state,
                   dir_t *indexed, const value_t **out_val)
-{   /* we have parsed <indexed>. - we now need to parse [<id>.]*<id> */
-    /* (where parent = [<id>.]*)                                     */
-    dir_t *parent;
+{   dir_t *parent; /* where parent = [<id>.]*) */
     const value_t *id;
     bool ok = FALSE;
 
     if (parse_index_path(ref_line, state, indexed, &parent, &id))
     {   *out_val = dir_dot_lookup(parent, id);
-        if (NULL != *out_val)
-            ok = TRUE;
-        else
+        ok = TRUE;
+        if (NULL == *out_val)
         {   parser_error(state, "index symbol undefined in parent '");
             parser_value_print(state, id);
             OMIT(printf("' in %s at %p\n",
-                          value_type_name(dir_value(parent)), parent);)
+                        value_type_name(dir_value(parent)), parent);)
             fprintf(stderr, "'\n");
             OMIT(DIR_SHOW("parent env: ", parent);)
         }
@@ -16692,12 +17541,15 @@ parse_index_value(const char **ref_line, parser_state_t *state,
 
 
 
-/* This function may cause a garbage collection */
+/* Parse left hand value of index path in indexed object
+   we have parsed @<indexed>. - we now need to parse [<index>.]*<index> 
+   (where parent = <indexed>.[<indexed>.]*)
+   This function may cause a garbage collection 
+*/
 static bool
 parse_index_lhvalue(const char **ref_line, parser_state_t *state,
                     dir_t *indexed, const value_t **out_val)
-{   /* we have parsed @<indexed>. - we now need to parse [<id>.]*<id> */
-    /* (where parent = <indexed>.[<id>.]*)                            */
+{
     dir_t *parent;
     const value_t *id;
     bool ok = FALSE;
@@ -16737,17 +17589,19 @@ parse_index_lhvalue(const char **ref_line, parser_state_t *state,
 
 
 
-/* This function may cause a garbage collection */
+/*! Parse [@<index>|<closure>][.<index>]*
+ *  This function may cause a garbage collection
+ */
 extern bool
 parse_retrieval(const char **ref_line, parser_state_t *state,
                 const value_t **out_val)
-{   /* [@<index>|<closure>][.<index>]* */
+{   
     bool ok = FALSE;
     bool need_index = FALSE;
     bool is_local;
     bool is_lhv = FALSE;
 
-    DEBUGTRACE(DPRINTF("lookup: %s\n", *ref_line););
+    DEBUGTRACE(DPRINTF("(lookup: '%s'\n", *ref_line););
 
     parse_space(ref_line);
 
@@ -16788,6 +17642,16 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
             ok = FALSE;
         }
     }
+    
+    DEBUGTRACE(
+        DPRINTF(")lookup %s: '%s'", ok?"OK":"FAIL", *ref_line);
+        if (ok) {
+            DPRINTF(" = ");
+            parser_value_print(state, *out_val);
+        }
+        DPRINTF("\n");
+    )
+
     return ok;
 }
 
@@ -16816,8 +17680,12 @@ static bool
 parse_operator_expr(const char **ref_line, parser_state_t *state,
                     const value_t **out_val)
 {   /* parse based on defined operator definitions */
-    return parse_opterm(ref_line, state, &parse_retrieval_base, state->opdefs,
-                        out_val);
+    bool ok;
+    DEBUGTRACE(DPRINTF("(op expr: '%s'\n", *ref_line););
+    ok = parse_opterm(ref_line, state, &parse_retrieval_base,
+                      state->opdefs, out_val);
+    DEBUGTRACE(DPRINTF(")op expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    return ok;
 }
 
 
@@ -16955,7 +17823,7 @@ invoke(const value_t *code, parser_state_t *state)
                     /* we will garbage collect the discarded value */
                     if (NULL == dir)
                         dir = dir_id_new();
-                    pos = parser_env_push(state, dir, /*env_end*/TRUE);
+                    pos = parser_env_push(state, dir, /*outer_visible*/TRUE);
                     value_code_place(codeval, &placename, &lineno);
                     linesource_push(parser_linesource(state),
                                     charsource_lineref_init(&line,
@@ -17005,7 +17873,7 @@ invoke(const value_t *code, parser_state_t *state)
                         printf("top : %p\n", parser_env_stack(state)->stack);
                         DIR_SHOW("push: ", dir);
                     )
-                    pos = parser_env_push(state, dir, /*env_end*/TRUE);
+                    pos = parser_env_push(state, dir, /*outer_visible*/TRUE);
                     DEBUGMOD(DPRINTF("%s: invoke - fn closure with %sreturn\n",
                                      codeid(), pos==NULL?"no ":"");)
                     val = (*value_func_exec(fn))(code, state);
@@ -17050,7 +17918,7 @@ extern bool value_istype_invokable(const value_t *val)
                 codeid(), value_type_name(val));
     else
         ok = TRUE;
-    
+
     return ok;
 }
 
@@ -17061,14 +17929,18 @@ extern bool value_istype_invokable(const value_t *val)
 
 
 
-
-/* This function may cause a garbage collection */
+/*! parse up'!'* [<retrieval> '!'*]* 
+ * This function may cause a garbage collection
+ */
+                                
 static bool
 parse_substitution_args(const char **ref_line, parser_state_t *state,
                         const value_t **ref_val)
-{   /* '!'* [<retrieval> '!'*]* */
+{   
     bool ok = TRUE;
     const value_t *newarg = NULL;
+
+    DEBUGTRACE(DPRINTF("(subst args: '%s'\n", *ref_line););
 
     while (ok && parse_pling(ref_line) && parse_space(ref_line))
         *ref_val = invoke(*ref_val, state);
@@ -17092,6 +17964,7 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
     if (NULL == *ref_val)
         *ref_val = &value_null;
 
+    DEBUGTRACE(DPRINTF(")subst args %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -17168,22 +18041,27 @@ parse_substitution_argv(const char ***ref_argv, int *ref_argn,
 
 
 
-
-/* This function may cause a garbage collection */
+/*! Parse [<retrieval> '!'*]* 
+ *  This function may cause a garbage collection
+ */
 static bool
 parse_substitution(const char **ref_line, parser_state_t *state,
                    const value_t **out_val)
-{   /* [<retrieval> '!'*]* */
-
-    DEBUGTRACE(DPRINTF("substitute: %s\n", *ref_line);)
+{   bool ok;
+    
+    DEBUGTRACE(DPRINTF("(substitute: '%s'\n", *ref_line);)
 
     if (parse_operator_expr(ref_line, state, out_val) && parse_space(ref_line))
-    {   OMIT(DPRINTF("substitute args: %s\n", *ref_line););
-        return parse_substitution_args(ref_line, state, out_val);
+    {   OMIT(DPRINTF("substitute args: '%s'\n", *ref_line););
+        ok = parse_substitution_args(ref_line, state, out_val);
     } else
     {   *out_val = &value_null;
-        return FALSE;
+        ok = FALSE;
     }
+
+    DEBUGTRACE(DPRINTF(")substitute %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+
+    return ok;
 }
 
 
@@ -17202,7 +18080,7 @@ parse_expr(const char **ref_line, parser_state_t *state,
     const char *line = *ref_line;
     dir_t *parent = NULL;
 
-    DEBUGTRACE(DPRINTF("expr: %s\n", *ref_line);)
+    DEBUGTRACE(DPRINTF("(expr: '%s'\n", *ref_line);)
     DEBUGENV(DIR_SHOW("expr env: ", parser_env(state));)
     *out_val = NULL;
 
@@ -17229,22 +18107,25 @@ parse_expr(const char **ref_line, parser_state_t *state,
     if (!assignment)
         ok = parse_substitution(ref_line, state, out_val) &&
              parse_space(ref_line);
+
+    DEBUGTRACE(DPRINTF(")expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
 
 
-/* This function may cause a garbage collection */
+/*! Parse <expr>[;[<expr>]]* 
+ *  ; discards the previous value 
+ *  This function may cause a garbage collection
+ */
 static bool
 parse_cmdlist(const char **ref_line, parser_state_t *state,
               const value_t **out_val)
-{   /* <expr>[;[<expr>]]* */
-    /* ; discards the previous value */
-    bool ok;
+{   bool ok;
 
     parse_space(ref_line);
 
-    DEBUGTRACE(DPRINTF("cmdlist: %s\n", *ref_line);)
+    DEBUGTRACE(DPRINTF("(cmdlist: '%s'\n", *ref_line);)
 
     ok = (parse_empty(ref_line) || *ref_line[0]=='}' || *ref_line[0]==';')
          ||
@@ -17263,6 +18144,7 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
     if (parse_space(ref_line) && !parse_empty(ref_line))
         parser_error_longstring(state, *ref_line, "error in");
 
+    DEBUGTRACE(DPRINTF(")cmdlist %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -17371,11 +18253,11 @@ new_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 
 
 
+#if 0
 /* make a copy of a directory */
 static dir_t *
 dir_copy(dir_t *dir)
-{   const value_t *val = NULL;
-    dir_t *newdir = NULL;
+{   dir_t *newdir = NULL;
     enum_new_arg_t newarg;
 
     newarg.dir_build = NULL;
@@ -17392,12 +18274,13 @@ dir_copy(dir_t *dir)
 
     return newdir;
 }
+#endif
 
 
 
 
 /*! make an environment from the function arguments, add 'name' field
- *   and throw the result 
+ *   and throw the result
  *   This function may cause a garbage collection
  */
 static const value_t *
@@ -17432,7 +18315,7 @@ exception_throw(const value_t *this_fn, parser_state_t *state,
     }
     dir_string_set(newenv, "name", value_string_new_measured(name));
     info = dir_value(newenv);
-       
+
 #endif
     if (info != NULL) {
         bool thrown = parser_throw(state, info);
@@ -17475,7 +18358,7 @@ cmds_generic_exception(parser_state_t *state, dir_t *cmds)
     mod_addfnscope(cmds, "throw",
               "<value> - signal an exception with <value>, exit outer 'catch'",
               &fn_throw, 1, scope);
-    
+
     mod_add_dir(cmds, "exception", expt_cmds);
 
     mod_addfn(expt_cmds, "signal", "signal <signo> - send signal exception",
@@ -17517,7 +18400,7 @@ static bool throw_interrupt(parser_state_t *state, int signal)
     const value_t *signal_exception =
         !value_type_equal(fn_sig, type_closure)? NULL:
         value_closure_bind(fn_sig, value_int_new(signal));
-    
+
     if (signal_exception != NULL) {
         /*parser_throw(state, signal_exception);*/
         (void)invoke(signal_exception, state); /* shouldn't normally return */
@@ -17550,10 +18433,12 @@ static void interrupt_handler(int signal)
 }
 
 
+#if 0
 static bool cause_sigint(void)
 {   interrupt_handler(SIGINT);
     return exiting;
 }
+#endif
 
 
 
@@ -17571,12 +18456,12 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
                    old==SIG_ERR?" (ERR)":"", old==SIG_DFL?" (DFL)":"",
                    old==SIG_IGN?" (IGN)":"");
     );
-    
+
     if (ref_old_handler != NULL) {
         ref_old_handler->displaced_state = global_int_state;
         ref_old_handler->handler = old;
     }
-    
+
     if (old == SIG_ERR)
         return FALSE;
     else {
@@ -17590,12 +18475,13 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
 
 static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 {
-    interrupt_handler_fn *newi;
-    OMIT(fprintf(stderr, "%s: installing interrupt returned to %p\n",
-                   codeid(), ref_old_handler->handler);
-           fflush(stderr);
+    
+    OMIT(interrupt_handler_fn *newi;
+         fprintf(stderr, "%s: installing interrupt returned to %p\n",
+                 codeid(), ref_old_handler->handler);
+         fflush(stderr);
     );
-    newi = signal(SIGINT, ref_old_handler->handler);
+    OMIT(newi =)signal(SIGINT, ref_old_handler->handler);
     OMIT(fprintf(stderr, "%s: installing old interrupt complete - "
                    "was %p%s%s%s\n",
                    codeid(), newi,
@@ -17644,12 +18530,12 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
 
     OMIT(fprintf(stderr, "%s: installing interrupt handler %p\n",
                  codeid(), &interrupt_handler););
-    
+
     if (ref_old_handler != NULL) {
         ref_old_handler->handler = NULL; /*not used in windows */
         ref_old_handler->displaced_state = global_int_state;
     }
-    
+
     if (ok)
         return FALSE;
     else {
@@ -17659,12 +18545,12 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
 }
 
 
-static void interrupt_handler_end(interrupt_state_t old_handler)
+static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 {
-    BOOL ok;
-    OMIT(fprintf(stderr, "%s: installing interrupt returned to %p\n",
-                   codeid(), old_handler); fflush(stderr););
-    ok = SetConsoleCtrlHandler(&interrupt_handler, /*Add*/FALSE);
+    OMIT(BOOL ok;
+         fprintf(stderr, "%s: installing interrupt returned to %p\n",
+                 codeid(), ref_old_handler); fflush(stderr););
+    OMIT(ok =)SetConsoleCtrlHandler(&interrupt_handler, /*Add*/FALSE);
     OMIT(fprintf(stderr, "%s: installing old interrupt complete\n",
                    codeid()););
     global_int_state = ref_old_handler->displaced_state;
@@ -17822,7 +18708,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     } else
     if (value_type_equal(value, type_dir))
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
-                                              /*env_end*/FALSE);
+                                              /*outer_visible*/FALSE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value);)
         DEBUGMOD(DPRINTF("%s: push enclosing directory\n", codeid());)
         value = mod_exec(ref_line, state);
@@ -17965,7 +18851,7 @@ mod_invoke_argv(const char ***ref_argv, int *ref_argn, const char *execpath,
     } else
     if (value_type_equal(value, type_dir))
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
-                                              /*env_end*/FALSE);
+                                              /*outer_visible*/FALSE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
         DEBUGMOD(DPRINTF("%s: push enclosing directory\n", codeid()););
         value = mod_execv(ref_argv, ref_argn, execpath, state);
@@ -18118,9 +19004,11 @@ mod_execv(const char ***ref_argv, int *ref_argn, const char *execpath,
 */
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state)
-{   if (parser_echo(state))
-    {   fprintf(stderr, "%s\n", *ref_line);
-        fflush(stderr);
+{   FILE *log = stdout;
+    const char *fmt = NULL;
+    if (parser_echoto(state, &log, &fmt))
+    {   fprintf(log, fmt != NULL? fmt: "%s\n", *ref_line);
+        fflush(log);
     }
     return mod_exec(ref_line, state);
 }
@@ -18561,7 +19449,7 @@ parse_format(const char **ref_line, parser_state_t *state,
     number_t precision = -1;
     number_t width = 0;
     const char *line = *ref_line;
-    const value_t *fmtfn;
+    const value_t *fmtfn = NULL;
 
     while ((!left && (left = parse_key(ref_line,"-"))) ||
            (!posv && (sign = parse_key(ref_line,"+"))) ||
@@ -19243,7 +20131,7 @@ genfn_rdexec(const value_t *this_fn, parser_state_t *state,
                      collection */
 
             OMIT(DIR_SHOW("Invoke env: ", parser_env(state));)
-            pos = parser_env_push(state, new_dir, /*env_end*/FALSE);
+            pos = parser_env_push(state, new_dir, /*outer_visible*/FALSE);
             OMIT(DIR_SHOW("Dir after push: ", parser_env(state));)
             res = parser_expand_exec(state, source, initcmds,
                                      /*rcfile_id*/NULL, /*no_locals*/FALSE);
@@ -21307,11 +22195,11 @@ cmds_generic_nul(parser_state_t *state, dir_t *cmds)
 
 static const value_t *
 fn_typeof(const value_t *this_fn, parser_state_t *state)
-{   const value_t *any = parser_builtin_arg(state, 1);
+{   const value_t *anyval = parser_builtin_arg(state, 1);
     const value_t *res = &value_null;
 
-    if (NULL != any)
-        res = value_type_new(value_type(any));
+    if (NULL != anyval && anyval->kind != NULL)
+        res = value_type_value(anyval->kind);
 
     return res;
 }
@@ -21339,6 +22227,39 @@ fn_typename(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
+cmd_type(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
+{
+    const value_t *result_typeval = NULL;
+    dir_t *cmds = parser_root(state);
+    const value_t *typesval = cmds == NULL? NULL:
+                              dir_string_get(cmds, ROOT_DIR_TYPE);
+    dir_t *root_types = NULL;
+    const char *typename = *ref_line;
+
+    *ref_line += strlen(*ref_line);
+
+    if (value_as_dir(typesval, &root_types))
+    {
+        dir_stack_pos_t pos = parser_env_push(state, root_types,
+                                              /*outer_visible*/FALSE);
+        result_typeval = dir_string_get(root_types, typename);
+        if (result_typeval == NULL)
+             result_typeval = &value_null;
+
+        parser_env_return(state, pos); /* go back to original stack pos */
+    } else
+        parser_error(state, "can't locate types directory '%s'\n",
+                     ROOT_DIR_TYPE);
+
+    return result_typeval;
+}
+
+
+
+
+
+
+static const value_t *
 fn_cmp(const value_t *this_fn, parser_state_t *state)
 {   const value_t *v1 = parser_builtin_arg(state, 1);
     const value_t *v2 = parser_builtin_arg(state, 2);
@@ -21353,17 +22274,38 @@ fn_cmp(const value_t *this_fn, parser_state_t *state)
 
 static void
 cmds_generic_type(parser_state_t *state, dir_t *cmds)
-{   mod_addfn(cmds, "typeof",
+{
+    dir_t *types = dir_id_new();
+
+    mod_add_dir(cmds, ROOT_DIR_TYPE, types);
+
+    /* regiser built-in types in 'type' directory */
+    mod_add_val(types, type_name(type_type), value_type_value(type_type));
+    mod_add_val(types, type_name(type_null), value_type_value(type_null));
+    mod_add_val(types, type_name(type_string), value_type_value(type_string));
+    mod_add_val(types, type_name(type_code), value_type_value(type_code));
+    mod_add_val(types, type_name(type_closure), value_type_value(type_closure));
+    mod_add_val(types, type_name(type_int), value_type_value(type_int));
+    mod_add_val(types, type_name(type_dir), value_type_value(type_dir));
+    mod_add_val(types, type_name(type_cmd), value_type_value(type_cmd));
+    mod_add_val(types, type_name(type_func), value_type_value(type_func));
+    mod_add_val(types, type_name(type_stream), value_type_value(type_stream));
+    mod_add_val(types, type_name(type_ipaddr), value_type_value(type_ipaddr));
+    mod_add_val(types, type_name(type_macaddr), value_type_value(type_macaddr));
+    mod_add_val(types, type_name(type_coroutine),
+                value_type_value(type_coroutine));
+    mod_add_val(types, type_name(type_mem), value_type_value(type_mem));
+
+    mod_addfn(cmds, "typeof",
              "<expr> - returns the type of <expr>",
              &fn_typeof, 1);
     mod_addfn(cmds, "typename",
              "<expr> - returns the name of the type of <expr>",
              &fn_typename, 1);
+    mod_add(cmds, "type", "<type name> - type value",  &cmd_type);
     mod_addfn(cmds, "cmp",
              "<expr> <expr> - returns integer comparing its arguments",
              &fn_cmp, 2);
-    mod_add(cmds, "type",
-            "<type name> - type value",  &value_type_parse);
 }
 
 
@@ -22581,7 +23523,7 @@ my_memmem(const char *buf, size_t len, const char *find, size_t findlen)
 {
     const char *end = buf + len;
     const char *last = end - findlen;
-    /*< last pos where a search for find makes sense */
+    /**< last pos where a search for find makes sense */
     char *p = NULL; /* overall pointer result */
     char *sp = NULL; /* sub-string pointer result */
 
@@ -22615,7 +23557,7 @@ static char *my_strnstr(const char *buf, size_t len, const char *find)
     size_t buflen0 = strlen(buf); /* first section, at least */
     const char *end = buf + len;
     const char *last = end - findlen;
-    /*< last pos where a search for find makes sense */
+    /**< last pos where a search for find makes sense */
     char *p = NULL;
 
     if (buflen0 > len + 256)
@@ -22644,7 +23586,7 @@ static char *my_strnstr(const char *buf, size_t len, const char *find)
 
 
 
-/*< on linux this routine is provided as memmem */
+/**< on linux this routine is provided as memmem */
 static char *strnstrn(const char *buf, size_t len,
                       const char *find, size_t findlen)
 {  size_t len0 = strlen(buf);
@@ -22671,7 +23613,7 @@ static char *strnstrn(const char *buf, size_t len,
               null-terminated parts of buf */
            const char *end = buf + len;
            const char *last = end - findlen;
-           /*< last pos where a search for find makes sense */
+           /**< last pos where a search for find makes sense */
            char *p = NULL; /* overall pointer result */
            char *sp = NULL; /* sub-string pointer result */
 
@@ -22946,7 +23888,7 @@ static const value_t *fn_binsplit(const value_t *this_fn, parser_state_t *state)
 #else
             memreader_instore_t *memreader =
                 (memreader_instore_t *)FTL_MALLOC(sizeof(memreader_instore_t));
-            
+
             if (memreader != NULL)
             {
                 dir_t *dynseq;
@@ -23410,12 +24352,13 @@ fn_lock(const value_t *this_fn, parser_state_t *state)
 
 
 
-/*! Push a new environment on the stack that will be used when new variables
+/*! Push a new envronment on the stack that will be used when new variables
  *  are defined.  Make previous environments "invisible" if \c env_end is
  *  FALSE
  */
 static const value_t *
-parser_enter_dir(const value_t *this_fn, parser_state_t *state, bool env_end)
+parser_enter_dir(const value_t *this_fn, parser_state_t *state,
+                 bool outer_visible)
 {   const value_t *dir = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
     dir_t *env;
@@ -23425,7 +24368,7 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state, bool env_end)
 
         /* insert the directory above our return position so that it is
            still there when we return */
-        parser_env_push_at_pos(state, pos, env, env_end);
+        parser_env_push_at_pos(state, pos, env, outer_visible);
     } else
         parser_report_help(state, this_fn);
 
@@ -23439,7 +24382,7 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state, bool env_end)
 
 static const value_t *
 fn_enter(const value_t *this_fn, parser_state_t *state)
-{   return parser_enter_dir(this_fn, state, /*env_end*/FALSE);
+{   return parser_enter_dir(this_fn, state, /*outer_visible*/FALSE);
 }
 
 
@@ -23449,7 +24392,7 @@ fn_enter(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_restrict(const value_t *this_fn, parser_state_t *state)
-{   return parser_enter_dir(this_fn, state, /*env_end*/TRUE);
+{   return parser_enter_dir(this_fn, state, /*outer_visible*/TRUE);
 }
 
 
@@ -23817,7 +24760,7 @@ fn_select(const value_t *this_fn, parser_state_t *state)
         selectval.dir_build = NULL;
         OMIT(VALUE_SHOW("select beselecte environment: ",
                           dir_value(parser_env(state)));)
-        pos = parser_env_push(state, argdir, /*env_end*/FALSE);
+        pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
         OMIT(VALUE_SHOW("select environment: ",
                           dir_value(parser_env(state)));)
         (void)dir_forall(env, &select_exec, &selectval);
@@ -24359,7 +25302,7 @@ fn_forall(const value_t *this_fn, parser_state_t *state)
         forval.code = code;
         OMIT(VALUE_SHOW("for before environment: ",
                           dir_value(parser_env(state)));)
-        pos = parser_env_push(state, argdir, /*env_end*/FALSE);
+        pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
         OMIT(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
         (void)dir_forall(env, &forall_exec, &forval);
         (void)parser_env_return(state, pos);
@@ -24423,7 +25366,7 @@ fn_for(const value_t *this_fn, parser_state_t *state)
             forval.code = code;
             OMIT(VALUE_SHOW("for before environment: ",
                               dir_value(parser_env(state)));)
-            pos = parser_env_push(state, argdir, /*env_end*/FALSE);
+            pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
             OMIT(VALUE_SHOW("for environment: ",
                               dir_value(parser_env(state)));)
             (void)dir_forall(env, &for_exec, &forval);
@@ -25304,7 +26247,7 @@ fn_cmd(const value_t *this_fn, parser_state_t *state)
         if (NULL != helpval && helpval != &value_null)
             if (value_istype(helpval, type_string))
                 dir_cstring_set(helpenv, BUILTIN_HELP, helpval);
-        (void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
+        (void)value_closure_pushdir(closure, helpenv, /*outer_visible*/FALSE);
         sprintf(&argname[0], "%s%d", BUILTIN_ARG, 1);
         /*argnext =*/(void)value_closure_pushunbound(closure, NULL,
                                    value_string_new_measured(argname));
@@ -25378,8 +26321,8 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
         cmds_generic_parser(state, cmds, argc, argv);
 
     cmds_generic_coroutine(state, cmds);
-    cmds_generic_stream(state, cmds);
     cmds_generic_type(state, cmds);
+    cmds_generic_stream(state, cmds);
     cmds_generic_nul(state, cmds);
     cmds_generic_int(state, cmds);
     cmds_generic_bool(state, cmds);
@@ -25476,11 +26419,22 @@ ftl_version(int *out_major, int *out_minor, int *out_debug)
 extern void
 ftl_init(void)
 {   value_heap_init();
+    values_type_init();
     values_null_init();
     values_int_init();
+    values_ipaddr_init();
+    values_macaddr_init();
     values_string_init();
+    values_code_init();
+    values_stream_init();
     values_string_argname_init();
-    values_bool_init();
+    values_dir_init();
+    values_closure_init();
+    values_coroutine_init();
+    values_cmd_init();
+    values_func_init();
+    values_bool_init();/* must follow values_func_init */
+    values_mem_init();
     fprint_init();
     OMIT(printf("FTL_MB_LEN_MAX = %d MB_LEN_MAX = %d (%s)\n",
                   FTL_MB_LEN_MAX, MB_LEN_MAX, str(MB_LEN_MAX));)

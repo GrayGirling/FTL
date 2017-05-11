@@ -124,7 +124,7 @@ extern char *file_executable(char* buf, size_t size)
 {
    char linkname[64];    /* to hold /proc/<pid>/exe */
    pid_t pid = getpid(); /* our process ID */
-   int len = snprintf(linkname, sizeof(linkname), "/proc/%i/exe", pid);
+   long len = snprintf(linkname, sizeof(linkname), "/proc/%i/exe", pid);
    char *file = NULL;
 
    if (len > 0) {

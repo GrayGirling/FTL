@@ -11,7 +11,7 @@
 
 #include "ftl.h" /* for bool */
 
-#ifdef WIN32  /*< Set the macros according to the OS */
+#ifdef WIN32  /**< Set the macros according to the OS */
 
 #define OS_PATH_SEP ';'
 #define OS_FS_SEP '\\'

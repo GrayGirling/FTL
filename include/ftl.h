@@ -1370,7 +1370,6 @@ parser_expand(parser_state_t *state, outchar_t *out,
 /*          Dynamic Directories                                 */
 
 /*! create a new dynamic environment from FTL functions
- *    @param dyndir    - dyn directory value to be initialized
  *    @param state     - parser state to use for function execution [!!]
  *    @param get_fn    - NULL or closure with 1 arg to retrieve name
  *    @param set_fn    - NULL or closure with 2 args to set name to value
