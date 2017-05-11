@@ -9,6 +9,9 @@ endif
 ifeq ($(OSARCH),osx64)
     ARCH=osx
 endif
+ifeq ($(OSARCH),linux64)
+    ARCH=linux
+endif
 
 HAS_CSCOPE=0
 LIB_DYNLIB=-ldl
@@ -40,7 +43,7 @@ ifneq ($(ARCH),cygwin64)
     INCS_READLINE=-I /usr/include/readline
     OBJS_READLINE=
 
-    CFLAGS_CC=-Wint-conversion
+    #CFLAGS_CC=-Wint-conversion
 else
     CC=mingw32-gcc
     LIB_DYNLIB=

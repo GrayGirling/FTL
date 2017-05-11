@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 cmd_this="$0"
 cmd_dir=`dirname "$cmd_this"`
@@ -164,7 +164,13 @@ while $option; do
     fi
 done
 
-name="$1"; shift
+if [ $# -gt 0]; then
+    name="$1"
+    shift
+else
+    name=
+fi
+
 rc=0
 
 if $do_help; then
