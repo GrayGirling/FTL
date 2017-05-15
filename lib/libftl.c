@@ -13870,7 +13870,8 @@ parser_expand(parser_state_t *state, outchar_t *out,
                 const value_t *macval = NULL;
 
                 if (ch == '{')
-                {   /* parse ${expr} */
+                {   /* parse ${expr} - expansion of string resulting from
+                     * expression */
                     ch = instack_getc(in);
                     while (ch != '}' && ch != EOF)
                     {   if (len > 1)
@@ -13881,7 +13882,7 @@ parser_expand(parser_state_t *state, outchar_t *out,
                     }
                 } else
                 if (ch  == '_'  || isalnum(ch))
-                {   /* parse $name */
+                {   /* parse $name - macro expansion */
                     do {
                         if (len > 1)
                             *mac++ = ch;
@@ -13891,7 +13892,7 @@ parser_expand(parser_state_t *state, outchar_t *out,
                     instack_ungetc(in, ch);
                 } else
                 if (ch  == '@')
-                {   /* parse $@<n>*/
+                {   /* parse $@<n> - what is this supposed to do? */
                     do {
                         if (len > 1)
                             *mac++ = ch;
@@ -13916,7 +13917,16 @@ parser_expand(parser_state_t *state, outchar_t *out,
                     size_t blen;
                     charsource_t *inmac;
 
-                    if (!value_type_equal(macval, type_string))
+                    if (value_type_equal(macval, type_string))
+                    {
+                        /* include text as a macro - NB any '$' in the
+                           expansion will themselves be treated as macros
+                        */
+                        value_string_get(macval, &body, &blen);
+                        inmac = charsource_string_new(&macname[0], body, blen);
+                        instack_push(in, inmac);
+                    }
+                    else
                     {   charsink_string_t charbuf;
                         charsink_t *sink = charsink_string_init(&charbuf);
 
@@ -13926,11 +13936,18 @@ parser_expand(parser_state_t *state, outchar_t *out,
                         OMIT(printf("mac body: '%s'[%d]\n", body, blen);)
                         macval = value_string_new(body, blen);
                         charsink_string_close(sink);
-                    }
 
-                    value_string_get(macval, &body, &blen);
-                    inmac = charsource_string_new(&macname[0], body, blen);
-                    instack_push(in, inmac);
+                        /* it's not a string - include the text literally */
+                        value_string_get(macval, &body, &blen);
+                        if (body != NULL)
+                        {
+                            const char *endbody = &body[blen];
+                            while (body < endbody)
+                            {   outchar_putc(out, *body);
+                                body++;
+                            }
+                        }   
+                    }
                 }
             }
         } else
