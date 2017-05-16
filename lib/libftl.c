@@ -199,8 +199,6 @@
 
    File directory as an environment type.
 
-   Windows registry as an environment type.
-
    Functions to support automatic generation of an XML representation of
    an environment.
 
@@ -312,6 +310,9 @@
 #define BUILTIN_ARG_CH1 '_'
 #define BUILTIN_ARG "_"
 #define BUILTIN_HELP "_help"
+
+#define FTLDIR_EXCEPT "exception"
+#define FN_EXCEPT_SIGNAL "signal"
 
 #define FTLDIR_PARSE  "parse"
 #define FN_UNDEF_HOOK "on_badcmd"
@@ -2926,8 +2927,10 @@ typedef void *history_file_t ;
 
 
 
+#if 0
 /* Throw terminal interrupt exception */
 static bool cause_sigint(void); /* forward reference to Ctrl-C handler */
+#endif
 
 
 
@@ -2962,10 +2965,11 @@ charsource_readline_rdch(charsource_t *base_source)
             do {
                 errno = 0;
                 nextline = linenoise(source->prompt);
-                /* if (nextline == NULL && errno == EAGAIN)
+#if 0
+                if (nextline == NULL && errno == EAGAIN)
                        (void)cause_sigint();
                        // probably we won't have a try block
-                */
+#endif
             } while (nextline == NULL && errno == EAGAIN);
 
             OMIT(fprintf(stderr, "ln: %s%d %s rc %d\n",
@@ -18376,9 +18380,10 @@ cmds_generic_exception(parser_state_t *state, dir_t *cmds)
               "<value> - signal an exception with <value>, exit outer 'catch'",
               &fn_throw, 1, scope);
 
-    mod_add_dir(cmds, "exception", expt_cmds);
+    mod_add_dir(cmds, FTLDIR_EXCEPT, expt_cmds);
 
-    mod_addfn(expt_cmds, "signal", "signal <signo> - send signal exception",
+    mod_addfn(expt_cmds, FN_EXCEPT_SIGNAL,
+              FN_EXCEPT_SIGNAL" <signo> - send signal exception",
               &fn_exception_signal, 1);
 }
 
@@ -18394,6 +18399,8 @@ cmds_generic_exception(parser_state_t *state, dir_t *cmds)
 
 
 
+#define DEBUG_SIGNAL OMIT
+
 
 static bool exiting = FALSE;
 static parser_state_t *global_int_state = NULL;
@@ -18406,20 +18413,21 @@ static parser_state_t *global_int_state = NULL;
 #ifdef EXIT_ON_CTRL_C
 
 
-static bool throw_interrupt(parser_state_t *state, int signal)
+static bool throw_signal(parser_state_t *state, int signal)
 {
     dir_t *root = parser_root(state);
     const value_t *exceptions =
-        root==NULL? NULL: dir_string_get(root, "exception");
+        root==NULL? NULL: dir_string_get(root, FTLDIR_EXCEPT);
     const value_t *fn_sig =
         !value_type_equal(exceptions, type_dir)? NULL:
-        dir_string_get((dir_t *)(exceptions), "signal");
+        dir_string_get((dir_t *)(exceptions), FN_EXCEPT_SIGNAL);
     const value_t *signal_exception =
         !value_type_equal(fn_sig, type_closure)? NULL:
         value_closure_bind(fn_sig, value_int_new(signal));
 
     if (signal_exception != NULL) {
         /*parser_throw(state, signal_exception);*/
+        OMIT(fprintf(stderr, "%s: throwing FTL signal\n", codeid()););
         (void)invoke(signal_exception, state); /* shouldn't normally return */
         return TRUE;
     } else
@@ -18441,11 +18449,11 @@ typedef struct {
 } interrupt_state_t;
 
 
-static void interrupt_handler(int signal)
+static void interrupt_handler(int signo)
 {
     // find state
-    OMIT(fprintf(stderr, "%s: signal %d\n", codeid(), signal););
-    if (global_int_state == NULL || !throw_interrupt(global_int_state, signal))
+    DEBUG_SIGNAL(fprintf(stderr, "%s: signal %d\n", codeid(), signo););
+    if (global_int_state == NULL || !throw_signal(global_int_state, signo))
         exiting = TRUE;
 }
 
@@ -18459,17 +18467,18 @@ static bool cause_sigint(void)
 
 
 
-static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
-                                   parser_state_t *int_state)
+static bool handler_init(interrupt_state_t *ref_old_handler,
+                         parser_state_t *int_state, int signo,
+                         const char *signame)
 {   interrupt_handler_fn *old;
 
     exiting = FALSE;
 
-    old = signal(SIGINT, &interrupt_handler);
+    old = signal(signo, interrupt_handler);
 
-    OMIT(fprintf(stderr, "%s: installing interrupt handler %p -> last was "
+    DEBUG_SIGNAL(fprintf(stderr, "%s: installing %s handler %p -> last was "
                    "%p%s%s%s\n",
-                   codeid(), &interrupt_handler, old,
+                   codeid(), signame, interrupt_handler, old,
                    old==SIG_ERR?" (ERR)":"", old==SIG_DFL?" (DFL)":"",
                    old==SIG_IGN?" (IGN)":"");
     );
@@ -18489,24 +18498,50 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
 
 
 
-
-static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
+static void handler_end(interrupt_state_t *ref_old_handler,
+                        int signo)
 {
     
-    OMIT(interrupt_handler_fn *newi;
+    DEBUG_SIGNAL(interrupt_handler_fn *newi;
          fprintf(stderr, "%s: installing interrupt returned to %p\n",
                  codeid(), ref_old_handler->handler);
          fflush(stderr);
     );
-    OMIT(newi =)signal(SIGINT, ref_old_handler->handler);
-    OMIT(fprintf(stderr, "%s: installing old interrupt complete - "
-                   "was %p%s%s%s\n",
-                   codeid(), newi,
-                   newi==SIG_ERR?" (ERR)":"", newi==SIG_DFL?" (DFL)":"",
-                   newi==SIG_IGN?" (IGN)":""););
+    DEBUG_SIGNAL(newi =)signal(signo, ref_old_handler->handler);
+    DEBUG_SIGNAL(fprintf(stderr, "%s: installing old interrupt complete - "
+                        "was %p%s%s%s\n",
+                        codeid(), newi,
+                        newi==SIG_ERR?" (ERR)":"", newi==SIG_DFL?" (DFL)":"",
+                        newi==SIG_IGN?" (IGN)":""););
     exiting = FALSE;
     global_int_state = ref_old_handler->displaced_state;
 }
+
+
+
+
+static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
+{   return handler_init(ref_old_handler, int_state, SIGINT, "interrupt");
+}
+
+
+static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
+{   handler_end(ref_old_handler, SIGINT);
+}
+
+
+static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
+{   return handler_init(ref_old_handler, int_state, SIGFPE,
+                        "floating point exception");
+}
+
+
+static void badmaths_handler_end(interrupt_state_t *ref_old_handler)
+{   handler_end(ref_old_handler, SIGFPE);
+}
+
 
 
 #endif /* __unix__ */
@@ -18525,15 +18560,17 @@ typedef struct {
 
 BOOL WINAPI interrupt_handler(DWORD dwCtrlType)
 {
-    if (global_int_state == NULL || !throw_interrupt(global_int_state, 2))
+    if (global_int_state == NULL || !throw_signal(global_int_state, 2))
         exiting = TRUE;
     return TRUE/*handled*/;
 }
 
 
+#if 0
 static bool cause_sigint(void)
 {   return interrupt_handler(0) && exiting;
 }
+#endif
 
 
 
@@ -18574,6 +18611,19 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
     exiting = FALSE;
 }
 
+
+
+static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
+{   return true;
+}
+
+
+static void badmaths_handler_end(interrupt_state_t *ref_old_handler)
+{   return;
+}
+
+
 #endif /* _WIN32 */
 
 
@@ -18594,11 +18644,16 @@ typedef struct {
         ((void)(ref_old_handler),TRUE)
 #define interrupt_handler_end(ref_old_handler)
 
+#define badmaths_handler_init(ref_old_handler, state) \
+        ((void)(ref_old_handler),TRUE)
+#define badmaths_handler_end(ref_old_handler)
 
+
+#if 0
 static bool cause_sigint(void)
 {   return FALSE; /* not handled */
 }
-
+#endif
 
 
 
@@ -19235,6 +19290,7 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 {   const value_t *val = NULL;
     linesource_t saved;
     interrupt_state_t old_int_state;
+    interrupt_state_t old_badmaths_state;
     FILE *resultout = interactive? stdout: NULL;
 
     OMIT(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state));)
@@ -19252,6 +19308,7 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 
     if (interactive)
         (void)interrupt_handler_init(&old_int_state, state);
+    (void)badmaths_handler_init(&old_badmaths_state, state);
 
     while (!linesource_eof(parser_linesource(state)))
     {
@@ -19348,6 +19405,8 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
     OMIT(fprintf(stderr, "-- session over\n"););
     linesource_restore(parser_linesource(state), &saved);
 
+    badmaths_handler_end(&old_badmaths_state);
+    
     if (interactive)
         interrupt_handler_end(&old_int_state);
 
