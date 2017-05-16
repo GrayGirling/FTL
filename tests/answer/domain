@@ -1,0 +1,13 @@
+> domain [a=3, b="asdf", "c"=[], d]
+<"a", "b", "c">
+> domain [a=3, b="asdf"]::["c"=[], d]
+<"c", "a", "b">
+> join ", " (domain [a=3, b="asdf", "c"=[], d]!)
+"a, b, c"
+> set rndelement[env]: { env.((domain env!).(rnd (len env!)!)) }
+> domain <1, 2, 4=4, 5>
+<0, 1, 4, 5>
+> domain <10..14>
+<0, 1, 2, 3, 4>
+> domain [a=3, b="asdf"]::["c"=[], d]::<1, 2, 4=4, 5>
+<0, 1, 4, 5, "c", "a", "b">
