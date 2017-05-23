@@ -164,7 +164,7 @@ while $option; do
     fi
 done
 
-if [ $# -gt 0]; then
+if [ $# -gt 0 ]; then
     name="$1"
     shift
 else
