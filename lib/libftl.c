@@ -556,7 +556,7 @@
 #define PTRVALID(_var) (NULL != (_var))
 #define HEAPVALID(_var) (true)
 
-#ifdef __APPLE__
+#if 0 //defined(__APPLE__)
 #undef PTRVALID
 #define PTRVALID(_var) \
     (assert((((ptrdiff_t)(_var)) & 0xFFFF000000000000) == 0),NULL != (_var))
@@ -3936,7 +3936,7 @@ value_fprint(FILE *out, const value_t *root, const value_t *val)
 
 
 
-static void
+extern void
 value_delete_alloced(value_t *value)
 {   if (value != NULL && HEAPVALID(value))
     {
@@ -3977,7 +3977,7 @@ value_cmp(const value_t *v1, const value_t *v2)
     } else if (v2 == NULL) {
         DEBUGCMP(DPRINTF("cmp: v1 not NULL v2 NULL\n", v2 == NULL? "":"not "););
         return 1;
-    } else if (v1->kind != v2->kind) {
+    } else if (!type_equal(v1->kind, v2->kind)) {
         DEBUGCMP(DPRINTF("cmp: v1 (%s) v2 (%s) type differs\n",
                          type_name(v1->kind), type_name(v2->kind)););
         return v1->kind - v2->kind;
@@ -4188,12 +4188,12 @@ value_type_compare(const value_t *v1, const value_t *v2)
 
 
 extern /*internal*/ value_t *
-value_type_init(value_type_t *kind, bool on_heap,
-                type_id_t type_id, const char *name,
-                value_print_fn_t *val_print_fn, value_parse_fn_t *val_parse_fn,
-                value_cmp_fn_t *val_compare_fn,
-                value_delete_fn_t *val_delete_fn,
-                value_markver_fn_t *val_mark_version_fn)
+type_init(value_type_t *kind, bool on_heap,
+          type_id_t type_id, const char *name,
+          value_print_fn_t *val_print_fn, value_parse_fn_t *val_parse_fn,
+          value_cmp_fn_t *val_compare_fn,
+          value_delete_fn_t *val_delete_fn,
+          value_markver_fn_t *val_mark_version_fn)
 {   (void)value_init(value_type_value(kind), type_type, on_heap);
     kind->name = name;
     kind->id = type_id;
@@ -4234,9 +4234,9 @@ type_clone(bool on_heap,
 {   value_type_t *typeval = (value_type_t *)FTL_MALLOC(sizeof(value_type_t));
 
     if (PTRVALID(typeval))
-        return value_type_init(typeval, on_heap, cloned_type_id, name,
-                               print_fn, parse_fn, compare_fn, delete_fn,
-                               mark_version);
+        return type_init(typeval, on_heap, cloned_type_id, name,
+                         print_fn, parse_fn, compare_fn, delete_fn,
+                         mark_version);
     else
         return NULL;
 }
@@ -4265,7 +4265,7 @@ static void
 values_type_init(void)
 {
     type_id_generator = 0;
-    value_type_init(&type_type_val, /*on_heap*/FALSE,
+    type_init(&type_type_val, /*on_heap*/FALSE,
                     type_id_new(), "type", &value_type_print,
                     /*value_type_parse*/NULL,
                     &value_type_compare, &value_delete_alloced,
@@ -4323,9 +4323,9 @@ value_null_init(value_t *value, bool on_heap)
 static void
 values_null_init(void)
 {
-    value_type_init(&type_null_val, /*on_heap*/FALSE, type_id_new(), "nul",
-                    &value_null_print, /*parse*/NULL,
-                    &value_null_compare, &value_delete_alloced, /*mark*/NULL);
+    type_init(&type_null_val, /*on_heap*/FALSE, type_id_new(), "nul",
+              &value_null_print, /*parse*/NULL,
+              &value_null_compare, &value_delete_alloced, /*mark*/NULL);
     value_null_init(&value_null, /*on_heap*/FALSE);
 }
 
@@ -4995,9 +4995,9 @@ const value_t *value_one = &value_int_one.value;
 extern void
 values_int_init(void)
 {
-    value_type_init(&type_int_val, /*on_heap*/FALSE, type_id_new(), "int",
-                    &value_int_print, &value_int_parse,
-                    &value_int_compare, &value_delete_alloced, /*mark*/NULL);
+    type_init(&type_int_val, /*on_heap*/FALSE, type_id_new(), "int",
+              &value_int_print, &value_int_parse,
+              &value_int_compare, &value_delete_alloced, /*mark*/NULL);
     value_int_init(&value_int_zero,  0, /* on_heap */FALSE);
     value_int_init(&value_int_one,   1, /* on_heap */FALSE);
 }
@@ -5094,9 +5094,9 @@ value_ipaddr_init(value_ipaddr_t *ip, int a, int b, int c, int d, bool on_heap)
 static void
 values_ipaddr_init(void)
 {
-    value_type_init(&type_ipaddr_val, /*on_heap*/FALSE, type_id_new(), "ip",
-                    &value_ipaddr_print, &value_ipaddr_parse,
-                    &value_ipaddr_compare, &value_delete_alloced, /*mark*/NULL);
+    type_init(&type_ipaddr_val, /*on_heap*/FALSE, type_id_new(), "ip",
+              &value_ipaddr_print, &value_ipaddr_parse,
+              &value_ipaddr_compare, &value_delete_alloced, /*mark*/NULL);
 }
 
 
@@ -5379,10 +5379,10 @@ value_macaddr_parse(const char **ref_line, const value_t *this_cmd,
 static void
 values_macaddr_init(void)
 {
-    value_type_init(&type_macaddr_val, /*on_heap*/FALSE, type_id_new(), "mac",
-                    &value_macaddr_print, &value_macaddr_parse,
-                    &value_macaddr_compare, &value_delete_alloced,
-                    /*mark*/NULL);
+    type_init(&type_macaddr_val, /*on_heap*/FALSE, type_id_new(), "mac",
+              &value_macaddr_print, &value_macaddr_parse,
+              &value_macaddr_compare, &value_delete_alloced,
+              /*mark*/NULL);
 }
 
 
@@ -6087,29 +6087,25 @@ values_string_init(void)
 
     value_cstring_init(&value_string_empty_str,  "", 0, /*on_heap*/FALSE);
 
-    value_type_init(&type_string_val, /*on_heap*/FALSE, string_type_id,
-                    "string",
-                    &value_string_print, /*&value_string_parse*/NULL,
-                    &value_string_compare, &value_delete_alloced,
-                    /*mark*/NULL);
+    type_init(&type_string_val, /*on_heap*/FALSE, string_type_id, "string",
+              &value_string_print, /*&value_string_parse*/NULL,
+              &value_string_compare, &value_delete_alloced,
+              /*mark*/NULL);
 
-    value_type_init(&type_cstringlit_val, /*on_heap*/FALSE, string_type_id,
-                    "string",
-                    &value_string_print, /*&value_string_parse*/NULL,
-                    &value_string_compare, &value_delete_alloced,
-                    /*mark*/NULL);
+    type_init(&type_cstringlit_val, /*on_heap*/FALSE, string_type_id, "string",
+              &value_string_print, /*&value_string_parse*/NULL,
+              &value_string_compare, &value_delete_alloced,
+              /*mark*/NULL);
 
-    value_type_init(&type_stringlit_val, /*on_heap*/FALSE, string_type_id,
-                    "string",
-                    &value_string_print, /*&value_string_parse*/NULL,
-                    &value_string_compare, &value_string_delete,
-                    /*mark*/NULL);
+    type_init(&type_stringlit_val, /*on_heap*/FALSE, string_type_id, "string",
+              &value_string_print, /*&value_string_parse*/NULL,
+              &value_string_compare, &value_string_delete,
+              /*mark*/NULL);
 
-    value_type_init(&type_substring_val, /*on_heap*/FALSE, string_type_id,
-                    "string",
-                    &value_string_print, /*&value_string_parse*/NULL,
-                    &value_string_compare, &value_delete_alloced,
-                    &value_substring_markver);
+    type_init(&type_substring_val, /*on_heap*/FALSE, string_type_id, "string",
+              &value_string_print, /*&value_string_parse*/NULL,
+              &value_string_compare, &value_delete_alloced,
+              &value_substring_markver);
 }
 
 
@@ -6290,10 +6286,10 @@ values_code_init(void)
 {
     type_id_t code_type_id = type_id_new();
 
-    value_type_init(&type_code_val, /*on_heap*/FALSE, code_type_id, "code",
-                    &value_code_print, /*&value_code_parse*/NULL,
-                    &value_code_compare, &value_code_delete,
-                    &value_code_markver);
+    type_init(&type_code_val, /*on_heap*/FALSE, code_type_id, "code",
+              &value_code_print, /*&value_code_parse*/NULL,
+              &value_code_compare, &value_code_delete,
+              &value_code_markver);
 }
 
 
@@ -7029,37 +7025,37 @@ values_stream_init(void)
 {
     type_id_t stream_type_id = type_id_new();
 
-    value_type_init(&type_stream_file_val, /*on_heap*/FALSE,
-                    stream_type_id, "stream",
-                    &value_stream_print, /*&value_stream_parse*/NULL,
-                    /*&value_stream_compare*/NULL, &value_stream_delete,
-                    /*&value_stream_markver*/NULL);
+    type_init(&type_stream_file_val, /*on_heap*/FALSE,
+              stream_type_id, "stream",
+              &value_stream_print, /*&value_stream_parse*/NULL,
+              /*&value_stream_compare*/NULL, &value_stream_delete,
+              /*&value_stream_markver*/NULL);
 
 #ifdef HAS_SOCKETS
-    value_type_init(&type_stream_socket_val, /*on_heap*/FALSE,
-                    stream_type_id, "stream",
-                    &value_stream_print, /*&value_stream_parse*/NULL,
-                    /*&value_stream_compare*/NULL, &value_stream_delete,
-                    /*&value_stream_markver*/NULL);
+    type_init(&type_stream_socket_val, /*on_heap*/FALSE,
+              stream_type_id, "stream",
+              &value_stream_print, /*&value_stream_parse*/NULL,
+              /*&value_stream_compare*/NULL, &value_stream_delete,
+              /*&value_stream_markver*/NULL);
 #endif
 
-    value_type_init(&type_stream_instring_val, /*on_heap*/FALSE,
-                    stream_type_id, "stream",
-                    &value_stream_print, /*&value_stream_parse*/NULL,
-                    /*&value_stream_compare*/NULL, &value_stream_delete,
-                    /*&value_stream_markver*/NULL);
+    type_init(&type_stream_instring_val, /*on_heap*/FALSE,
+              stream_type_id, "stream",
+              &value_stream_print, /*&value_stream_parse*/NULL,
+              /*&value_stream_compare*/NULL, &value_stream_delete,
+              /*&value_stream_markver*/NULL);
 
-    value_type_init(&type_stream_outstring_val, /*on_heap*/FALSE,
-                    stream_type_id, "stream",
-                    &value_stream_print, /*&value_stream_parse*/NULL,
-                    /*&value_stream_compare*/NULL, &value_stream_delete,
-                    /*&value_stream_markver*/NULL);
+    type_init(&type_stream_outstring_val, /*on_heap*/FALSE,
+              stream_type_id, "stream",
+              &value_stream_print, /*&value_stream_parse*/NULL,
+              /*&value_stream_compare*/NULL, &value_stream_delete,
+              /*&value_stream_markver*/NULL);
 
-    value_type_init(&type_stream_outmem_val, /*on_heap*/FALSE,
-                    stream_type_id, "stream",
-                    &value_stream_print, /*&value_stream_parse*/NULL,
-                    /*&value_stream_compare*/NULL, &value_stream_delete,
-                    /*&value_stream_markver*/NULL);
+    type_init(&type_stream_outmem_val, /*on_heap*/FALSE,
+              stream_type_id, "stream",
+              &value_stream_print, /*&value_stream_parse*/NULL,
+              /*&value_stream_compare*/NULL, &value_stream_delete,
+              /*&value_stream_markver*/NULL);
 
 #if 0
         (stream)
@@ -12678,84 +12674,84 @@ values_dir_init(void)
     type_id_t dir_type_id = type_id_new();
 
     /* type_dir correspond to dir_id */
-    value_type_init(&type_dir_id_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, NULL /* &dir_parse */,
-                    &dir_compare, &dir_id_delete,
-                    &dir_id_markver);
+    type_init(&type_dir_id_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, NULL /* &dir_parse */,
+              &dir_compare, &dir_id_delete,
+              &dir_id_markver);
 
-    value_type_init(&type_dir_vec_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_vec_print, /*&value_dir_parse*/NULL,
-                    &dir_compare, &dir_vec_delete,
-                    &dir_vec_markver);
+    type_init(&type_dir_vec_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_vec_print, /*&value_dir_parse*/NULL,
+              &dir_compare, &dir_vec_delete,
+              &dir_vec_markver);
 
-    value_type_init(&type_dir_dyn_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced/* never used? */,
-                    &dir_dyn_markver);
+    type_init(&type_dir_dyn_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced/* never used? */,
+              &dir_dyn_markver);
 
-    value_type_init(&type_dir_join_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &dir_join_delete,
-                    &dir_join_markver);
+    type_init(&type_dir_join_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &dir_join_delete,
+              &dir_join_markver);
 
-    value_type_init(&type_dir_struct_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &dir_struct_delete,
-                    &dir_struct_markver);
+    type_init(&type_dir_struct_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &dir_struct_delete,
+              &dir_struct_markver);
 
-    value_type_init(&type_dir_dynseq_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_vec_print, /*&dir_parse*/NULL,
-                    &dir_compare, &dir_dynseq_delete,
-                    /*markver*/ NULL);
+    type_init(&type_dir_dynseq_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_vec_print, /*&dir_parse*/NULL,
+              &dir_compare, &dir_dynseq_delete,
+              /*markver*/ NULL);
 
-    value_type_init(&type_dir_argvec_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced/* never used */,
-                    /*markver*/ NULL);
+    type_init(&type_dir_argvec_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced/* never used */,
+              /*markver*/ NULL);
 
-    value_type_init(&type_dir_array_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &dir_array_delete, &dir_array_markver);
+    type_init(&type_dir_array_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &dir_array_delete, &dir_array_markver);
 
-    value_type_init(&type_dir_series_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_series_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced,
-                    /*markver*/ NULL);
+    type_init(&type_dir_series_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_series_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced,
+              /*markver*/ NULL);
 
-    value_type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced/* never used?*/,
-                    /*markver*/ NULL);
+    type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced/* never used?*/,
+              /*markver*/ NULL);
 
 #if 0
-    value_type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, /*&dir_sysenv_delete*/NULL,
-                    /*&dir_sysenv_markver*/NULL);
+    type_init(&type_dir_sysenv_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, /*&dir_sysenv_delete*/NULL,
+              /*&dir_sysenv_markver*/NULL);
 #endif
 
-    value_type_init(&type_dir_lib_val, /*on_heap*/FALSE,
-                    dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &dir_lib_delete, &dir_lib_markver);
+    type_init(&type_dir_lib_val, /*on_heap*/FALSE,
+              dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &dir_lib_delete, &dir_lib_markver);
 
 #ifdef HAS_REGISTRY
-    value_type_init(&type_dir_regkeyval_val, /*on_heap*/FALSE,
-                    dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced,
-                    /*markver*/ NULL);
+    type_init(&type_dir_regkeyval_val, /*on_heap*/FALSE,
+              dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced,
+              /*markver*/ NULL);
 #endif
 
-    value_type_init(&type_dir_stack_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &dir_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced,
-                    &dir_stack_markver);
+    type_init(&type_dir_stack_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced,
+              &dir_stack_markver);
 
-    value_type_init(&type_dir_env_val, /*on_heap*/FALSE, dir_type_id, "dir",
-                    &value_env_print, /*&dir_parse*/NULL,
-                    &dir_compare, &value_delete_alloced,
-                    &value_env_markver);
+    type_init(&type_dir_env_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &value_env_print, /*&dir_parse*/NULL,
+              &dir_compare, &value_delete_alloced,
+              &value_env_markver);
 }
 
 
@@ -13137,11 +13133,11 @@ values_closure_init(void)
 {
     type_id_t closure_type_id = type_id_new();
 
-    value_type_init(&type_closure_val, /*on_heap*/FALSE,
-                    closure_type_id, "closure",
-                    &value_closure_print, /*&value_closure_parse*/NULL,
-                    &value_closure_compare, &value_closure_delete,
-                    &value_closure_markver);
+    type_init(&type_closure_val, /*on_heap*/FALSE,
+              closure_type_id, "closure",
+              &value_closure_print, /*&value_closure_parse*/NULL,
+              &value_closure_compare, &value_closure_delete,
+              &value_closure_markver);
 }
 
 
@@ -13366,13 +13362,13 @@ values_coroutine_init(void)
 {
     type_id_t coroutine_type_id = type_id_new();
 
-    value_type_init(&type_coroutine_val, /*on_heap*/FALSE,
-                    coroutine_type_id, "coroutine",
-                    &value_coroutine_print,
-                    /*&value_closure_parse*/NULL,
-                    /*&value_coroutine_compare*/NULL,
-                    &value_coroutine_delete,
-                    &value_coroutine_markver);
+    type_init(&type_coroutine_val, /*on_heap*/FALSE,
+              coroutine_type_id, "coroutine",
+              &value_coroutine_print,
+              /*&value_closure_parse*/NULL,
+              /*&value_coroutine_compare*/NULL,
+              &value_coroutine_delete,
+              &value_coroutine_markver);
 }
 
 
@@ -15160,10 +15156,10 @@ values_cmd_init(void)
 {
     type_id_t cmd_type_id = type_id_new();
 
-    value_type_init(&type_cmd_val, /*on_heap*/FALSE, cmd_type_id, "cmd",
-                    &value_cmd_print, /*&value_cmd_parse*/NULL,
-                    /*&value_cmd_compare*/NULL, &value_cmd_delete,
-                    &value_cmd_markver);
+    type_init(&type_cmd_val, /*on_heap*/FALSE, cmd_type_id, "cmd",
+              &value_cmd_print, /*&value_cmd_parse*/NULL,
+              /*&value_cmd_compare*/NULL, &value_cmd_delete,
+              &value_cmd_markver);
 }
 
 
@@ -15453,17 +15449,17 @@ values_func_init(void)
 {
     type_id_t func_type_id = type_id_new();
 
-    value_type_init(&type_func_val, /*on_heap*/FALSE, func_type_id, "fn",
-                    &value_func_print, /*&value_func_parse*/NULL,
-                    /*&value_func_compare*/NULL, &value_func_delete,
-                    /*&value_func_markver*/NULL);
+    type_init(&type_func_val, /*on_heap*/FALSE, func_type_id, "fn",
+              &value_func_print, /*&value_func_parse*/NULL,
+              /*&value_func_compare*/NULL, &value_func_delete,
+              /*&value_func_markver*/NULL);
 
-    value_type_init(&type_func_lhv_val, /*on_heap*/FALSE, func_type_id, "fn",
-                    &value_func_lhv_print,
-                    /*&value_func_parse*/NULL,
-                    /*&value_func_lhv_compare*/NULL,
-                    &value_func_delete,
-                    &value_func_lhv_markver);
+    type_init(&type_func_lhv_val, /*on_heap*/FALSE, func_type_id, "fn",
+              &value_func_lhv_print,
+              /*&value_func_parse*/NULL,
+              /*&value_func_lhv_compare*/NULL,
+              &value_func_delete,
+              &value_func_lhv_markver);
 }
 
 
@@ -15962,26 +15958,26 @@ values_mem_init(void)
 {
     type_id_t mem_type_id = type_id_new();
 
-    value_type_init(&type_mem_val, /*on_heap*/FALSE, mem_type_id, "mem",
-                    &value_mem_print, /*&value_mem_parse*/NULL,
-                    /*&value_mem_compare*/NULL, &value_mem_bin_delete,
-                    &value_mem_bin_markver);
+    type_init(&type_mem_val, /*on_heap*/FALSE, mem_type_id, "mem",
+              &value_mem_print, /*&value_mem_bin_parse*/NULL,
+              /*&value_mem_bin_compare*/NULL, &value_mem_bin_delete,
+              &value_mem_bin_markver);
 
-    value_type_init(&type_mem_shared_val, /*on_heap*/FALSE, mem_type_id, "mem",
-                    &value_mem_print, /*&value_mem_parse*/NULL,
-                    /*&value_mem_compare*/NULL, &value_delete_alloced,
-                    &value_mem_bin_markver);
+    type_init(&type_mem_shared_val, /*on_heap*/FALSE, mem_type_id, "mem",
+              &value_mem_print, /*&value_mem_bin_parse*/NULL,
+              /*&value_mem_bin_compare*/NULL, &value_delete_alloced,
+              &value_mem_bin_markver);
 
-    value_type_init(&type_mem_rebase_val, /*on_heap*/FALSE, mem_type_id, "mem",
-                    &value_mem_print, /*&value_mem_parse*/NULL,
-                    /*&value_mem_compare*/NULL, &value_mem_rebase_delete,
-                    &value_mem_rebase_markver);
+    type_init(&type_mem_rebase_val, /*on_heap*/FALSE, mem_type_id, "mem",
+              &value_mem_print, /*&value_mem_rebase_parse*/NULL,
+              /*&value_mem_rebase_compare*/NULL, &value_mem_rebase_delete,
+              &value_mem_rebase_markver);
 
-    value_type_init(&type_mem_rebase_shared_val, /*on_heap*/FALSE,
-                    mem_type_id, "mem",
-                    &value_mem_print, /*&value_mem_parse*/NULL,
-                    /*&value_mem_compare*/NULL, &value_delete_alloced,
-                    &value_mem_rebase_markver);
+    type_init(&type_mem_rebase_shared_val, /*on_heap*/FALSE,
+              mem_type_id, "mem",
+              &value_mem_print, /*&value_mem_rebase_parse*/NULL,
+              /*&value_mem_rebase_compare*/NULL, &value_delete_alloced,
+              &value_mem_rebase_markver);
 }
 
 
@@ -16403,11 +16399,10 @@ values_bool_init(void)
     type_id_t closure_type_id = type_closure->id;
 
     /* bool is a varient of the "fn" type */
-    value_type_init(&type_bool_val, /*on_heap*/FALSE,
-                    closure_type_id, "closure",
-                    &value_bool_print, /*&value_closure_parse*/NULL,
-                    &value_bool_cmp, &value_closure_delete,
-                    &value_closure_markver);
+    type_init(&type_bool_val, /*on_heap*/FALSE, closure_type_id, "closure",
+              &value_bool_print, /*&value_closure_parse*/NULL,
+              &value_bool_cmp, &value_closure_delete,
+              &value_closure_markver);
 
     value_bool_init(&value_closure_true, &value_func_true,
                     &value_argenv_true, &value_helpstr_true,

@@ -158,6 +158,11 @@ _value_unlocal(const value_t *val, int lineno)
 
 #define value_unlocal(val) _value_unlocal(val, __LINE__)
 
+/* candidate function for value_delete_fn_t for a simple value_t */
+extern void
+value_delete_alloced(value_t *value);
+
+
 extern void
 value_delete(value_t **ref_val);
 
