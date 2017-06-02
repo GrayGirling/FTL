@@ -19,7 +19,9 @@ are sufficiently expressive to write programs in.
 
 Using the library allows the user to implement just the commands necessary
 without needing to implement things like:
-* command line editing
+* command line editing (depending on the build)
+* concatenating lines using separated with a terminal '\'
+* ignoring comment lines with an initial '#'
 * variable setting and expansion
 * including scripts from other files
 
@@ -64,7 +66,7 @@ programs can be downloaded from
 [here](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-commandline-tutorial.html).
 
 If used as the basis of a language see the user guide at:
-[user guide](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-user-guide.html).
+[user guide](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-user-guide.pdf).
 
 A simple outline of the language is contained in:
 [spec](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-spec.html).
