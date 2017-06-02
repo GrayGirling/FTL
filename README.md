@@ -63,13 +63,13 @@ this repository.
 
 A description of the use of the library to create C or C++ command-line
 programs can be downloaded from
-[here](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-commandline-tutorial.html).
+[here](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-commandline-tutorial.html).
 
 If used as the basis of a language see the user guide at:
-[user guide](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-user-guide.pdf).
+[user guide](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-user-guide.pdf).
 
 A simple outline of the language is contained in:
-[spec](https://github.com/GrayGirling/FTL/tree/master/doc/FTL-spec.html).
+[spec](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-spec.html).
 
 ## License
 
