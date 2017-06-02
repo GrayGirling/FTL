@@ -1,0 +1,12 @@
+eval f="foibles"
+#"foibles"
+eval [a]:{echo a!; a} "asparagus"!
+#asparagus
+#"asparagus"
+set demo [expr]:{ 
+   io.write io.out ""+(expr)+" = "+(str (eval expr!)!)+"\n"!
+}
+for <3..5> [n]:{demo "100/"+(str n!)!}
+#100/3 = 33
+#100/4 = 25
+#100/5 = 20
