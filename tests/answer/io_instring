@@ -1,0 +1,9 @@
+> parse exec "" (io.instring "echo hi\necho there" "r"!)
+> echo hi
+hi
+> echo there
+there
+> set f io.instring "text to read\n" "r"!
+> io read f 4
+"text"
+> io close f

@@ -202,6 +202,9 @@ sleep_ms(unsigned long milliseconds);
 
 /*          O/S Independence - File Path                             */
 
+/*! Open \c name on the directory path \c path writing the full name
+ *  of the name (including a prefix from the directory path) to \c namebuf
+ */
 extern FILE *
 fopen_onpath(const char *path, const char *name, size_t namelen,
              const char *mode, char *namebuf, size_t buflen);

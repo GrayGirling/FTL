@@ -1,0 +1,26 @@
+> set done FALSE
+> set once[fn]: { if (done) { done=TRUE; fn! } {}! } 
+> eval FALSE {echo "never run"!}!
+FALSE
+> equal TRUE FALSE
+FALSE
+> equal FALSE FALSE
+TRUE
+> notequal TRUE FALSE
+TRUE
+> notequal FALSE FALSE
+FALSE
+> eval not FALSE
+TRUE
+> eval invert FALSE!
+TRUE
+> logand FALSE FALSE
+FALSE
+> logand FALSE TRUE
+FALSE
+> logor FALSE FALSE
+FALSE
+> logor FALSE TRUE
+TRUE
+> typeof FALSE
+$basetype.closure

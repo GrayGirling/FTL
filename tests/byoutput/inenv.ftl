@@ -20,3 +20,11 @@ inenv <1..4> 4
 #inenv <1..4>::<9..12> 5
 #inenv <1..4>::<9..12> 9
 
+inenv (parse.env!) "inenv"
+#TRUE
+inenv [a=NULL, b] "a"
+#TRUE
+inenv [a=NULL, b] "b"
+#FALSE
+inenv [a=NULL, b] "c"
+#FALSE

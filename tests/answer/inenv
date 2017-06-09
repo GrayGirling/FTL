@@ -24,3 +24,11 @@ TRUE
 TRUE
 > inenv <1..4> 4
 FALSE
+> inenv (parse.env!) "inenv"
+TRUE
+> inenv [a=NULL, b] "a"
+TRUE
+> inenv [a=NULL, b] "b"
+FALSE
+> inenv [a=NULL, b] "c"
+FALSE

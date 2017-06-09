@@ -1,0 +1,39 @@
+> eval (3 == 3) {echo "hi"!}!
+hi
+> equal 0 0
+TRUE
+> equal NULL NULL
+TRUE
+> equal "string" "string"
+TRUE
+> equal (mac {02:99:55:AB:9D:12}!) (mac {02:99:55:AB:9D:12}!)
+TRUE
+> equal (ip {192.168.0.20}!) (ip {192.168.0.20}!)
+TRUE
+> equal basetype.int basetype.int
+TRUE
+> equal 0 1
+FALSE
+> equal NULL FALSE
+FALSE
+> equal "string" "otherstring"
+FALSE
+> equal (mac {02:99:55:AB:9D:12}!) (mac {03:99:55:AB:9D:12}!)
+FALSE
+> equal (ip {192.168.0.20}!) (ip {192.168.0.30}!) 
+FALSE
+> equal basetype.int basetype.mac
+FALSE
+> equal <> <>
+FALSE
+> equal [] []
+FALSE
+> set friends_a [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
+> set friends_b [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
+> set friends_c new friends_a!
+> equal friends_a friends_a
+TRUE
+> equal friends_a friends_b
+FALSE
+> equal friends_a friends_c
+FALSE

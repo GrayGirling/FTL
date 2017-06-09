@@ -1,0 +1,8 @@
+> invert TRUE
+FALSE
+> invert FALSE
+TRUE
+> invert []
+FALSE
+> invert 9
+FALSE

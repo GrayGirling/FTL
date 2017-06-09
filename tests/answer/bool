@@ -4,13 +4,11 @@ TRUE
 FALSE
 > TRUE {echo "prints"!}           
 prints
-FALSE
 > FALSE {echo "doesn't print"!}   
 FALSE
 > TRUE {echo "prints"!;TRUE}! {echo "prints again"!}       
 prints
 prints again
-FALSE
 > TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}     
 prints
 FALSE

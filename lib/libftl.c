@@ -1916,6 +1916,9 @@ charsource_file_new(const char *name)
 
 
 
+/*! Open \c name on the directory path \c path writing the full name
+ *  of the name (including a prefix from the directory path) to \c namebuf
+ */
 extern FILE *
 fopen_onpath(const char *path, const char *name, size_t namelen,
              const char *mode, char *namebuf, size_t buflen)
@@ -16372,7 +16375,7 @@ fn_true(const value_t *this_fn, parser_state_t *state)
         val = invoke(arg, state);
     }
 
-    if (val == NULL || val == &value_null)
+    if (val == NULL)
         val = value_false;
 
     return val;
@@ -22808,6 +22811,50 @@ fn_int_bitnot(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
+fn_rndseed(const value_t *this_fn, parser_state_t *state)
+{   const value_t *seedval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+    const char *seedbin;
+    size_t seedlen = 0;
+    bool is_int = value_istype(seedval, type_int);
+
+    if (is_int || value_string_get(seedval, &seedbin, &seedlen))
+    {
+        unsigned int seed = 0;
+        unsigned int *seedparts;
+        int seedpartcount;
+        number_t seedint;
+        if (is_int)
+        {   seedint = value_int_number(seedval);
+            seedbin = (char *)&seedint;
+            seedlen = sizeof(seedint);
+        }
+        seedparts = (unsigned int *)seedbin;
+        seedpartcount = seedlen/sizeof(unsigned int);
+        seedlen -= seedpartcount * sizeof(unsigned int);
+        // make a seed by exclusive-oring all the unsigned ints in the binary
+        while (seedpartcount-- > 0)
+            seed ^= *seedparts++;
+        seedbin = (char *)seedparts;
+        if (seedlen > 0)
+        {   unsigned int lastpart = 0;
+            char *lastpartbin = (char *)&lastpart; 
+            while (seedlen-- > 0)
+                *lastpartbin++ = *seedbin++;
+            seed ^= lastpart;
+        }
+	srand(seed);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
 fn_rnd(const value_t *this_fn, parser_state_t *state)
 {   const value_t *upb = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
@@ -22879,6 +22926,9 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
     mod_addfn(cmds, "rnd",
               "<n> - return random number less than <n>",
               &fn_rnd, 1);
+    mod_addfn(cmds, "rndseed",
+              "<n> | <string> - set random seed based on argument",
+              &fn_rndseed, 1);
     mod_addfn(cmds, "int_fmt_hexbits",
               "<n> - set bits that won't result in integer hex "
               "printing in hex when set",
