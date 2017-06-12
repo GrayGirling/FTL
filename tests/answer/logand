@@ -1,0 +1,8 @@
+> logand TRUE TRUE
+TRUE
+> logand TRUE FALSE
+FALSE
+> logand FALSE TRUE
+FALSE
+> logand FALSE FALSE
+FALSE

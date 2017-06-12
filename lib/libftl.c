@@ -22814,7 +22814,7 @@ static const value_t *
 fn_rndseed(const value_t *this_fn, parser_state_t *state)
 {   const value_t *seedval = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
-    const char *seedbin;
+    const char *seedbin = NULL;
     size_t seedlen = 0;
     bool is_int = value_istype(seedval, type_int);
 

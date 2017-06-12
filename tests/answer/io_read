@@ -7,3 +7,4 @@
 > set f io.file "log" "r"!
 > io read f 25
 "=== a line of logging\n==="
+> io close f

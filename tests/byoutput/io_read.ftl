@@ -6,3 +6,4 @@ set write[file, msg]:{
 write "log"  "=== a line of logging\n=== followed by another"
 set f io.file "log" "r"!
 io read f 25
+io close f

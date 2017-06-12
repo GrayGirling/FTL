@@ -1,0 +1,6 @@
+set n io.stringify io.out "that's \"£££\"s\n"!
+#"that\'s \"\xc2\xa3\xc2\xa3\xc2\xa3\"s\n">
+eval n
+#41
+io stringify io.out [a=3, b="this", c=<"one", 2, 3>]
+#["a"=3,"b"="this","c"=<"one", 2, 3>]36

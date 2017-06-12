@@ -1,0 +1,17 @@
+> set inrange[x,low,high]: { 1 and (moreeq x low!) and (lesseq x high!) }
+> inrange 0 3 6
+FALSE
+> inrange 3 3 6
+TRUE
+> inrange 4 3 6
+TRUE
+> inrange 6 3 6
+TRUE
+> inrange 7 3 6
+FALSE
+> inrange "ab" "a" "b"
+TRUE
+> inrange basetype.dir basetype.nul basetype.string
+FALSE
+> inrange basetype.string basetype.nul basetype.dir
+TRUE

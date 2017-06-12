@@ -1,0 +1,14 @@
+> len "one\0two"
+7
+> len [a=5,b,c]
+1
+> len <..4>
+4
+> len "£"
+2
+> set stack <>
+> set push [x]: { stack.(len stack!) = x; }
+> push "this"
+> push "that"
+> eval stack
+<"this", "that">

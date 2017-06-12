@@ -1,0 +1,19 @@
+> set max[a,b]:{ if (more a b!){a}{b}! }
+> max 0 0
+0
+> max 5 6
+6
+> max "aword" "bword"
+"bword"
+> max "a" "ab"
+"ab"
+> max [a=5] [b=33]
+[b=33]
+> max <1> <2>
+<2>
+> max NULL 8
+8
+> max 8 NULL
+8
+> max basetype.int basetype.nul
+$basetype.int

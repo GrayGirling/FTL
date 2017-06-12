@@ -1,0 +1,7 @@
+io write io.out "€1 = £0.60\n"
+#€1 = £0.60
+#14
+set n io.write io.out "that's \"£££\"s\n"!
+#that's "£££"s
+eval n
+#17
