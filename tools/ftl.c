@@ -75,9 +75,10 @@
 
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 0
+#define VERSION_MIN 1
 
 #define ENV_PATH "FTL_PATH"
+#define ENV_PROLOG "FTL_PROLOG"
 
 /* #define TEST_FTLSTRUCT */
 /* #define USE_READLINE */
@@ -522,17 +523,36 @@ main(int argc, char **argv)
                 bool do_args = opt_argc > 0;
 
                 if (do_prolog)
-                {   charsource_t *prolog =
-                        charsource_cstring_new("prolog", &prolog_text[0],
-                                               sizeof(prolog_text));
-                    if (NULL == prolog)
-                        printf("%s: couldn't open text prolog\n", CODEID);
-                    else if (NULL == parser_expand_exec(state, prolog,
-                                                        NULL, NULL,
+                {    const char *prolog_file = getenv(ENV_PROLOG);
+                     const char *rltool_path = getenv(ENV_PATH);
+
+                     if (NULL != prolog_file && prolog_file[0] != '\0')
+                     {   charsource_t *fin =
+                             charsource_file_path_new(rltool_path, prolog_file,
+                                                      strlen(prolog_file));
+                         if (NULL == fin)
+                             printf("%s: can't find prolog '%s' on path\n",
+                                    codeid(), prolog_file);
+                         else
+                         if (NULL == parser_expand_exec(state, fin, NULL, NULL,
                                                         /*no_locals*/TRUE))
-                    {   fprintf(stderr, "%s: attempted execution of "
-                                "text prolog failed\n", codeid());
-                    }
+                         {  fprintf(stderr, "%s: attempted execution of "
+                                    "prolog file \"%s\" failed\n",
+                                    codeid(), prolog_file);
+                         }
+                     } else
+                     {   charsource_t *prolog =
+                             charsource_cstring_new("prolog", &prolog_text[0],
+                                                    sizeof(prolog_text));
+                         if (NULL == prolog)
+                             printf("%s: couldn't open text prolog\n", CODEID);
+                         else if (NULL == parser_expand_exec(state, prolog,
+                                                             NULL, NULL,
+                                                             /*no_locals*/TRUE))
+                         {   fprintf(stderr, "%s: attempted execution of "
+                                     "text prolog failed\n", codeid());
+                         }
+                     }
                 }
 
                 if (do_args)
