@@ -1619,6 +1619,11 @@ extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
 extern const value_t *
+parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
+                 const char *delim, const char *execpath, dir_t *fndir,
+                 bool expect_no_locals);
+
+extern const value_t *
 parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                const char *cmd_str, const char *rcfile_id,
                bool expect_no_locals, bool interactive);
@@ -1643,12 +1648,40 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                            NULL, NULL, no_locals)
 
 
+/*! Start an interactive ftl interpreter reading rcfile initially
+ * initially commands are read from the terminal and output is written there
+ */
 extern void
 cli(parser_state_t *state, const char *rcfile, const char *code_name);
 
+/*! Run an ftl interpreter taking commands from argv
+ *  Comma (,) tokens are used to separate runs of tokens that are interpreted
+ *  as separate FTL commands
+ *    @param state     - current parser state
+ *    @param code_name - name to call the parser during this phase
+ *    @param execpath  - file directory path from which to take FTL sources
+ *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
+ *    @param ref_argn  - updatable reference number of syms in array
+ */
 extern void
 argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
          const char **argv, int argc);
+
+
+/*! Run an ftl interpreter taking commands from argv
+ *  Only the initial commands that consist of --opt style tokens are parsed.
+ *  as separate FTL commands.
+ *  The argv provided is updated and provides the remaining tokens.
+ *    @param state     - current parser state
+ *    @param code_name - name to call the parser during this phase
+ *    @param execpath  - file directory path from which to take FTL sources
+ *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
+ *    @param ref_argn  - updatable reference number of syms in array
+ *    @param fndir     - directory to take parsing function definitions from
+ */
+extern void
+argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
+             const char ***ref_argv, int *ref_argc, dir_t *fndir);
 
 
 /*          Generic Commands                                 */

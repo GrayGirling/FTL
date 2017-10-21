@@ -82,7 +82,7 @@
 /* #define TEST_FTLSTRUCT */
 /* #define USE_READLINE */
 
-#define APP_ARGC_MAX 64
+#define APP_ARGC_MAX 128
 
 #ifndef IN_CPLANE
 
@@ -175,7 +175,7 @@ usage(const char* msg)
     fprintf(stderr, "     [-f] <cmdfile>     - read commands from this file instead of the console\n");
     fprintf(stderr, "     -c \"cmd;cmd;...\"   - execute initial commands\n");
     fprintf(stderr, "     -r <n>             - set random seed\n");
-    fprintf(stderr, "     -[n]e | --[no]echo - "
+    fprintf(stderr, "     -[n]e | --[no]emit - "
 		    "[don't] echo executed commands\n");
     fprintf(stderr, "     -q | --quiet       - "
 	            "don't report unnecessary info\n");
@@ -192,7 +192,7 @@ static const char *
 parse_args(int argc, char **argv,
 	   int *out_argc, const char **out_argv, size_t out_argv_len,
 	   const char **ref_cmd, const char **ref_input,
-	   bool *out_echo, bool *out_quiet)
+	   bool *out_echo, bool *out_do_prolog, bool *out_quiet)
 {   int argn = 1;
     int out_argn = 0;
     const char *err = NULL;
@@ -203,6 +203,7 @@ parse_args(int argc, char **argv,
 
     while (argn < argc)
     {   const char *arg = argv[argn];
+
 	if (localargs)
 	{   if ((parse_key(&arg, "-h") || parse_key(&arg, "--help")) &&
 		parse_empty(&arg))
@@ -235,21 +236,30 @@ parse_args(int argc, char **argv,
 		parse_empty(&arg))
 		*out_quiet = TRUE;
 	    else
-	    if ((parse_key(&arg, "-e") || parse_key(&arg, "--echo")) &&
+	    if ((parse_key(&arg, "-e") || parse_key(&arg, "--emit")) &&
 		parse_empty(&arg))
 		*out_echo = TRUE;
 	    else
-	    if ((parse_key(&arg, "-ne") || parse_key(&arg, "--noecho")) &&
+	    if ((parse_key(&arg, "-ne") || parse_key(&arg, "--noemit") ||
+                 parse_key(&arg, "--noecho")) &&
 		parse_empty(&arg))
 		*out_echo = TRUE;
+	    else
+            if ((parse_key(&arg, "-np") || parse_key(&arg, "--noprolog")) &&
+		parse_empty(&arg))
+		*out_do_prolog = FALSE;
 	    else
 	    if (parse_key(&arg, "--") && parse_empty(&arg))
 		localargs = FALSE;
 	    else
-	    {   out_argv[out_argn++] = argv[argn];
-                localargs = FALSE;
+	    {   localargs = FALSE;
+                if ((size_t)out_argn < out_argv_len)
+                    out_argv[out_argn++] = argv[argn];
+                else
+                    err = "too many options";
             }
 #if 0
+            // take first non-keyed argument as --file input
 	    if (NULL == *ref_input)
 	    {   *ref_input = argv[argn];
 		localargs = FALSE; /* subsequent args are for the script */
@@ -456,6 +466,23 @@ cmds_ftl_end(parser_state_t *state)
 
 /*****************************************************************************
  *                                                                           *
+ *          FTL Code						             *
+ *          ========                                                         *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
+#include "ftl_fns.str"
+    ;
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Main Program						     *
  *          ============					             *
  *                                                                           *
@@ -474,6 +501,7 @@ main(int argc, char **argv)
     const char *app_argv[APP_ARGC_MAX];
     int app_argc;
     bool echo_lines = FALSE;
+    bool do_prolog = TRUE;
     FILE *echo_log = stdout;
     bool quiet = FALSE;
     
@@ -481,15 +509,42 @@ main(int argc, char **argv)
     
     if (NULL == (err = parse_args(argc, argv,
 				  &app_argc, &app_argv[0], APP_ARGC_MAX,
-				  &init, &cmd_file, &echo_lines, &quiet)))
+				  &init, &cmd_file, &echo_lines, &do_prolog,
+                                  &quiet)))
     {   parser_state_t *state = parser_state_new(dir_id_new());
 
 	if (NULL != state)
 	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
 	    cmds_generic(state, app_argc, &app_argv[0]);
 	    if (cmds_ftl(state))
-	    {	bool do_args = app_argc > 1;
+	    {	const char **opt_argv = &app_argv[1];
+                int opt_argc = app_argc-1;
+                bool do_args = opt_argc > 0;
 
+                if (do_prolog)
+                {   charsource_t *prolog =
+                        charsource_cstring_new("prolog", &prolog_text[0],
+                                               sizeof(prolog_text));
+                    if (NULL == prolog)
+                        printf("%s: couldn't open text prolog\n", CODEID);
+                    else if (NULL == parser_expand_exec(state, prolog,
+                                                        NULL, NULL,
+                                                        /*no_locals*/TRUE))
+                    {   fprintf(stderr, "%s: attempted execution of "
+                                "text prolog failed\n", codeid());
+                    }
+                }
+
+                if (do_args)
+                {   // parse --<option> ..
+                    const value_t *opt_parse_dirval =
+                        dir_string_get(parser_env(state), "opt");
+                    if (opt_parse_dirval != NULL)
+                        argv_opt_cli(state, CODEID, /*execpath*/NULL,
+                                     &opt_argv, &opt_argc,
+                                     (dir_t *)opt_parse_dirval);
+                    do_args = opt_argc > 0;
+                }
                 if (NULL != cmd_file)
 		{   charsource_t *fin =
                         charsource_file_path_new(getenv(ENV_PATH),
@@ -504,8 +559,9 @@ main(int argc, char **argv)
 				codeid(), cmd_file);
 		    }
 		} else if (do_args)
-                {   argv_cli(state, CODEID, getenv(ENV_PATH),
-                             (const char **)&app_argv[1], app_argc-1);
+                {
+                    argv_cli(state, CODEID, getenv(ENV_PATH),
+                             opt_argv, opt_argc);
                 } else
 	        {   if (!quiet)
 		    {   int ftlmaj, ftlmin, ftldebug;
@@ -541,3 +597,11 @@ main(int argc, char **argv)
 
 
 /*! \cidoxg_end */
+
+/*
+ * Local variables:
+ *  c-basic-offset: 4
+ *  c-indent-level: 4
+ *  tab-width: 8
+ * End:
+ */
