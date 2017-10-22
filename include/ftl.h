@@ -1618,10 +1618,10 @@ parse_expr(const char **ref_line, parser_state_t *state,
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
-extern const value_t *
+extern bool
 parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *execpath, dir_t *fndir,
-                 bool expect_no_locals);
+                 bool expect_no_locals, const value_t **out_value);
 
 extern const value_t *
 parser_expand_exec_int(parser_state_t *state, charsource_t *source,
@@ -1663,7 +1663,7 @@ cli(parser_state_t *state, const char *rcfile, const char *code_name);
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
  *    @param ref_argn  - updatable reference number of syms in array
  */
-extern void
+extern bool
 argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
          const char **argv, int argc);
 
@@ -1679,7 +1679,7 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
  *    @param ref_argn  - updatable reference number of syms in array
  *    @param fndir     - directory to take parsing function definitions from
  */
-extern void
+extern bool
 argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
              const char ***ref_argv, int *ref_argc, dir_t *fndir);
 
