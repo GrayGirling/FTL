@@ -1,3 +1,9 @@
+#-----------------------------------------------------------------------------
+#
+# help use scripts for FTL
+#
+#-----------------------------------------------------------------------------
+
 # execute csdev commands instead of FTL
 set prog[_help="<csdev_code> - execute csdev commands",code]:{ parse.exec NULL (io.instring code "r"!)!}
 
@@ -19,3 +25,9 @@ set DO [_help="<csdev_code> <ftl_conditon> - do code while condition",
 set FOR [_help="<var> <env> <csdev_code> - run code with <var> set to each value in <env>", var, env, csdev_code]:{
    forall env [(var)]:{prog csdev_code!}!
 }
+
+# use {cmds;cmds;}^ to run prog
+# eval parse.opset parse.op 4 parse.assoc.fx "^" [code]:{exec code}!
+# test: set fn[a]:{exec {eval a;}!}; fn 42
+
+# restrict function 'help' visibility and rename operations
