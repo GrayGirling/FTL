@@ -36,18 +36,22 @@ ifeq ($(ARCH),osx)
     CC_OPT_DEBUGSYMS=-O0 -g3 
     CFLAGS_CC=-Wno-tautological-compare
 else
-ifneq ($(ARCH),cygwin64)
-
+ifeq ($(ARCH),cygwin64)
+    # CC=mingw32-gcc
+    LIBS_READLINE=
+    #DEFS_READLINE=-DUSE_LINENOISE
+    INCS_READLINE=
+    #OBJS_READLINE=linenoise.o
+    CC=x86_64-w64-mingw32-gcc
+    LIB_DYNLIB=
+    LIB_SOCKET=-lws2_32
+else
     LIBS_READLINE=-lreadline -lhistory
     DEFS_READLINE=-DUSE_READLINE
     INCS_READLINE=-I /usr/include/readline
     OBJS_READLINE=
 
     #CFLAGS_CC=-Wint-conversion
-else
-    CC=mingw32-gcc
-    LIB_DYNLIB=
-    LIB_SOCKET=-lws2_32
 endif
 endif
 

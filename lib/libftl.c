@@ -2969,11 +2969,19 @@ charsource_readline_rdch(charsource_t *base_source)
                 errno = 0;
                 nextline = linenoise(source->prompt);
 #if 0
-                if (nextline == NULL && errno == EAGAIN)
+                if (nextline == NULL
+#ifdef EAGAIN
+                    && errno == EAGAIN
+#endif
+                )
                        (void)cause_sigint();
                        // probably we won't have a try block
 #endif
-            } while (nextline == NULL && errno == EAGAIN);
+            } while (nextline == NULL
+#ifdef EAGAIN
+                     && errno == EAGAIN
+#endif
+                    );
 
             OMIT(fprintf(stderr, "ln: %s%d %s rc %d\n",
                          nextline==NULL? "NONE " :"",
@@ -11579,7 +11587,7 @@ dir_regkeyval_set(key_t key, REGVAL_NAMEVAR_T valname_k,
                     if (data_wc[data_wchars] != L'\0')
                         fprintf(stderr, "%s: written UNICODE string does not "
                                 "have proper termination (len %d from %d)\n",
-                                codeid(), data_wchars, datastrl);
+                                codeid(), (int)data_wchars, (int)datastrl);
                     rc = REGVAL_NAMEVAR_FN(RegSetValueEx)(
                              key, valname_k, /*reserved*/0, (DWORD)key_type,
                              (const BYTE *)data_wc,
