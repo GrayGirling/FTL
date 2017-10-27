@@ -491,6 +491,36 @@ const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
 
 
 
+typedef struct optresult_s
+{
+    bool badopt;
+} optresult_t;
+
+
+
+
+/* register the value resvaling from the execution of a prolog option handling
+ * routine
+ */
+static bool option_result(parser_state_t *state, const char *cmd,
+                          const value_t *resval, void *arg)
+{   bool ok = TRUE;
+    optresult_t *result_arg = (optresult_t *)arg;
+
+#if 0
+    printf("OPTION %s result: ", cmd);
+    value_fprint(stdout, dir_value(parser_root(state)), resval);
+    fprintf(stdout, "\n");
+#endif
+        
+    if (resval == value_false)
+        result_arg->badopt = TRUE;
+    
+    return ok;
+}
+
+
+
 
 extern int
 main(int argc, char **argv)
@@ -574,10 +604,19 @@ main(int argc, char **argv)
                     const value_t *opt_parse_dirval =
                         dir_string_get(parser_env(state), FTL_DIR_OPTIONS);
                     if (opt_parse_dirval != NULL)
-                    {   if (!argv_opt_cli(state, CODEID, /*execpath*/NULL,
+                    {
+                        optresult_t arg;
+                        arg.badopt = FALSE;
+
+                        if (!argv_opt_cli(state, CODEID, /*execpath*/NULL,
                                           &opt_argv, &opt_argc,
-                                          (dir_t *)opt_parse_dirval))
+                                          (dir_t *)opt_parse_dirval,
+                                          &option_result, (void *)&arg))
                             exit_rc = EXIT_BAD_FTLOPT;
+                        else
+                            if (arg.badopt)
+                                exit_rc = EXIT_BAD_FTLOPT;
+                                
                     }
                     do_args = opt_argc > 0;
                 }

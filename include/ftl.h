@@ -1615,13 +1615,18 @@ parse_expr(const char **ref_line, parser_state_t *state,
 
 /*          Command Line Interpreter                         */
 
+typedef bool register_opt_result_fn(parser_state_t *state, const char *cmd,
+                                    const value_t *result, void *arg);
+
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
 extern bool
 parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *execpath, dir_t *fndir,
-                 bool expect_no_locals, const value_t **out_value);
+                 bool expect_no_locals,
+                 register_opt_result_fn *with_results, void *with_results_arg,
+                 const value_t **out_value);
 
 extern const value_t *
 parser_expand_exec_int(parser_state_t *state, charsource_t *source,
@@ -1678,10 +1683,13 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
  *    @param ref_argn  - updatable reference number of syms in array
  *    @param fndir     - directory to take parsing function definitions from
+ *    @param with_results - function called for the results of every option call
+ *    @param with_results_arg - argument for with_results
  */
 extern bool
 argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
-             const char ***ref_argv, int *ref_argc, dir_t *fndir);
+             const char ***ref_argv, int *ref_argc, dir_t *fndir,
+             register_opt_result_fn *with_results, void *with_results_arg);
 
 
 /*          Generic Commands                                 */

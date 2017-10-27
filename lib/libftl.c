@@ -12363,7 +12363,7 @@ value_env_print_relative(outchar_t *out,
             pr.len += outchar_printf(out, "]");
             if (NULL == out_root_relative)
             {   if (PTRVALID(found_root))
-                    pr.len += outchar_printf(out, ":root");
+                    pr.len += outchar_printf(out, ":$root");
             } else
                 *out_root_relative = PTRVALID(found_root);
         }
@@ -12847,7 +12847,7 @@ static int value_closure_print(outchar_t *out,
                                       &relative_to_root);
         if (NULL == closure->code)
         {   if (relative_to_root)
-                n += outchar_printf(out, ":root");
+                n += outchar_printf(out, ":$root");
         } else {
             if (relative_to_root)
                 n += outchar_printf(out, ":");
@@ -18094,12 +18094,14 @@ parse_substitution_argv(const char *fnname,
     bool complete = FALSE; /* run out of requirement for arguments */
     bool pling = FALSE;
     bool goodarg = TRUE;
+    bool autoexec = !token_strings;// invoke closures with no remaining arguments
 
     /* execute *ref_argn if argument is pling or if it is a bound closure */
     while (ok && (
            (pling = (*ref_argn > 0 &&
                      parse_argv_pling(&line) && parse_empty(&line))) ||
-           (value_type_equal(*ref_val, type_closure) &&
+           (autoexec &&
+                value_type_equal(*ref_val, type_closure) &&
                 NULL == value_closure_unbound(*ref_val))))
     {   if (pling)
         {   (*ref_argv)++;
@@ -18118,7 +18120,7 @@ parse_substitution_argv(const char *fnname,
                               parse_empty(&line)))
     {   const value_t *code = *ref_val;
 
-        DEBUGMOD(DPRINTF("%s: apply argv %s argument%s '%s'\n",
+        DEBUGMOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
                          codeid(), fnname==NULL? "function": fnname,
                          token_strings? " as string": "", line););
         (*ref_argv)++;
@@ -18133,7 +18135,8 @@ parse_substitution_argv(const char *fnname,
         while (ok && (
                (pling = (*ref_argn > 0 &&
                          parse_argv_pling(&line) && parse_empty(&line))) ||
-               (value_type_equal(*ref_val, type_closure) &&
+               (autoexec &&
+                    value_type_equal(*ref_val, type_closure) &&
                     NULL == value_closure_unbound(*ref_val))))
         {   if (pling)
             {   (*ref_argv)++;
@@ -18142,15 +18145,17 @@ parse_substitution_argv(const char *fnname,
             } else
                 complete = TRUE;
 
-            DEBUGMOD(DPRINTF("%s: invoke argv %s function after substitute\n",
+            DEBUGMOD(DPRINTF("%s: invoke argv '%s' function after substitute\n",
                              codeid(), fnname==NULL? "function": fnname););
             *ref_val = invoke(*ref_val, state);
+            DEBUGMOD(DPRINTF("%s: returns '%s' value\n",
+                             codeid(), type_name((*ref_val)->kind)););
         }
     }
 
     if (!goodarg)
-    {   parser_error(state, "%s: can't parse %s argument - '%s'\n",
-                     codeid(), fnname==NULL? "the": fnname, line);
+    {   parser_error(state, "can't parse %s argument - '%s'\n",
+                     fnname==NULL? "the": fnname, line);
         ok = FALSE;
     }
 
@@ -18158,13 +18163,32 @@ parse_substitution_argv(const char *fnname,
     {
         if (NULL == value_closure_unbound(*ref_val))
         {   DEBUGMOD(DPRINTF("%s: invoke argv %s function after substitute\n",
-                             codeid(), fnname==NULL? "function": fnname););
+                             codeid(), fnname==NULL? "a": fnname););
             *ref_val = invoke(*ref_val, state);
         }
         else
-        {   parser_error(state, "%s: insufficient arguments provided for "
+        {   DEBUGMOD(
+                const value_t *code = NULL;
+                dir_t *env = NULL;
+                const value_t *unbound = NULL;
+                if (value_closure_get(*ref_val, &code, &env, &unbound))
+                {
+                    int n = 0;
+                    while (NULL != unbound) {
+                        n++;
+                        unbound = unbound->link;
+                    }
+                    DPRINTF("%s: argv - '%s' function still has %d args\n",
+                            codeid(), fnname==NULL? "a": fnname, n);
+                }
+                else {
+                    DPRINTF("%s: argv - '%s' function not a closure\n",
+                            codeid(), fnname==NULL? "a": fnname);
+                }
+            );
+            parser_error(state, "insufficient arguments provided for "
                          "'%s'\n",
-                         codeid(), fnname==NULL? "function": fnname);
+                         fnname==NULL? "function": fnname);
             ok = FALSE;
         }
     }
@@ -18317,9 +18341,8 @@ fn_throw(const value_t *this_fn, parser_state_t *state)
         bool thrown = parser_throw(state, info);
         val = value_bool(thrown);
         if (!thrown)
-            parser_error(state,  "%s: attempt to throw exception without an "
-                         "enclosing try block\n",
-                         codeid());
+            parser_error(state,  "attempt to throw exception without an "
+                         "enclosing try block\n");
     } else
         parser_report_help(state, this_fn);
 
@@ -18459,9 +18482,8 @@ exception_throw(const value_t *this_fn, parser_state_t *state,
         bool thrown = parser_throw(state, info);
         val = value_bool(thrown);
         if (!thrown)
-            parser_error(state,  "%s: exception thrown without an "
-                         "enclosing try block\n",
-                         codeid());
+            parser_error(state,  "exception thrown without an "
+                         "enclosing try block\n");
     } else
         parser_report_help(state, this_fn);
 
@@ -19137,6 +19159,91 @@ mod_exec(const char **ref_line, parser_state_t *state)
 
 
 
+static bool mod_parse_script(const value_t **out_val,
+                             const char ***ref_argv, int *ref_argn,
+                             const char *delim,
+                             const char *execpath, 
+                             parser_state_t *state)
+{   const char *cmd_file = (*ref_argv)[0];
+    charsource_t *fin =
+        charsource_file_path_new(execpath, cmd_file, strlen(cmd_file));
+    bool parsed_ok = FALSE;
+    const value_t *value = NULL;
+
+    DEBUGEXECV(printf("open '%s' on path '%s' - %s\n", cmd_file, execpath,
+                      NULL == fin? "failed": "OK"););
+    if (NULL != fin)
+    {   const char **script_argv = *ref_argv;
+        int script_argn = *ref_argn;
+        const value_t *orig_argvec = NULL;
+        const value_t *pcmdsval =
+            dir_stringl_get(dir_stack_dir(state->env), FTLDIR_PARSE,
+                            strlen(FTLDIR_PARSE));
+        dir_t *pcmds = NULL;
+
+        parsed_ok = TRUE;
+
+        (*ref_argv)++;
+        (*ref_argn)--;
+
+        /* give the rest of the line's arguments to the script */
+        if (delim != NULL)
+        {   while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
+                   0 != strcmp((*ref_argv)[0], delim))
+            {   (*ref_argv)++;
+                (*ref_argn)--;
+            }
+        }
+        else
+        {   /* this case is a little more dodgy than the delimited one
+               if the --optfile is the last option before normal arguments
+               the normal arguments will be included unless the user makes
+               use of the -- option
+            */
+            while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
+                   (*ref_argv)[0][0] != '-')
+            {   (*ref_argv)++;
+                (*ref_argn)--;
+            }
+            if (0 != strcmp((*ref_argv)[0], "--"))
+            {   (*ref_argv)++;
+                (*ref_argn)--;
+            }
+        }
+        script_argn = script_argn - *ref_argn;
+
+        if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir)) {
+            /* overwrite parse.argv with scripts arguments */
+            dir_t *argvec = dir_argvec_new(script_argn, script_argv);
+
+            pcmds = (dir_t *)pcmdsval;
+            orig_argvec = dir_stringl_get(pcmds, "argv", strlen("argv"));
+            mod_add_dir(pcmds, "argv", argvec);
+        } else
+            printf("%s: no 'parse' directory\n", codeid());
+
+        value = parser_expand_exec(state, fin,
+                                   /*cmdstr*/NULL, /*rcfile*/NULL,
+                                   /*no_locals*/TRUE);
+        if (NULL == value)
+        {   fprintf(stderr, "%s: attempted execution of "
+                    "file \"%s\" failed\n",
+                    codeid(), cmd_file);
+            parsed_ok = FALSE;
+        }
+
+        if (orig_argvec != NULL) {
+            /* restore original arguments */
+            mod_add_dir(pcmds, "argv", (dir_t *)orig_argvec);
+        }
+    }
+    if (parsed_ok)
+        *out_val = value;
+
+    return parsed_ok;
+}
+
+
 
 
 /*! Parse and execute the prefix symbols from argv until the next
@@ -19177,7 +19284,7 @@ mod_execv(const value_t **out_val,
                            value_type_name(value), symbol););
         if (value == NULL || value == &value_null)
         {   value = NULL; /* signal an error */
-            parser_error(state, "%s not found '%s'\n",
+            parser_error(state, "%s ignored '%s'\n",
                          delim==NULL? "option": "function", symbol);
         }
         else
@@ -19190,77 +19297,9 @@ mod_execv(const value_t **out_val,
     else
     /* try to execute the option on execpath if it exists */
     if (execpath != NULL && *ref_argn > 0)
-    {   const char *cmd_file = (*ref_argv)[0];
-        charsource_t *fin =
-            charsource_file_path_new(execpath, cmd_file, strlen(cmd_file));
-
-        DEBUGEXECV(printf("open '%s' on path '%s' - %s\n", cmd_file, execpath,
-                          NULL == fin? "failed": "OK"););
-        if (NULL != fin)
-        {   const char **script_argv = *ref_argv;
-            int script_argn = *ref_argn;
-            const value_t *orig_argvec = NULL;
-            const value_t *pcmdsval =
-                dir_stringl_get(dir_stack_dir(state->env), FTLDIR_PARSE,
-                                strlen(FTLDIR_PARSE));
-            dir_t *pcmds = NULL;
-
-            parsed_ok = TRUE;
-
-            (*ref_argv)++;
-            (*ref_argn)--;
-
-            /* give the rest of the line's arguments to the script */
-            if (delim != NULL)
-            {   while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
-                       0 != strcmp((*ref_argv)[0], delim))
-                {   (*ref_argv)++;
-                    (*ref_argn)--;
-                }
-            }
-            else
-            {   /* this case is a little more dodgy than the delimited one
-                   if the --optfile is the last option before normal arguments
-                   the normal arguments will be included unless the user makes
-                   use of the -- option
-                */
-                while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
-                       (*ref_argv)[0][0] != '-')
-                {   (*ref_argv)++;
-                    (*ref_argn)--;
-                }
-                if (0 != strcmp((*ref_argv)[0], "--"))
-                {   (*ref_argv)++;
-                    (*ref_argn)--;
-                }
-            }
-            script_argn = script_argn - *ref_argn;
-
-            if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir)) {
-                /* overwrite parse.argv with scripts arguments */
-                dir_t *argvec = dir_argvec_new(script_argn, script_argv);
-
-                pcmds = (dir_t *)pcmdsval;
-                orig_argvec = dir_stringl_get(pcmds, "argv", strlen("argv"));
-                mod_add_dir(pcmds, "argv", argvec);
-            } else
-                printf("%s: no 'parse' directory\n", codeid());
-
-            value = parser_expand_exec(state, fin,
-                                       /*cmdstr*/NULL, /*rcfile*/NULL,
-                                       /*no_locals*/TRUE);
-            if (NULL == value)
-            {   fprintf(stderr, "%s: attempted execution of "
-                        "file \"%s\" failed\n",
-                        codeid(), cmd_file);
-                parsed_ok = FALSE;
-            }
-
-            if (orig_argvec != NULL) {
-                /* restore original arguments */
-                mod_add_dir(pcmds, "argv", (dir_t *)orig_argvec);
-            }
-        }
+    {
+        parsed_ok = mod_parse_script(&value, ref_argv, ref_argn,
+                                     delim, execpath, state);
     }
     else
     {
@@ -19417,13 +19456,44 @@ rcfile_run(parser_state_t *state, const char *code_name)
 
 
 
+static bool default_register_result(parser_state_t *state, const char *cmd,
+                                    const value_t *result, void *arg)
+{
+    bool ok = TRUE;
+    
+    if (!value_type_equal(result, type_null))
+    {
+        // printf("RESULT: ");
+        value_fprint(stdout,
+                     dir_value(parser_root(state)), result);
+        fprintf(stdout, "\n");
+    }
+
+    return ok;
+}
+
+
+
+
+
 /*! Execute argv as delimiter or option separated ftl commands
+ *  Only the initial commands that consist of --opt style tokens are parsed.
+ *  as separate FTL commands.
+ *  The argv provided is updated and provides the remaining tokens.
+ *    @param state     - current parser state
+ *    @param code_name - name to call the parser during this phase
+ *    @param execpath  - file directory path from which to take FTL sources
+ *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
+ *    @param ref_argn  - updatable reference number of syms in array
+ *    @param fndir     - directory to take parsing function definitions from
  *  This function may cause a garbage collection
  */
 extern bool
 parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *execpath, dir_t *fndir,
-                 bool expect_no_locals, const value_t **out_value)
+                 bool expect_no_locals,
+                 register_opt_result_fn *with_results, void *with_results_arg,
+                 const value_t **out_value)
 {   const value_t *val = NULL;
     linesource_t saved;
     bool executing_prefix = TRUE;
@@ -19459,12 +19529,10 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
 
         if (executing_prefix)
         {   DEBUGEXECV(VALUE_SHOW("MOD EXECV report val: ", val););
-            if (val != NULL)
-            {   if (!value_type_equal(val, type_null))
-                {   value_fprint(stdout,
-                                 dir_value(parser_root(state)), val);
-                    fprintf(stdout, "\n");
-                }
+            if (val!= NULL)
+            {   if (with_results != NULL)
+                    executing_prefix = (*with_results)(state, cmd, val,
+                                                       with_results_arg);
             } else
             {   parser_error(state, "unknown command '%s'\n", cmd);
                 executing_prefix = FALSE;
@@ -19498,6 +19566,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
 
     linesource_restore(parser_linesource(state), &saved);
 
+    /* last value returned */
     *out_value = (val == NULL? &value_null: val);
     return syntax_ok;
 }
@@ -19699,7 +19768,9 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
     codeid_set(code_name);
     return parser_argv_exec(state, &argv, &argc, ",", execpath,
                             parser_env(state),
-                            /*expect_no_locals*/TRUE, &value);
+                            /*expect_no_locals*/TRUE,
+                            &default_register_result, NULL,
+                            &value);
 }
 
 
@@ -19709,12 +19780,15 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
 /* This function may cause a garbage collection */
 extern bool
 argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
-             const char ***ref_argv, int *ref_argc, dir_t *fndir)
+             const char ***ref_argv, int *ref_argc, dir_t *fndir,
+             register_opt_result_fn *with_results, void *with_results_arg)
 {   const value_t *value = NULL;
     codeid_set(code_name);
     return parser_argv_exec(state, ref_argv, ref_argc,
                             /*delimiter*/NULL/*use --opt style parsing*/,
-                            execpath, fndir, /*expect_no_locals*/TRUE, &value);
+                            execpath, fndir, /*expect_no_locals*/TRUE,
+                            with_results, with_results_arg,
+                            &value);
 }
 
 
