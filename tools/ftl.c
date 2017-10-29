@@ -60,6 +60,15 @@
 
 #include "ftl.h"
 
+#ifdef USE_FTLLIB_ELF
+#include "ftl_elf.h"
+#endif
+
+#ifdef USE_FTLLIB_XML
+#include "ftl_xml.h"
+#endif
+
+
 
 
 
@@ -81,8 +90,12 @@
 
 /* #define TEST_FTLSTRUCT */
 /* #define USE_READLINE */
+/* #define USE_FTLLIB_ELF */
+/* #define USE_FTLLIB_XML */
 
-#define FTL_DIR_OPTIONS "opt"
+#define FTL_DIR_OPTIONS  "opt"
+#define FTL_DIR_CMDS_XML "xml"   // used if USE_FTLLIB_XML is set
+#define FTL_DIR_CMDS_ELF "elf"   // used if USE_FTLLIB_ELF is set
 
 #define APP_ARGC_MAX 128
 
@@ -482,6 +495,87 @@ const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
 
 /*****************************************************************************
  *                                                                           *
+ *          Other FTL LIbraries						     *
+ *          ===================					             *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+static bool ftl_libs_init(parser_state_t *state)
+{
+    bool ok = TRUE;
+    
+    if (!cmds_ftl(state))
+    {   fprintf(stderr, "%s: failed to load application-specific "
+                "commands\n", CODEID);
+        ok = FALSE;
+    }
+#ifdef USE_FTLLIB_ELF
+    if (ok)
+    {   dir_t *cmds = parser_root(state);
+        dir_t *elf_cmds = dir_id_new();
+        fprintf(stderr, "%s: adding ELF commands\n", CODEID);//GRAY
+        if (cmds_elf(state, elf_cmds))
+            mod_add_dir(cmds, FTL_DIR_CMDS_ELF, elf_cmds);
+        else
+        {   fprintf(stderr, "%s: failed to load ELF commands\n", CODEID);
+            ok = FALSE;
+        }
+    }
+#endif
+
+#ifdef USE_FTLLIB_XML
+    if (ok)
+    {   dir_t *cmds = parser_root(state);
+        dir_t *xml_cmds = dir_id_new();
+        if (cmds_xml(state, elf_cmds))
+            mod_add_dir(cmds, FTL_DIR_CMDS_XML, xml_cmds);
+        else
+        {   fprintf(stderr, "%s: failed to load XML commands\n", CODEID);
+            ok = FALSE;
+        }
+    }
+#endif
+
+#ifdef USE_FTLLIB_ELF
+    if (ok)
+    {   dir_t *cmds = parser_root(state);
+        dir_t *elf_cmds = dir_id_new();
+        if (cmds_elf(state, elf_cmds))
+            mod_add_dir(cmds, FTL_DIR_CMDS_ELF, elf_cmds);
+        else
+        {   fprintf(stderr, "%s: failed to load ELF commands\n", CODEID);
+            ok = FALSE;
+        }
+    }
+#endif
+
+    return ok;
+}
+
+
+static void ftl_libs_end(parser_state_t *state)
+{
+#ifdef USE_FTLLIB_ELF
+    cmds_ftl_end(state);
+#endif
+
+#ifdef USE_FTLLIB_XML
+    cmds_xml_end(state);
+#endif
+
+    cmds_ftl_end(state);
+}
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Main Program						     *
  *          ============					             *
  *                                                                           *
@@ -552,10 +646,8 @@ main(int argc, char **argv)
         else
 	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
 	    cmds_generic(state, app_argc, &app_argv[0]);
-	    if (!cmds_ftl(state))
+	    if (!ftl_libs_init(state))
             {
-		fprintf(stderr, "%s: failed to load application-specific "
-			"commands\n", CODEID);
                 exit_rc = EXIT_BAD_FTLINIT;
             }
             else
@@ -663,7 +755,7 @@ main(int argc, char **argv)
                             printf("%s: finished\n", CODEID);
                     }
                 }
-	        cmds_ftl_end(state);
+	        ftl_libs_end(state);
 	    }
 	    parser_state_free(state);
 	}

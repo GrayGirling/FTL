@@ -1,8 +1,82 @@
-/*! @file ftl_elf.c
+/*
+ * Copyright (c) 2014, Broadcom Inc.
+ * Copyright (c) 2005-2017, Gray Girling
+ *
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are
+ * met:
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+ * IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+ * TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+ * PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+ * OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+/*! @author  Gray Girling
+ *  @file libftl_elf.c
  *  @brief ELF functions for FTL
  *         This utility provides some FTL functions to manipulate ELF files
  *         based on the BSD-licensed libelf API.
  */
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Configuration                                                    *
+ *                                                                           *
+ *****************************************************************************/
+
+
+#ifndef USE_LIB_BCM
+#define USE_LIB_BCM 0 // if using the old hand-built Broadcom ELF libraries
+#endif
+
+#ifndef USE_LIB_ELF
+#define USE_LIB_ELF 0 // if using the 'standard' GNU libelf - usually lib GPLed
+/* e.g. available when using Debian Linux after apt install libelf-dev */
+#endif
+
+#ifndef USE_LIB_GELF
+#define USE_LIB_GELF 0 // if using the BSD licensed libgelf
+/* e.g. available when using the BSD sources for free libelf */
+#endif
+
+
+// Normalize USE_LIB* (to be either 0 or 1)
+
+#if USE_LIB_BCM
+#define USE_LIB_BCM 1
+#endif
+
+#if USE_LIB_ELF
+#define USE_LIB_ELF 1
+#endif
+
+#if USE_LIB_GELF
+#define USE_LIB_GELF 1
+#endif
+
+#if (USE_LIB_BCM+USE_LIB_ELF+USE_LIB_GELF) <= 0
+#error The ELF library to be used is not defined
+#endif
+#if (USE_LIB_BCM+USE_LIB_ELF+USE_LIB_GELF) > 1
+#error Too many ELF libraries have been specified 
+#endif
 
 
 
@@ -23,6 +97,7 @@
 
 #include "ftl.h"
 #include "ftl_internal.h"
+#include "ftl_elf.h"       /* our library */
 
 #if __GNUC__
 #include <err.h>
@@ -30,6 +105,7 @@
 
 #include <fcntl.h>
 
+#if USE_LIB_BCM
 /* These headers are ghastly .. they give us sys/cdefs.h which can do nasty
    things to C when using cl
 */
@@ -42,6 +118,91 @@
 #undef const
 #undef signed
 #undef inline
+#define LIB_NAME_GELF 1
+#endif
+
+
+#if USE_LIB_ELF
+#include "libelf.h"
+#define LIB_NAME_GELF 0
+#endif
+
+#if USE_LIB_GELF
+#include "gelf.h"
+#define LIB_NAME_GELF 1
+#endif
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Library Independence                                             *
+ *          ====================                                             *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+#if LIB_NAME_GELF
+#define ELF32_Ehdr GElf_Ehdr
+#define ELF32_Phdr GElf_Phdr
+#define ELF32_getehdr gelf_getehdr
+#define ELF32_getphdr_next gelf_getphdr
+#define ELF_getclass(id, elf) gelf_getclass(elf)
+#endif
+
+#if !LIB_NAME_GELF
+#define ELF32_Ehdr Elf32_Ehdr
+#define ELF32_Phdr Elf32_Phdr
+#define ELF32_getehdr(elf, ehdr) elf32_getehdr(elf)
+#define ELF32_getphdr_next(elf, n, phdr) elf32_getphdr(elf)
+
+/*! Return ELFCLASSNONE, ELFCLASS32, ELFCLASS64
+ *     @param ident     bytes returned by elf_getident()
+ */
+int ELF_getclass (char *ident, Elf *elf)
+{
+    int class = ELFCLASSNONE;
+    if (elf != NULL && ident != NULL && elf_kind(elf) == ELF_K_ELF)
+    {
+        class = ident[EI_CLASS];
+    }
+    return class;
+}
+#endif
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          File System  				                     *
+ *          ===========                                                      *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+#include <unistd.h>
+
+
+
+// FD operations
+#define fe_open(name,flags,mode) open(name, O_RDONLY)
+#define fe_close                 close
+#define fe_lseek(fd, offset)     lseek(fd, offset, SEEK_SET)
+#define fe_read                  read
+
+
+
 
 
 /*****************************************************************************
@@ -110,7 +271,7 @@ fn_kind(const value_t *this_fn, parser_state_t *state)
 typedef const value_t *
 elf_hdr_fn_t(const value_t *this_fn, parser_state_t *state,
              const char *filename, int binfd,
-             Elf *e, GElf_Ehdr *ehdr, void *fn_arg);
+             Elf *e, ELF32_Ehdr *ehdr, void *fn_arg);
 
 
 static const value_t *
@@ -139,8 +300,8 @@ genfn_with_elfhdr(const value_t *this_fn, parser_state_t *state, int file_arg,
             if (ek != ELF_K_ELF)
                parser_report(state, "not an ELF file - %s\n", elf_errmsg(-1));
             else {
-               GElf_Ehdr ehdr;
-               if (gelf_getehdr(e, &ehdr) == NULL)
+               ELF32_Ehdr ehdr;
+               if (ELF32_getehdr(e, &ehdr) == NULL)
                   parser_report(state, "no execution header in ELF file - %s\n",
                                 elf_errmsg(-1));
                else  {
@@ -164,10 +325,10 @@ genfn_with_elfhdr(const value_t *this_fn, parser_state_t *state, int file_arg,
 static const value_t *
 elf_get_ehdr(const value_t *this_fn, parser_state_t *state,
              const char *filename, int binfd,
-             Elf *e, GElf_Ehdr *ehdr, void *arg)
+             Elf *e, ELF32_Ehdr *ehdr, void *arg)
 {
-   int eclass = gelf_getclass(e);
    char *id = elf_getident(e, NULL);
+   int eclass = ELF_getclass(id, e);
    dir_t *einfo = dir_id_new();
    dir_t *edir = dir_id_new();
    size_t n;
@@ -240,7 +401,7 @@ fn_elfhdr(const value_t *this_fn, parser_state_t *state)
 static const value_t *
 elf_get_phdrs(const value_t *this_fn, parser_state_t *state,
               const char *filename, int binfd,
-              Elf *e, GElf_Ehdr *ehdr, void *arg)
+              Elf *e, ELF32_Ehdr *ehdr, void *arg)
 {
    const value_t *resval = NULL;
    size_t n;
@@ -253,9 +414,9 @@ elf_get_phdrs(const value_t *this_fn, parser_state_t *state,
       dir_t *partdir = dir_vec_new();
 
       for (i = 0; i < n; i++) {
-         GElf_Phdr phdr;
+         ELF32_Phdr phdr;
          dir_t *pdir = dir_id_new();
-         if (gelf_getphdr(e, i, &phdr) != &phdr)
+         if (ELF32_getphdr_next(e, i, &phdr) != &phdr)
             parser_report(state,
                           "ELF segment %d unretrievable - %s\n",
                           i, elf_errmsg(-1));
@@ -327,7 +488,7 @@ typedef struct {
 static const value_t *
 elf_load_with_fn(const value_t *this_fn, parser_state_t *state,
                  const char *filename, int binfd,
-                 Elf *e, GElf_Ehdr *ehdr, void *arg)
+                 Elf *e, ELF32_Ehdr *ehdr, void *arg)
 {
    elf_loadfn_args_t *fnarg = (elf_loadfn_args_t *)arg;
    const value_t *hdrcheckfn = fnarg->hdrcheckfn;
@@ -365,9 +526,9 @@ elf_load_with_fn(const value_t *this_fn, parser_state_t *state,
 
       if (ok && memwrfn != NULL) {
          for (i = 0; ok && i < n; i++) {
-            GElf_Phdr phdr;
+            ELF32_Phdr phdr;
 
-            if (gelf_getphdr(e, i, &phdr) != &phdr)
+            if (ELF32_getphdr_next(e, i, &phdr) != &phdr)
                parser_report(state, "ELF segment %d unretrievable - %s\n",
                              i, elf_errmsg(-1));
             else {
@@ -525,6 +686,47 @@ fn_ehdr_type(const value_t *this_fn, parser_state_t *state)
 
 
 
+#define WITH_ELF_EF_FLAG(APPLY,_arg) \
+    APPLY(EF_SPARC_LEDATA, 0x800000, little endian data, _arg)          \
+    APPLY(EF_SPARC_32PLUS, 0x000100, generic V8+ features, _arg)        \
+    APPLY(EF_SPARC_SUN_US1,0x000200, Sun UltraSPARC1 extensions, _arg)  \
+    APPLY(EF_SPARC_HAL_R1, 0x000400, HAL R1 extensions, _arg)           \
+    APPLY(EF_SPARC_SUN_US3,0x000800, Sun UltraSPARCIII extensions, _arg) \
+    APPLY(EF_MIPS_NOREORDER,1, A .noreorder directive was used., _arg)  \
+    APPLY(EF_MIPS_PIC, 2, Contains PIC code., _arg)                     \
+    APPLY(EF_MIPS_CPIC, 4, Uses PIC calling sequence., _arg)            \
+    APPLY(EF_MIPS_XGOT, 8, XGOT, _arg)                                  \
+    APPLY(EF_MIPS_64BIT_WHIRL,16, 64 bit Whirl, _arg)                   \
+    APPLY(EF_MIPS_ABI2, 32, ABI 2, _arg)                                \
+    APPLY(EF_MIPS_ABI_ON32,64, ABI on 32-bit, _arg)                     \
+    APPLY(EF_MIPS_FP64, 512, Uses FP64 (12 callee-saved, _arg)., _arg)  \
+    APPLY(EF_MIPS_NAN2008, 1024, Uses IEEE 754-2008 NaN encoding., _arg) \
+    APPLY(EF_PARISC_TRAPNIL,0x00010000, Trap nil pointer dereference., _arg) \
+    APPLY(EF_PARISC_EXT, 0x00020000, Program uses arch. extensions., _arg) \
+    APPLY(EF_PARISC_LSB, 0x00040000, Program expects little endian., _arg) \
+    APPLY(EF_PARISC_WIDE, 0x00080000, Program expects wide mode., _arg) \
+    APPLY(EF_PARISC_NO_KABP,0x00100000, No kernel assisted branch prediction., _arg) \
+    APPLY(EF_PARISC_LAZYSWAP,0x00400000, Allow lazy swapping., _arg)    \
+    APPLY(EF_ALPHA_32BIT, 1, All addresses must be < 2GB., _arg)            \
+    APPLY(EF_ALPHA_CANRELAX,2, Relocations for relaxing exist., _arg)       \
+    APPLY(EF_PPC_EMB, 0x80000000, PowerPC embedded flag, _arg)              \
+    APPLY(EF_PPC64_ABI,3, ABI, _arg)                                        \
+    APPLY(EF_ARM_RELEXEC, 0x01, RELEXEC, _arg)                              \
+    APPLY(EF_ARM_HASENTRY, 0x02 , Has entry, _arg)                          \
+    APPLY(EF_ARM_INTERWORK,0x04 , Interwork, _arg)                          \
+    APPLY(EF_ARM_APCS_26, 0x08 , APCS 26, _arg)                             \
+    APPLY(EF_ARM_APCS_FLOAT,0x10 , APCS float, _arg)                        \
+    APPLY(EF_ARM_PIC, 0x20, Position independent code, _arg)                \
+    APPLY(EF_ARM_ALIGN8, 0x40, 8-bit structure alignment is in use, _arg)   \
+    APPLY(EF_ARM_NEW_ABI, 0x80, New ABI, _arg)                              \
+    APPLY(EF_ARM_OLD_ABI, 0x100, Old ABI, _arg)                             \
+    APPLY(EF_ARM_SOFT_FLOAT,0x200, Soft floating point, _arg)               \
+    APPLY(EF_ARM_VFP_FLOAT,0x400, VFP floating point, _arg)                 \
+    APPLY(EF_ARM_MAVERICK_FLOAT,0x800, Materick floating point, _arg)       \
+    APPLY(EF_S390_HIGH_GPRS, 0x00000001, High GPRs kernel facility needed., _arg) 
+
+
+
 
 static const value_t *
 fn_ehdr_flags(const value_t *this_fn, parser_state_t *state)
@@ -549,17 +751,17 @@ fn_ehdr_flags(const value_t *this_fn, parser_state_t *state)
       const char *flagname;
 
 #undef   _ELF_DEFINE_EF
-#define  _ELF_DEFINE_EF(name, val, msg) \
+#define  _ELF_DEFINE_EF(name, val, msg, arg)        \
       flagname = #name;                 \
       if (val != 0 && val==(flags & val) && \
           flagname == strstr(flagname, name_prefix)) {              \
-         const char *info = msg;                                    \
-         if (0 == strcmp(msg, "GNU EABI extension"))                \
+         const char *info = #msg;                                    \
+         if (0 == strcmp(info, "GNU EABI extension"))                \
             info = flagname+3;                                       \
          dir_int_set(vec, index++, value_string_new_measured(info)); \
       }
 
-      _ELF_DEFINE_EHDR_FLAGS()
+      WITH_ELF_EF_FLAG(_ELF_DEFINE_EF, )
 
       if (flags != 0 && index == 0) {
          /* no descriptions identified */
@@ -585,6 +787,11 @@ fn_ehdr_flags(const value_t *this_fn, parser_state_t *state)
 
 
 
+#define WITH_ELF_PF_FLAG(APPLY,_arg) \
+    APPLY(PF_X, (1 << 0), Segment is executable, _arg)      \
+    APPLY(PF_W, (1 << 1), Segment is writable, _arg)        \
+    APPLY(PF_R, (1 << 2), Segment is readable, _arg)
+
 
 
 static const value_t *
@@ -598,11 +805,11 @@ fn_phdr_flags(const value_t *this_fn, parser_state_t *state)
       int index = 0;
 
 #undef   _ELF_DEFINE_PF
-#define  _ELF_DEFINE_PF(name, val, msg) \
-      if (val != 0 && val == (flags & val))             \
-         dir_int_set(vec, index++, value_string_new_measured(msg));
+#define  _ELF_DEFINE_PF(name, val, msg, _opt)                            \
+      if ((val) != 0 && (val) == (flags & (val)))                   \
+         dir_int_set(vec, index++, value_string_new_measured(#msg));
 
-      _ELF_DEFINE_PHDR_FLAGS()
+      WITH_ELF_PF_FLAG(_ELF_DEFINE_PF, )
 
       retval = dir_value(vec);
    } else
@@ -617,7 +824,7 @@ fn_phdr_flags(const value_t *this_fn, parser_state_t *state)
 
 /*****************************************************************************
  *                                                                           *
- *          Load File  				                             *
+ *          Load File                                   *
  *          =========                                                        *
  *                                                                           *
  *****************************************************************************/
@@ -883,7 +1090,7 @@ load_file(parser_state_t *state, void *handle, char *elf_file_name,
 
 /*****************************************************************************
  *                                                                           *
- *          Whole Command set  				                     *
+ *          Whole Command set                                                *
  *          =================                                                *
  *                                                                           *
  *****************************************************************************/
@@ -892,7 +1099,7 @@ load_file(parser_state_t *state, void *handle, char *elf_file_name,
 
 
 extern bool
-cmds_elflib(parser_state_t *state, dir_t *cmds)
+cmds_elf(parser_state_t *state, dir_t *cmds)
 {
    bool ok = (elf_version(EV_CURRENT) != EV_NONE);
 
@@ -923,4 +1130,13 @@ cmds_elflib(parser_state_t *state, dir_t *cmds)
    }
 
    return ok;
+}
+
+
+
+
+extern void
+cmds_elf_end(parser_state_t *state)
+{
+    return;
 }

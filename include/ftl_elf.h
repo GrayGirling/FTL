@@ -7,7 +7,18 @@
 
 #include "ftl.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern bool
-cmds_elflib(parser_state_t *state, dir_t *cmds);
+cmds_elf(parser_state_t *state, dir_t *cmds);
+
+extern void
+cmds_elf_end(parser_state_t *state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* _DRIVER_FTL_ELFLIB_H */
