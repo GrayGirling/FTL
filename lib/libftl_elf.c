@@ -150,7 +150,7 @@
 #define ELF32_Ehdr GElf_Ehdr
 #define ELF32_Phdr GElf_Phdr
 #define ELF32_getehdr gelf_getehdr
-#define ELF32_getphdr_next gelf_getphdr
+#define ELF32_getphdr_ix gelf_getphdr
 #define ELF_getclass(id, elf) gelf_getclass(elf)
 #endif
 
@@ -158,7 +158,6 @@
 #define ELF32_Ehdr Elf32_Ehdr
 #define ELF32_Phdr Elf32_Phdr
 #define ELF32_getehdr(elf, ehdr) elf32_getehdr(elf)
-#define ELF32_getphdr_next(elf, n, phdr) elf32_getphdr(elf)
 
 /*! Return ELFCLASSNONE, ELFCLASS32, ELFCLASS64
  *     @param ident     bytes returned by elf_getident()
@@ -172,6 +171,23 @@ int ELF_getclass (char *ident, Elf *elf)
     }
     return class;
 }
+
+ELF32_Phdr *ELF32_getphdr_ix(Elf *elf, int n, ELF32_Phdr *out_phdr)
+{
+    ELF32_Phdr *result = NULL;
+    if (elf != NULL && out_phdr != NULL)
+    {
+        Elf32_Phdr *phdr_array = elf32_getphdr(elf);
+        if (phdr_array != NULL)
+        {
+            memcpy(out_phdr, &phdr_array[n], sizeof(*out_phdr));
+            result = out_phdr;
+        }
+    }
+    return result;
+}
+
+
 #endif
 
 
@@ -416,7 +432,7 @@ elf_get_phdrs(const value_t *this_fn, parser_state_t *state,
       for (i = 0; i < n; i++) {
          ELF32_Phdr phdr;
          dir_t *pdir = dir_id_new();
-         if (ELF32_getphdr_next(e, i, &phdr) != &phdr)
+         if (ELF32_getphdr_ix(e, i, &phdr) != &phdr)
             parser_report(state,
                           "ELF segment %d unretrievable - %s\n",
                           i, elf_errmsg(-1));
@@ -528,7 +544,7 @@ elf_load_with_fn(const value_t *this_fn, parser_state_t *state,
          for (i = 0; ok && i < n; i++) {
             ELF32_Phdr phdr;
 
-            if (ELF32_getphdr_next(e, i, &phdr) != &phdr)
+            if (ELF32_getphdr_ix(e, i, &phdr) != &phdr)
                parser_report(state, "ELF segment %d unretrievable - %s\n",
                              i, elf_errmsg(-1));
             else {
