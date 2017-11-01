@@ -1,3 +1,5 @@
+set codeid "nedit"
+
 #-----------------------------------------------------------------------------
 #
 # whole file operations
@@ -121,7 +123,7 @@ set nedit[]:{
       lntext = []:{ io.outstring [outf]:{flistf "%[n]d %[text]s\n" outf!}! },
       text = []:{ io.outstring [outf]:{flistf "%[text]s\n" outf!}! },
       file = []:{fname},
-      all = []:{ntext},
+      # all = []:{ntext},
     ]
 }
 
@@ -131,3 +133,57 @@ set nedit[]:{
 #   set h (new nedit!)!
 # to provide two editors g and h
 
+
+set editor nedit!
+
+
+#-----------------------------------------------------------------------------
+#
+# Default command handling
+#
+#-----------------------------------------------------------------------------
+
+
+set get_item[out_item, line]:{
+    .po = parse.scan line!;
+    parse.scanwhite po!;
+    parse.scanitemstr out_item po! {parse.scanempty po!}!
+}
+
+
+set unknown_command[line]:{
+    .po = parse.scan line!;
+    .n = NULL;
+    parse.scanwhite po!;
+    if (parse.scanint @n po!) {editor.add line!;}{
+        io.fprintf io.err "%s: unrecognized command line %v\n" <codeid, line>!;
+        NULL
+    }!
+}
+
+set parse.on_badcmd (cmd unknown_command "- unknown command handler"!)
+
+set load_fn[_help="<filename> - load file into the editor",line]:{
+    .filename = NULL;
+    if (get_item @filename line!) { editor.load filename! }{
+        io.fprintf io.err "%s: syntax - %s\n" <codeid, _help>!;
+    }!;
+}
+
+set saveas_fn[_help="<filename> - save lines to a file",line]:{
+    .filename = NULL;
+    if (get_item @filename line!) { editor.saveas filename! }{
+        io.fprintf io.err "%s: syntax - %s\n" <codeid, _help>!;
+    }!;
+}
+
+enter [
+    new = (editor.new)::[_help="- clear lines in the editor"],
+    ren = (editor.ren)::[_help="- renumber the lines in the editor"],
+    load = cmd load_fn load_fn._help!,
+    save = (editor.save)::[_help="- save lines back to the file they were loaded from"],
+    saveas = cmd saveas_fn save_fn._help!,
+    list = (editor.list)::[_help="- list the lines being edited"],
+    file = editor.file,
+    sh = sys.run,
+]

@@ -1,7 +1,7 @@
 CC=gcc
 
 
-# CONFIGURATION
+# CONFIGURATION (these can be specified on the 'make' command line)
 
 add_elf=yes
 add_xml=no
