@@ -147,7 +147,7 @@ set editor nedit!
 set get_item[out_item, line]:{
     .po = parse.scan line!;
     parse.scanwhite po!;
-    parse.scanitemstr out_item po! {parse.scanempty po!}!
+    parse.scanitemstr out_item po! {parse.scanwhite po!; parse.scanempty po!}!
 }
 
 
@@ -182,7 +182,7 @@ enter [
     ren = (editor.ren)::[_help="- renumber the lines in the editor"],
     load = cmd load_fn load_fn._help!,
     save = (editor.save)::[_help="- save lines back to the file they were loaded from"],
-    saveas = cmd saveas_fn save_fn._help!,
+    saveas = cmd saveas_fn saveas_fn._help!,
     list = (editor.list)::[_help="- list the lines being edited"],
     file = editor.file,
     sh = sys.run,
