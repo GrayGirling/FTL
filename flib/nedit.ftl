@@ -126,8 +126,8 @@ set nedit[]:{
         .po = parse.scan txt!;
         parse.scanint @n po! {
            .ix = NULL;
-           forall nprev [v,i]:{ v==n {ix=i}! }!;
-           if ix == NULL {rep="????"}{rep=strf "%d" <nnew.(ix)>!}!;
+           forall nprev [v,i]:{ v.0==n {ix=i}! }!;
+           if ix == NULL {rep="????"}{rep=strf "%d" <nnew.(ix).0>!}!;
            txt=""+(rep)+(parse.scanned po!);
         }!;
         txt
@@ -135,16 +135,21 @@ set nedit[]:{
     .renln = [nprev,nnew,line]:{
         tokargswp [GOTO=(nswap nprev nnew), GOSUB=(nswap nprev nnew)] line!
     };
-    .renumber = [first,inc]:{
+    .renbody = [oldn, newn]:{
+        forall newn [nt,n]:{nt.1 = renln oldn newn nt.1!}!;
+    };
+    .renumber = [lnedfn,first,inc]:{
         .tlns = <>;
         .nxt = first;
         forall ntext [nt,n]:{ tlns.(len tlns!) = <nxt,nt.1>; nxt=nxt+inc; }!;
+        lnedfn != NULL {lnedfn ntext tlns!}!;
         ntext = tlns;
     };
     [ new = clear,
       add = add,
       addn = addn,
-      ren = renumber 10 10,
+      # ren = renumber NULL 10 10,
+      ren = renumber renbody 10 10,
       next = nextln 10 10,
       read = read 10 10,
       append = [text]:{read (nextln 10 10!) 10 text!},
