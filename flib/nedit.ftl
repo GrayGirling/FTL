@@ -49,7 +49,7 @@ set nedit[]:{
     .flisttest = [fmt,outf]:{
         forall ntext [nt,n]:{ io.fprintf outf "%v\n" [n=n,text=nt]!; }!;
     };
-    .clear = []:{ ntext=<>; };
+    .clear = []:{ ntext=<>; fname = NULL; };
     .addn = [n,line]:{
         .ix = NULL;
         .entry = select [nline]:{n == nline.0} ntext!;
@@ -58,33 +58,39 @@ set nedit[]:{
             ntext = ntext.(sortby [nt1,nt2]:{nt1.0 - nt2.0 } ntext!);
         }{  ntext.((domain entry!).0) = <n,line>; }!;
     };
+    .deln = [xn]:{
+        .tlns = <>;
+        forall ntext [nt,n]:{ nt.0 != xn {tlns.(len tlns!) = nt}!; }!;
+        ntext = tlns;
+    };
     .add = [nline]:{
         .pobj = parse.scan nline!;
         .n = NULL;
         parse.scanwhite pobj!;
         not (parse.scanempty pobj!) {
-            if (parse.scanint @n pobj! {parse.scanwhite pobj!}!) {
-                .line = parse.scanned pobj!;
-                addn n line!
+            if (parse.scanint @n pobj!) {
+                if (parse.scanwhite pobj!) {
+                    addn n (parse.scanned pobj!)!
+                }{  deln n! }!
             }{io.fprintf io.err "Line must begin with an integer - '%s'\n"<nline>!}!;
         }!
     };
-    nextln = [first, inc]:{
+    .nextln = [first, inc]:{
         .lns = len ntext!;
         .nxt = first;
         lns _gt_ 0 { nxt = ntext.(lns-1).0 + inc }!;
         nxt
     };
-    lnread = [linedtext]:{
+    .lnread = [linedtext]:{
         .lines = split "\n" linedtext!;
         for lines [line]:{ add line!; }!;
     };
-    read = [first,inc,linedtext]:{
+    .read = [first,inc,linedtext]:{
         .lines = split "\n" linedtext!;
         .nxt = first;
         for lines [line]:{ addn nxt line!; nxt=nxt+inc; }!;
     };
-    load = [file]:{
+    .load = [file]:{
         clear!;
         .txt = loadtext file!;
         if txt != NULL {
@@ -92,7 +98,7 @@ set nedit[]:{
             fname = file;
         }{ io.fprintf io.err "Can't read file '%s'\n"<file>!; }!;
     };
-    saveas = [file]:{
+    .saveas = [file]:{
         if file == NULL { io.fprintf io.err "No filename set to save to\n"! }{
             .str = io.file file "w"!;
             if str != NULL {
@@ -101,7 +107,35 @@ set nedit[]:{
             }{ io.fprintf io.err "Can't write file '%s'\n"<file>!; }!;
         }!
     };
-    .rename = [first,inc]:{
+    .tokargswp = [fns,s]:{
+        .tok = split " " s!;
+        .news = "";
+        .onnext = NULL;
+        .utok = NULL;
+        for (split " " s!) [tok]:{
+            if onnext != NULL {tok = onnext tok!; onnext=NULL}{
+                utok = toupper tok!;
+                inenv fns utok! {onnext = fns.(utok)}!
+            }!;
+            if (news == "") {news=tok}{news = ""+(news)+" "+(tok)}!;
+        }!;
+        news
+    };
+    .nswap = [nprev,nnew,txt]:{
+        .n = NULL;
+        .po = parse.scan txt!;
+        parse.scanint @n po! {
+           .ix = NULL;
+           forall nprev [v,i]:{ v==n {ix=i}! }!;
+           if ix == NULL {rep="????"}{rep=strf "%d" <nnew.(ix)>!}!;
+           txt=""+(rep)+(parse.scanned po!);
+        }!;
+        txt
+    };
+    .renln = [nprev,nnew,line]:{
+        tokargswp [GOTO=(nswap nprev nnew), GOSUB=(nswap nprev nnew)] line!
+    };
+    .renumber = [first,inc]:{
         .tlns = <>;
         .nxt = first;
         forall ntext [nt,n]:{ tlns.(len tlns!) = <nxt,nt.1>; nxt=nxt+inc; }!;
@@ -110,7 +144,7 @@ set nedit[]:{
     [ new = clear,
       add = add,
       addn = addn,
-      ren = rename 10 10,
+      ren = renumber 10 10,
       next = nextln 10 10,
       read = read 10 10,
       append = [text]:{read (nextln 10 10!) 10 text!},
@@ -187,3 +221,8 @@ enter [
     file = editor.file,
     sh = sys.run,
 ]
+
+
+
+
+# e.g. tokargswp [GOTO=[t]:{"<arg>"}, GOSUB=[t]:{"<subarg>"}] s
