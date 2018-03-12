@@ -718,7 +718,7 @@ main(int argc, char **argv)
                     const value_t *opt_parse_dirval =
                         dir_string_get(parser_env(state), FTL_DIR_OPTIONS);
                     
-                    /*DEBUG_CLI GRAY*/DO(fprintf(stderr, "%s: %sparsing options%s\n",
+                    DEBUG_CLI(fprintf(stderr, "%s: %sparsing options%s\n",
                                       codeid(),
                                       opt_parse_dirval == NULL? "not ":"",
                                       opt_parse_dirval == NULL?

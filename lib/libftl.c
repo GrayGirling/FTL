@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2016, Gray Girling
+ * Copyright (c) 2005-2018, Gray Girling
  *
  * All rights reserved.
  *
@@ -458,6 +458,7 @@
 // #define DEBUG_MODEXEC DO 
 // #define DEBUG_CMP DO 
 // #define DEBUG_MEMDIFF DO 
+// #define DEBUG_ARGV DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_GC
@@ -480,6 +481,7 @@
 #undef DEBUG_RCFILE
 #undef DEBUG_CMP
 #undef DEBUG_MEMDIFF
+#undef DEBUG_ARGV
 #endif
 
 
@@ -543,6 +545,9 @@
 #endif
 #ifndef DEBUG_MEMDIFF
 #define DEBUG_MEMDIFF OMIT
+#endif
+#ifndef DEBUG_ARGV
+#define DEBUG_ARGV OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -16681,6 +16686,8 @@ mod_parse_argv(dir_t *dir, const char ***ref_argv, int *ref_argn,
 
     if (ok)
     {   *out_val = cmd;
+        DEBUG_ARGV(printf("%s: shift argv %d '%s'\n",
+                          codeid(), *ref_argn, (*ref_argv)[0]););
         (*ref_argn)--;
         (*ref_argv)++;
     }
@@ -16721,6 +16728,8 @@ mod_parse_optargv(dir_t *dir, const char ***ref_argv, int *ref_argn,
 
     if (ok)
     {   *out_val = cmd;
+        DEBUG_ARGV(printf("%s: shift --argv %d '%s'\n",
+                          codeid(), *ref_argn, (*ref_argv)[0]););
         (*ref_argn)--;
         (*ref_argv)++;
         return TRUE;
@@ -18525,11 +18534,14 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
 /*! Parse ['^' <expr|token_as_string> '^'*]
  *  Parse token_as_string if token_strings is TRUE otherwise parse expressions.
  *  This function may cause a garbage collection
+ *  When delim != 0 we are parsing the arguments of an --option starting with
+ *  the first token following --option.
  */
 static bool
 parse_substitution_argv(const char *fnname,
                         const char ***ref_argv, int *ref_argn,
-                        parser_state_t *state, bool token_strings,
+                        parser_state_t *state, const char *delim,
+                        bool token_strings,
                         const value_t **ref_val)
 {   /* '^'* [<retrieval> '^'*]* */
     bool ok = TRUE;
@@ -18549,7 +18561,10 @@ parse_substitution_argv(const char *fnname,
                 value_type_equal(*ref_val, type_closure) &&
                 NULL == value_closure_unbound(*ref_val))))
     {   if (pling)
-        {   (*ref_argv)++;
+        {
+            DEBUG_ARGV(DPRINTF("%s: subst auto ! argv %d '%s'\n",
+                               codeid(), *ref_argn, (*ref_argv)[0]););
+            (*ref_argv)++;
             (*ref_argn)--;
             line = (*ref_argv)[0];
         } else
@@ -18559,32 +18574,49 @@ parse_substitution_argv(const char *fnname,
     }
 
     while (ok && *ref_argn > 0 && !complete &&
+           (delim == NULL?
+                (*ref_argv)[0][0] != '-':
+                0 != strcmp(delim, (*ref_argv)[0]))
+           &&
            (goodarg = token_strings?
                           NULL != (newarg = value_string_new_measured(line)):
                           parse_operator_expr(&line, state, &newarg) &&
-                              parse_empty(&line)))
+                              parse_empty(&line))
+          )
     {   const value_t *code = *ref_val;
 
         DEBUG_MOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
                          codeid(), fnname==NULL? "function": fnname,
                          token_strings? " as string": "", line););
-        (*ref_argv)++;
-        (*ref_argn)--;
-        line = (*ref_argv)[0];
-
         *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
 
         if (NULL == *ref_val)
             ok = FALSE;
 
-        while (ok && (
-               (pling = (*ref_argn > 0 &&
-                         parse_argv_pling(&line) && parse_empty(&line))) ||
-               (autoexec &&
-                    value_type_equal(*ref_val, type_closure) &&
-                    NULL == value_closure_unbound(*ref_val))))
+        DEBUG_ARGV(DPRINTF("%s: subst argv %d '%s' delim %s\n",
+                           codeid(), *ref_argn, (*ref_argv)[0], delim););
+        (*ref_argv)++;
+        (*ref_argn)--;
+        line = (*ref_argv)[0];
+
+        while (ok && *ref_argn > 0 &&
+               (delim == NULL?
+                    (*ref_argv)[0][0] != '-':
+                     0 != strcmp(delim, (*ref_argv)[0]))
+               &&
+               (
+                (pling = (*ref_argn > 0 &&
+                          parse_argv_pling(&line) && parse_empty(&line))) ||
+                (autoexec &&
+                     value_type_equal(*ref_val, type_closure) &&
+                     NULL == value_closure_unbound(*ref_val))
+               )
+            )
         {   if (pling)
-            {   (*ref_argv)++;
+            {
+                DEBUG_ARGV(DPRINTF("%s: subst post auto ! argv %d '%s'\n",
+                                   codeid(), *ref_argn, (*ref_argv)[0]););
+                (*ref_argv)++;
                 (*ref_argn)--;
                 line = (*ref_argv)[0];
             } else
@@ -19389,51 +19421,52 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
 static size_t
 argv_to_string(const char ***ref_argv, int *ref_argn, const char *delim,
                char *buf, size_t len)
-{  char *bufstart = buf;
-   bool complete = *ref_argn <= 0;
+{   char *bufstart = buf;
+    bool complete = *ref_argn <= 0;
 
-   while (!complete)
-   {   const char *next = (*ref_argv)[0];
-       size_t n;
+    while (!complete)
+    {   const char *next = (*ref_argv)[0];
+        size_t n;
 
-       if (delim == NULL && next[0] == '-')
-           complete = TRUE;
-       else
-       {
-           (*ref_argv)++;
-           (*ref_argn)--;
-           complete = *ref_argn <= 0;
-       
-           if (delim != NULL && 0 == strcmp(next, delim))
-               complete = TRUE;
-           else {
-               if (NULL != strchr(next, ' ') || NULL != strchr(next, '\n')  ||
-                   NULL != strchr(next, '\t'))
-                   n = snprintf(buf, len, "\"%s\" ", next);
-               else
-                   n = snprintf(buf, len, "%s ", next);
+        if (delim == NULL && next[0] == '-')
+            complete = TRUE;
+        else
+        {
+            if (delim != NULL && 0 == strcmp(delim, next))
+                complete = TRUE;
+            else {
+                if (NULL != strchr(next, ' ') || NULL != strchr(next, '\n')  ||
+                    NULL != strchr(next, '\t'))
+                    n = snprintf(buf, len, "\"%s\" ", next);
+                else
+                    n = snprintf(buf, len, "%s ", next);
 
-               if (n < len)
-               {   len -= n;
-                   buf += n;
-               } else
-               {   buf += len;
-                   len = 0;
-               }
-           }
-       }
-   }
+                if (n < len)
+                {   len -= n;
+                    buf += n;
+                } else
+                {   buf += len;
+                    len = 0;
+                }
+                DEBUG_ARGV(printf("%s: shift argv string %d '%s'\n",
+                                  codeid(), *ref_argn, (*ref_argv)[0]););
+                (*ref_argv)++;
+                (*ref_argn)--;
+                complete = *ref_argn <= 0;
+            }
+        }
+    }
 
-   if (buf != bufstart)
-   {   /* something written */
-       buf[-1] = '\0';
-       len--;
-   } else
-   {   buf[0] = '\0';
-       buf++;
-   }
+    if (buf != bufstart)
+    {   /* something written */
+        buf[-1] = '\0';
+        len--;
+    } else
+    {   buf[0] = '\0';
+        buf++;
+    }
 
-   return buf - bufstart;
+    return buf - bufstart;
 }
 
 
@@ -19472,6 +19505,8 @@ mod_invoke_argv(const char *fnname,
 {   DEBUG_TRACE(DPRINTF("mod argv exec: %s [%d]\n",
                        value_type_name(value), *ref_argn););
     DEBUG_ENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state))););
+    DEBUG_ARGV(DPRINTF("%s: mod argv %d '%s' delim '%s'\n",
+                       codeid(), *ref_argn, (*ref_argv)[0], delim););
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code = NULL;
@@ -19496,7 +19531,8 @@ mod_invoke_argv(const char *fnname,
         {   DEBUG_MOD(DPRINTF("%s: invoke argv closure argument\n",
                              codeid()););
             if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
-                                        /*token_strings*/delim==NULL, &value))
+                                        delim, /*token_strings*/delim==NULL,
+                                        &value))
             {   retval = value;
                 DEBUG_MOD(DPRINTF("%s: applied argv substitution OK\n",
                                  codeid()););
@@ -19538,7 +19574,8 @@ mod_invoke_argv(const char *fnname,
     {
         DEBUG_MOD(DPRINTF("%s: invoke argv direct fn\n", codeid()););
         if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
-                                    /*token_strings*/delim==NULL, &value))
+                                    delim, /*token_strings*/delim==NULL,
+                                    &value))
         {   DEBUG_MOD(DPRINTF("%s: invoked argv direct function\n", codeid()););
             return value;
         } else
@@ -19720,8 +19757,12 @@ mod_execv(const value_t **out_val,
     bool parsed_ok = FALSE;
     const char *symbol = (*ref_argv)[0]; 
 
-    DEBUG_EXECV(DPRINTF("mod execv start: %s ...[%d] (path %s delim '%s')\n",
-                        symbol, *ref_argn,
+    DEBUG_ARGV(DPRINTF("%s: mod execv argv %d '%s' delim %s\n",
+                       codeid(), *ref_argn, (*ref_argv)[0],
+                       delim==NULL? "<none>": delim););
+    DEBUG_EXECV(DPRINTF("%s; mod execv start: %s ...[%d] "
+                        "(path %s delim '%s')\n",
+                        codeid(), symbol, *ref_argn,
                         execpath == NULL? "<NONE>": execpath,
                         delim==NULL? "<unset>": delim););
     /* Parse the command first */
@@ -19960,6 +20001,8 @@ static bool default_register_result(parser_state_t *state, const char *cmd,
  *    @param fndir     - directory to take parsing function definitions from
  *    @param with_results - function for dealing with command results
  *    @param with_results_arg - argument to provide with \c with_results
+ *    @param out_value - last value created by the commands
+ *    @param out_ends_with_delim - TRUE when last parsed item is the delimiter
  *
  *  If delim is NULL only the initial commands that consist of --opt style
  *  tokens are parsed (until the following --opt style entry or until --).
@@ -19972,7 +20015,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *execpath, dir_t *fndir,
                  bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
-                 const value_t **out_value)
+                 const value_t **out_value, bool *out_ends_with_delim)
 {   const value_t *val = NULL;
     linesource_t saved;
     bool executing_prefix = TRUE;
@@ -19984,9 +20027,13 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
     linesource_init(parser_linesource(state));
 
     while (executing_prefix && *ref_argn > 0)
-    {   const char *cmd = (*ref_argv)[0];
+    {   const char *cmd;
+        DEBUG_ENV(dir_t *startdir = parser_env_stack(state)->stack;);
 
-        DEBUG_ENV(dir_t *startdir = parser_env_stack(state)->stack;)
+        cmd = (*ref_argv)[0];
+        DEBUG_ARGV(printf("%s: %d args left - current args '%s'\n",
+                          codeid(), *ref_argn, cmd););
+
         if (NULL != val)
             value_unlocal(val);
 
@@ -20007,6 +20054,9 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                 syntax_ok = FALSE;
         }
 
+        if (out_ends_with_delim != NULL)
+            *out_ends_with_delim = FALSE;
+
         if (executing_prefix)
         {   DEBUG_EXECV(VALUE_SHOW("MOD EXECV report val: ", val););
             if (val!= NULL)
@@ -20023,6 +20073,8 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                 if (*ref_argn > 0 && 0 == strcmp((*ref_argv)[0], delim)) {
                     (*ref_argn)--;
                     (*ref_argv)++;
+                    if (out_ends_with_delim != NULL)
+                        *out_ends_with_delim = TRUE;
                 }
             }
 
@@ -20274,8 +20326,9 @@ cli(parser_state_t *state, const char *init_cmds, const char *code_name)
 
 /* This function may cause a garbage collection */
 extern bool
-argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
-         const char **argv, int argc)
+argv_cli_ending(parser_state_t *state, const char *code_name,
+                const char *execpath, const char **argv, int argc,
+                bool *out_ends_with_comma)
 {   const value_t *value = NULL;
     codeid_set(code_name);
     return parser_argv_exec(state, &argv, &argc, /*delim*/",", execpath,
@@ -20284,7 +20337,7 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
                             /* function dealing with results from command
                              * evaluations */&default_register_result,
                             /*with_results_arg*/NULL,
-                            &value);
+                            &value, out_ends_with_comma);
 }
 
 
@@ -20297,12 +20350,13 @@ argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
              const char ***ref_argv, int *ref_argc, dir_t *fndir,
              register_opt_result_fn *with_results, void *with_results_arg)
 {   const value_t *value = NULL;
+    bool ends_with_delim = FALSE;
     codeid_set(code_name);
     return parser_argv_exec(state, ref_argv, ref_argc,
                             /*delimiter*/NULL/*use --opt style parsing*/,
                             execpath, fndir, /*expect_no_locals*/TRUE,
                             with_results, with_results_arg,
-                            &value);
+                            &value, &ends_with_delim);
 }
 
 
@@ -26365,7 +26419,7 @@ fn_for(const value_t *this_fn, parser_state_t *state)
         } else
         {
             parser_error(state,
-                         "for - closure must have one unbound value (not %d)",
+                         "for - closure must have one unbound value (not %d)\n",
                          n);
         }
     } else
@@ -26958,7 +27012,7 @@ genfn_mem_dump(const value_t *this_fn, parser_state_t *state,
             unsigned sz_ln2 = (unsigned)value_int_number(szval);
             if (sz_ln2 > 3)
                 parser_error(state, "ln2 entry size byte length must be "
-                             "less than 4 - but is %u", sz_ln2);
+                             "less than 4 - but is %u\n", sz_ln2);
             else {
                 bool with_chars = !value_bool_is_false(withchval);
                 size_t ix = (size_t)value_int_number(ixval);

@@ -1641,7 +1641,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *execpath, dir_t *fndir,
                  bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
-                 const value_t **out_value);
+                 const value_t **out_value, bool *out_ends_with_delim);
 
 /*! Execute the commands provided from three sources in order
  *  This is an internal function implementing a range of others (that follow
@@ -1705,11 +1705,16 @@ cli(parser_state_t *state, const char *rcfile, const char *code_name);
  *    @param execpath  - file directory path from which to take FTL sources
  *    @param argv      - reference to 1st sym in an array of symbols
  *    @param argc      - number of syms in array
+ *    @param out_ends_with_comma - TRUE when last parsed item is the delimiter
  */
 extern bool
-argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
-         const char **argv, int argc);
+argv_cli_ending(parser_state_t *state, const char *code_name,
+                const char *execpath, const char **argv, int argc,
+                bool *out_ends_with_comma);
 
+#define argv_cli(state, code_name, execpath, argv, argc) \
+        argv_cli_ending(state, code_name, execpath, argv, argc, NULL)
+    
 
 /*! Run an ftl interpreter taking commands from argv
  *  Only the initial commands that consist of --opt style tokens are parsed.
@@ -1722,7 +1727,6 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
  *    @param ref_argc  - updatable reference number of syms in array
  *    @param fndir     - directory to take parsing function definitions from
  *    @param with_results - function called for the results of every option call
- *    @param with_results_arg - argument for with_results
  */
 extern bool
 argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
