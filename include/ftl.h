@@ -315,12 +315,21 @@ charsink_string_buf(charsink_t *sink, const char **out_buf, size_t *out_len);
 
 typedef struct charsource_s charsource_t;
 
+/*! read the next character from source and returns it as an unsigned char cast
+ *  to an int, or EOF on end of file or error
+ */    
 extern int
 charsource_getc(charsource_t *source);
 
+/*! end use of the charsource for reading
+ */
 extern void
 charsource_close(charsource_t *source);
 
+/*! reclaim resources allocated to the charsource
+ *  Does nothing if *ref_source == NULL.  Always succeeds.
+ *  Updates *ref_source to NULL.
+ */
 extern void
 charsource_delete(charsource_t **ref_source);
 
@@ -1582,9 +1591,9 @@ extern bool value_istype_invokable(const value_t *val);
 
 
 /*! Create a binding providing an argument to some code (resulting in a closure)
- *  if 'try' is set the substitution will not fail if there are not enough
+ *  if 'unstrict' is set the substitution will not fail if there are not enough
  *  unbound symbols for the substitution (the code value itself will be
- *  returned)
+ *  returned) - i.e. unnecessary arguments will not be reported (or used)
  */
 extern const value_t *
 substitute(const value_t *code, const value_t *arg, parser_state_t *state,
@@ -1618,6 +1627,12 @@ parse_expr(const char **ref_line, parser_state_t *state,
 typedef bool register_opt_result_fn(parser_state_t *state, const char *cmd,
                                     const value_t *result, void *arg);
 
+/*! execute the command provided in a string
+ *
+ *  A pointer to the string is provided in ref_line and a command line
+ *  is parsed and run.  The pointer is then updated to the end of the parsed
+ *  text.
+ */
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
@@ -1628,6 +1643,29 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  register_opt_result_fn *with_results, void *with_results_arg,
                  const value_t **out_value);
 
+/*! Execute the commands provided from three sources in order
+ *  This is an internal function implementing a range of others (that follow
+ *  as macro definitions)
+ *
+ *  First execute the commands in \c rcfile_id - which is found on the
+ *     RC directory path - unless \c rcfile_id is NULL
+ * 
+ *  Second execute the commands taken from \c cmd_str - if it is not NULL
+ *
+ *  Third execute the commands from the the character source \c source
+ *
+ *  Finally garbage collect unless \c expect_no_locals is FALSE
+ *
+ *  These three sources are stacked on the stack of character sources and
+ *  then lines are read and executed until EOF is returned (i.e. the character
+ *  source stack is empty).
+ *
+ *  Each line is executed with \c mod_exec_cmd with exception handling in place
+ *  if \c interactive is TRUE.
+ *
+ *  Unless /c expect_no_locals is TRUE the routine returns a value - the one
+ *  resulting from the last \c mod_exec_cmd() run
+ */
 extern const value_t *
 parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                const char *cmd_str, const char *rcfile_id,
@@ -1665,8 +1703,8 @@ cli(parser_state_t *state, const char *rcfile, const char *code_name);
  *    @param state     - current parser state
  *    @param code_name - name to call the parser during this phase
  *    @param execpath  - file directory path from which to take FTL sources
- *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
- *    @param ref_argn  - updatable reference number of syms in array
+ *    @param argv      - reference to 1st sym in an array of symbols
+ *    @param argc      - number of syms in array
  */
 extern bool
 argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
@@ -1681,7 +1719,7 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
  *    @param code_name - name to call the parser during this phase
  *    @param execpath  - file directory path from which to take FTL sources
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
- *    @param ref_argn  - updatable reference number of syms in array
+ *    @param ref_argc  - updatable reference number of syms in array
  *    @param fndir     - directory to take parsing function definitions from
  *    @param with_results - function called for the results of every option call
  *    @param with_results_arg - argument for with_results

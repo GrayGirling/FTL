@@ -168,7 +168,7 @@ value_delete(value_t **ref_val);
 
 /*          Types 					                     */
 
-typedef int type_name_fn_t();
+typedef int type_name_fn_t(void);
 
 
 struct value_type_s

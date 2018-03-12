@@ -14,9 +14,10 @@
 <3=3, 7=7>
 > eval <"a"=4> 
 ftl: names in a vector must be an integer not a string
-ftl $*console*:10: expected '>'
-ftl $*console*:10: failed to evaluate expression
-ftl $*console*:10: warning - trailing text ...4> 
+ftl $*console*:+10 in
+ftl $*console*:11: expected '>'
+ftl $*console*:+10: failed to evaluate expression
+ftl $*console*:+10: warning - trailing text ...4> 
 > eval <10..13>
 <10 .. 13>
 > intseq 10 NULL 13
@@ -76,31 +77,40 @@ TRUE
 > set v <..10>
 > set v.(len v!) 11
 ftl: name 10 has a constant value
-ftl $*console*:47: can't set a value for 10 here
+ftl $*console*:+47 in
+ftl $*console*:48: can't set a value for 10 here
 > eval v
 <1 .. 10>
 > eval <>.0    
-ftl $*console*:50: index symbol undefined in parent '0'
+ftl $*console*:+50 in
+ftl $*console*:51: index symbol undefined in parent '0'
 > eval <>.(-1) 
-ftl $*console*:51: index symbol undefined in parent '-1'
+ftl $*console*:+51 in
+ftl $*console*:52: index symbol undefined in parent '-1'
 > eval <>.1    
-ftl $*console*:52: index symbol undefined in parent '1'
+ftl $*console*:+52 in
+ftl $*console*:53: index symbol undefined in parent '1'
 > eval <42>.0   
 42
 > eval <42>.(-1) 
-ftl $*console*:55: index symbol undefined in parent '-1'
+ftl $*console*:+55 in
+ftl $*console*:56: index symbol undefined in parent '-1'
 > eval <42>.1    
-ftl $*console*:56: index symbol undefined in parent '1'
+ftl $*console*:+56 in
+ftl $*console*:57: index symbol undefined in parent '1'
 > eval <3=33,7=77>.2 
-ftl $*console*:58: index symbol undefined in parent '2'
+ftl $*console*:+58 in
+ftl $*console*:59: index symbol undefined in parent '2'
 > eval <3=33,7=77>.3
 33
 > eval <3=33,7=77>.4 
-ftl $*console*:60: index symbol undefined in parent '4'
+ftl $*console*:+60 in
+ftl $*console*:61: index symbol undefined in parent '4'
 > eval <3=33,7=77>.7
 77
 > eval <3=33,7=77>.8 
-ftl $*console*:62: index symbol undefined in parent '8'
+ftl $*console*:+62 in
+ftl $*console*:63: index symbol undefined in parent '8'
 > eval <4, 8 .. 23>.0
 4
 > eval <4, 8 .. 23>.1
@@ -112,6 +122,7 @@ ftl $*console*:62: index symbol undefined in parent '8'
 > eval <4, 8 .. 23>.4
 20
 > eval <4, 8 .. 23>.5 
-ftl $*console*:69: index symbol undefined in parent '5'
+ftl $*console*:+69 in
+ftl $*console*:70: index symbol undefined in parent '5'
 > eval <4, 8 .. 24>.5 
 24

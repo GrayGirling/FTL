@@ -4,10 +4,11 @@
 > key_chooser ["lock"=8,"key"=-9,"bolt"=2]
 -9
 > key_chooser ["lock"=8,"bolt"=2]
-ftl $*console*@3@0: in
-ftl $*console*@3: in
-ftl $*console*:6: undefined symbol 'key'
-ftl $*console*:6: error in closure code body
+ftl $*console*:3+0+0 in
+ftl $*console*:3+0 in
+ftl $*console*:+6 in
+ftl $*console*:7: undefined symbol 'key'
+ftl $*console*:3+0+0: error in closure code body
 > set init_42 closure TRUE [first=42] {[value=first]}!
 > init_42
 [value=42]

@@ -4,6 +4,7 @@
 > eval milk.mon
 5
 > set milk.feb 4
-ftl $*console*:6: can't set a value for "feb" here
+ftl $*console*:+6 in
+ftl $*console*:7: can't set a value for "feb" here
 > set config_empty []
 > lock config_empty

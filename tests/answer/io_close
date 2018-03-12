@@ -1,11 +1,11 @@
-io close (io.file "test" "w"!)
-set log[msg]:{
+> io close (io.file "test" "w"!)
+> set log[msg]:{
     .logstr = io.file "log" "w"!;
     io.write logstr msg!;
     io.write logstr "\n"!;
     io.close logstr!;
 }
-set cat[file]:{
+> set cat[file]:{
     .logstr = io.file file "r"!;
     .txt = NULL;
     logstr != NULL {
@@ -14,5 +14,6 @@ set cat[file]:{
     }!;
     txt
 }
-log "this"
-cat "log"
+> log "this"
+> cat "log"
+"this\n"

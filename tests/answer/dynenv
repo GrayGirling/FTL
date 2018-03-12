@@ -53,10 +53,12 @@
 2
 > set dyn_noset.ads 10
 ftl: name "ads" has a constant value
-ftl $*console*:31: can't set a value for "ads" here
+ftl $*console*:+31 in
+ftl $*console*:32: can't set a value for "ads" here
 > set dyn_noset.b 120
 ftl: name "b" has a constant value
-ftl $*console*:32: can't set a value for "b" here
+ftl $*console*:+32 in
+ftl $*console*:33: can't set a value for "b" here
 > eval dyn_noset.ads
 (get)
 8

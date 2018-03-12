@@ -46,12 +46,13 @@
 > set opeval[expr]: { parse.opeval opdef expr! }
 > set x 42
 > opeval {yfy}       
-ftl $*console*@54: in
-ftl $*console*:57: undefined symbol 'yfy'
-ftl $*console*:57: code has trailing text - ''
+ftl $*console*:54+0 in
+ftl $*console*:+57 in
+ftl $*console*:58: undefined symbol 'yfy'
+ftl $*console*:54+0: code has trailing text - ''
 > opeval {x}         
-ftl $*console*:58: undefined symbol 'x'
-ftl $*console*:58: code has trailing text - ''
+ftl $*console*:54+0: undefined symbol 'x'
+ftl $*console*:54+0: code has trailing text - ''
 > opeval {4}
 4
 > opeval {"str"}

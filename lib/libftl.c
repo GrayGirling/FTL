@@ -376,6 +376,7 @@
 #include <wctype.h>
 #include <stddef.h> /* for ptrdiff_t */
 #include <setjmp.h>
+#include <errno.h>
 
 #ifdef _WIN32
 
@@ -437,106 +438,111 @@
 
 #define FORCEDEBUG
 
-// #define DEBUGGC DO 
-// #define DEBUGGCU DO
-// #define DEBUGVALINIT DO 
-// #define DEBUGVALLINK DO
-// #define DEBUGCHARS DO 
-// #define DEBUGCONSOLE DO 
-// #define DEBUGEXPD DO 
-// #define DEBUGSERIES DO 
-// #define DEBUGTRACE DO
-// #define DEBUGDIR DO
-// #define DEBUGENV DO 
-// #define DEBUGMOD DO
-// #define DEBUGSOCK DO 
-// #define DEBUGOP DO 
-// #define DEBUGRCFILE DO 
-// #define DEBUGEXECV DO
-// #define DEBUGMODEXEC DO 
-// #define DEBUGCMP DO 
-// #define DEBUGMEMDIFF DO 
+// #define DEBUG_GC DO 
+// #define DEBUG_GCU DO
+// #define DEBUG_VALINIT DO 
+// #define DEBUG_VALLINK DO
+// #define DEBUG_CHARS DO 
+// #define DEBUG_LNO DO 
+// #define DEBUG_CONSOLE DO 
+// #define DEBUG_EXPD DO 
+// #define DEBUG_SERIES DO 
+// #define DEBUG_TRACE DO
+// #define DEBUG_DIR DO
+// #define DEBUG_ENV DO 
+// #define DEBUG_MOD DO
+// #define DEBUG_SOCK DO 
+// #define DEBUG_OP DO 
+// #define DEBUG_RCFILE DO 
+// #define DEBUG_EXECV DO
+// #define DEBUG_MODEXEC DO 
+// #define DEBUG_CMP DO 
+// #define DEBUG_MEMDIFF DO 
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
-#undef DEBUGGC
-#undef DEBUGGCU
-#undef DEBUGVALINIT
-#undef DEBUGVALLINK
-#undef DEBUGCHARS
-#undef DEBUGCONSOLE
-#undef DEBUGEXPD
-#undef DEBUGSERIES
-#undef DEBUGTRACE
-#undef DEBUGDIR
-#undef DEBUGENV
-#undef DEBUGMOD
-#undef DEBUGSOCK
-#undef DEBUGOP
-#undef DEBUGEXECV
-#undef DEBUGMODEXEC
-#undef DEBUGRCFILE
-#undef DEBUGCMP
-#undef DEBUGMEMDIFF
+#undef DEBUG_GC
+#undef DEBUG_GCU
+#undef DEBUG_VALINIT
+#undef DEBUG_VALLINK
+#undef DEBUG_CHARS
+#undef DEBUG_LNO
+#undef DEBUG_CONSOLE
+#undef DEBUG_EXPD
+#undef DEBUG_SERIES
+#undef DEBUG_TRACE
+#undef DEBUG_DIR
+#undef DEBUG_ENV
+#undef DEBUG_MOD
+#undef DEBUG_SOCK
+#undef DEBUG_OP
+#undef DEBUG_EXECV
+#undef DEBUG_MODEXEC
+#undef DEBUG_RCFILE
+#undef DEBUG_CMP
+#undef DEBUG_MEMDIFF
 #endif
 
 
 
-#ifndef DEBUGGC
-#define DEBUGGC OMIT
+#ifndef DEBUG_GC
+#define DEBUG_GC OMIT
 #endif
-#ifndef DEBUGGCU
-#define DEBUGGCU OMIT
+#ifndef DEBUG_GCU
+#define DEBUG_GCU OMIT
 #endif
-#ifndef DEBUGVALINIT
-#define DEBUGVALINIT OMIT
+#ifndef DEBUG_VALINIT
+#define DEBUG_VALINIT OMIT
 #endif
-#ifndef DEBUGVALLINK
-#define DEBUGVALLINK OMIT
+#ifndef DEBUG_VALLINK
+#define DEBUG_VALLINK OMIT
 #endif
-#ifndef DEBUGCHARS
-#define DEBUGCHARS OMIT
+#ifndef DEBUG_CHARS
+#define DEBUG_CHARS OMIT
 #endif
-#ifndef DEBUGCONSOLE
-#define DEBUGCONSOLE OMIT
+#ifndef DEBUG_LNO
+#define DEBUG_LNO OMIT
 #endif
-#ifndef DEBUGEXPD
-#define DEBUGEXPD OMIT
+#ifndef DEBUG_CONSOLE
+#define DEBUG_CONSOLE OMIT
 #endif
-#ifndef DEBUGSERIES
-#define DEBUGSERIES OMIT
+#ifndef DEBUG_EXPD
+#define DEBUG_EXPD OMIT
 #endif
-#ifndef DEBUGTRACE
-#define DEBUGTRACE OMIT
+#ifndef DEBUG_SERIES
+#define DEBUG_SERIES OMIT
 #endif
-#ifndef DEBUGDIR
-#define DEBUGDIR OMIT
+#ifndef DEBUG_TRACE
+#define DEBUG_TRACE OMIT
 #endif
-#ifndef DEBUGENV
-#define DEBUGENV OMIT
+#ifndef DEBUG_DIR
+#define DEBUG_DIR OMIT
 #endif
-#ifndef DEBUGMOD
-#define DEBUGMOD OMIT
+#ifndef DEBUG_ENV
+#define DEBUG_ENV OMIT
 #endif
-#ifndef DEBUGSOCK
-#define DEBUGSOCK OMIT
+#ifndef DEBUG_MOD
+#define DEBUG_MOD OMIT
 #endif
-#ifndef DEBUGOP
-#define DEBUGOP OMIT
+#ifndef DEBUG_SOCK
+#define DEBUG_SOCK OMIT
 #endif
-#ifndef DEBUGEXECV
-#define DEBUGEXECV OMIT
+#ifndef DEBUG_OP
+#define DEBUG_OP OMIT
 #endif
-#ifndef DEBUGMODEXEC
-#define DEBUGMODEXEC OMIT
+#ifndef DEBUG_EXECV
+#define DEBUG_EXECV OMIT
 #endif
-#ifndef DEBUGRCFILE
-#define DEBUGRCFILE OMIT
+#ifndef DEBUG_MODEXEC
+#define DEBUG_MODEXEC OMIT
 #endif
-#ifndef DEBUGCMP
-#define DEBUGCMP OMIT
+#ifndef DEBUG_RCFILE
+#define DEBUG_RCFILE OMIT
 #endif
-#ifndef DEBUGMEMDIFF
-#define DEBUGMEMDIFF OMIT
+#ifndef DEBUG_CMP
+#define DEBUG_CMP OMIT
+#endif
+#ifndef DEBUG_MEMDIFF
+#define DEBUG_MEMDIFF OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -546,8 +552,8 @@
 #define CODEID "ftl"
 #define CODEIDNAME_MAX 64
 
-#if DEBUGVALINIT(1+)0 > 0 && defined(FTL_VAL_HAS_LINENO)
-#error enable FTL_VAL_HAS_LINENO in ftl_internal.h for DEBUGVALINIT
+#if DEBUG_VALINIT(1+)0 > 0 && defined(FTL_VAL_HAS_LINENO)
+#error enable FTL_VAL_HAS_LINENO in ftl_internal.h for DEBUG_VALINIT
 #endif
 
 
@@ -556,7 +562,7 @@
 #define PTRVALID(_var) (NULL != (_var))
 #define HEAPVALID(_var) (true)
 
-#if 0 //defined(__APPLE__)
+#if 0 /* defined(__APPLE__) */
 #undef PTRVALID
 #define PTRVALID(_var) \
     (assert((((ptrdiff_t)(_var)) & 0xFFFF000000000000) == 0),NULL != (_var))
@@ -1569,13 +1575,26 @@ charsink_string_buf(charsink_t *sink, const char **out_buf, size_t *out_len)
 
 
 
-/* reads the next character from source and returns it as an
-   unsigned char cast to an int, or EOF on end of file or error. */
+/*! type of the function used to read the next character from source and
+    returns it as an unsigned char cast to an int, or EOF on end of file or
+    error.
+*/
 typedef int charsource_rdch_fn_t(charsource_t *source);
 
+
+/*! type of the function used to read a block of characters from the charsource
+ */    
 typedef size_t charsource_read_fn_t(charsource_t *source,
                                     void *buf, size_t len);
 
+/*! type of the function used to return the line number we are currently reading
+ */
+typedef int charsource_lineno_fn_t(charsource_t *source);
+
+
+/*! type of the function used to end use reclaim resources allocated to the
+ *  charsource
+ */
 typedef void charsource_delete_fn_t(charsource_t *source);
 
 
@@ -1585,11 +1604,11 @@ struct charsource_s
 {   struct charsource_s *link;
     charsource_rdch_fn_t *rdch;
     charsource_read_fn_t *read;
+    charsource_lineno_fn_t *linecount; /* return line number */
     charsource_delete_fn_t *del;     /* delete the charsource entirely */
     charsource_delete_fn_t *close;   /* delete any accumulated state */
     const char *name;
-    int lineno;
-};
+} /* charsource_t */;
 
 
 
@@ -1615,10 +1634,26 @@ charsource_read_from_rdch(charsource_t *source, void *buf, size_t len)
 }
 
 
-
+/*! initialize a new charsource object
+ *    @param source    - charsource_lineref object to be initialized
+ *    @param rdch      - function to read a single character
+ *    @param read      - NULL or function used to read a block of characters
+ *    @param linecount_fn - NULL or function used to determine current line no
+ *    @param delete_fn - NULL or function used to free resources held 
+ *    @param close     - NULL or function used to free accumulatd resources
+ *    @param name_format ... - sprintf arguments to create a user-friendly name
+ *                       for the charsource
+ *
+ *  If read is NULL then rdch will be used to read a block of data.
+ *  If linecount_fn is NULL then line number 0 is reported (otherwise line
+ *  number is never reported)
+ *  If close_fn is NULL then no action occurs when the charsource is closed.
+ *  If delete_fn is NULL then no action occurs when the charsource is deleted.
+ */
 static void
 charsource_init(charsource_t *source,
                 charsource_rdch_fn_t *rdch, charsource_read_fn_t *read,
+                charsource_lineno_fn_t *linecount_fn,
                 charsource_delete_fn_t *delete_fn,
                 charsource_delete_fn_t *close, const char *name_format, ...)
 {   size_t namelen;
@@ -1635,9 +1670,9 @@ charsource_init(charsource_t *source,
         source->read = read;
     else
         source->read = &charsource_read_from_rdch;
+    source->linecount = linecount_fn;
     source->del = delete_fn;
     source->close = close;
-    source->lineno = 1;
 
     if (namelen > 0)
     {   namebuf = FTL_MALLOC(namelen+1);
@@ -1647,7 +1682,7 @@ charsource_init(charsource_t *source,
         {   va_start(args, name_format);
             (void)vsnprintf(namebuf, namelen+1, name_format, args);
             va_end(args);
-            DEBUGCHARS(DPRINTF("%s: chars - name '%s' -> [%d] '%s'\n",
+            DEBUG_CHARS(DPRINTF("%s: chars - name '%s' -> [%d] '%s'\n",
                                codeid(), name_format, namelen, namebuf););
         }
     }
@@ -1660,7 +1695,7 @@ charsource_init(charsource_t *source,
 extern void
 charsource_close(charsource_t *source)
 {
-    DEBUGCHARS(DPRINTF("%s: chars - close '%s'%s\n",
+    DEBUG_CHARS(DPRINTF("%s: chars - close '%s'%s\n",
                        codeid(), source == NULL? "<NULL>": source->name,
                        (NULL != source &&
                         NULL != source->close)? "": " (no fn)"););
@@ -1677,7 +1712,7 @@ charsource_delete(charsource_t **ref_source)
 {   if (NULL != *ref_source)
     {   charsource_t *source = *ref_source;
 
-        DEBUGCHARS(DPRINTF("%s: chars - delete '%s'%s\n",
+        DEBUG_CHARS(DPRINTF("%s: chars - delete '%s'%s\n",
                            codeid(), source == NULL? "<NULL>": source->name););
         charsource_close(source);
 
@@ -1710,8 +1745,16 @@ charsource_name(charsource_t *source)
 
 STATIC_INLINE int
 charsource_lineno(charsource_t *source)
-{   return source == NULL? 0:
-           source->lineno;
+{
+    int lineno = (source == NULL || source->linecount == NULL)? -1:
+                 (*source->linecount)(source);
+    DEBUG_LNO(printf("%s: charsource '%s' req line number %s - %d\n", codeid(),
+                     source == NULL? "<none>": source->name,
+                     source == NULL? "NULL source":
+                     source->linecount == NULL? "no linecount":
+                     "from linecount fn",
+                     lineno););
+    return lineno;
 }
 
 
@@ -1721,15 +1764,12 @@ charsource_lineno(charsource_t *source)
 STATIC_INLINE int
 charsource_getc_local(charsource_t *source)
 {   if (source == NULL)
-    {   DEBUGCHARS(DPRINTF("%s: chars - '%s' getc EOF\n",
+    {   DEBUG_CHARS(DPRINTF("%s: chars - '%s' getc EOF\n",
                            codeid(), source == NULL? "<NULL>": source->name););
         return EOF;
     }
     else
-    {   int ch = (*source->rdch)(source);
-        if (ch == '\n')
-            source->lineno++;
-        return ch;
+    {   return (*source->rdch)(source);
     }
 }
 
@@ -1757,11 +1797,6 @@ charsource_read(charsource_t *source, void *buf, size_t len)
         return 0;
     else
     {   size_t actual = (*source->read)(source, buf, len);
-        const char *p = (const char *)buf;
-        const char *endp = p+actual;
-        while (p < endp)
-            if (*p++ == '\n')
-                source->lineno++;
         return (int)actual;
     }
 }
@@ -1787,6 +1822,7 @@ charsource_read(charsource_t *source, void *buf, size_t len)
 typedef struct
 {   charsource_t base;
     FILE *stream;
+    int lineno;
 } charsource_file_t;
 
 
@@ -1796,6 +1832,8 @@ STATIC_INLINE int
 charsource_file_rdch(charsource_t *base_source)
 {   charsource_file_t *source = (charsource_file_t *)base_source;
     int ch = getc(source->stream);
+    if (ch == '\n')
+        source->lineno++;
     return ch;
 }
 
@@ -1806,10 +1844,26 @@ static size_t
 charsource_file_read(charsource_t *base_source, void *buf, size_t len)
 {   charsource_file_t *source = (charsource_file_t *)base_source;
     size_t bytes = fread(buf, 1, len, source->stream);
+    char *p = (char *)buf;
+    char *endp = p+bytes;
+    while (p < endp)
+        if (*p++ == '\n')
+            source->lineno++;
     /*printf("%s: read %d bytes from %d - EOF %s\n",
              codeid(), bytes, len,
              feof(source->stream)? "TRUE": "FALSE"); */
     return bytes;
+}
+
+
+
+
+static int
+charsource_file_linecount(charsource_t *base_source)
+{   charsource_file_t *source = (charsource_file_t *)base_source;
+    OMIT(fprintf(stderr, "%s: file '%s' line %d\n",
+                 codeid(), base_source->name, source->lineno););
+    return source->lineno;
 }
 
 
@@ -1820,13 +1874,12 @@ charsource_stream_init(charsource_file_t *source,
                        charsource_delete_fn_t *delete_fn,
                        charsource_rdch_fn_t *rdch, charsource_read_fn_t *read,
                        const char *name, FILE *stream)
-{   charsource_init(&source->base, rdch, read, delete_fn,
-                    /*close*/NULL,  "<%s>", name);
+{   charsource_init(&source->base, rdch, read, &charsource_file_linecount,
+                    delete_fn, /*close*/NULL,  "<%s>", name);
     source->stream = stream;
+    source->lineno = 1; /* start numbering from 1 */
     return &source->base;
 }
-
-
 
 
 
@@ -1858,12 +1911,14 @@ static charsource_t *
 charsource_file_init(charsource_file_t *source,
                      charsource_delete_fn_t *delete_fn,
                      const char *name, FILE *stream)
-{    OMIT(printf("%s: new file '%s'\n", codeid(), name););
-     charsource_init(&source->base,
-                     &charsource_file_rdch, &charsource_file_read, delete_fn,
-                     &charsource_file_close, "%s", name);
-     source->stream = stream;
-     return &source->base;
+{   OMIT(printf("%s: new file '%s'\n", codeid(), name););
+    charsource_init(&source->base,
+                    &charsource_file_rdch, &charsource_file_read,
+                    &charsource_file_linecount, delete_fn,
+                    &charsource_file_close, "%s", name);
+    source->stream = stream;
+    source->lineno = 1; /* start at line 1 */
+    return &source->base;
 }
 
 
@@ -2055,6 +2110,7 @@ typedef struct
 {   charsource_t base;
     int fd;
     int recv_flags;
+    int lineno;
 } charsource_socket_t;
 
 
@@ -2064,7 +2120,15 @@ STATIC_INLINE int
 charsource_socket_rdch(charsource_t *base_source)
 {   charsource_socket_t *source = (charsource_socket_t *)base_source;
     char ch;
-    return recv(source->fd, &ch, 1, source->recv_flags);
+    int rc = recv(source->fd, &ch, 1, source->recv_flags);
+    if (rc < 0)
+        return EOF;
+    else
+    {
+        if (ch == '\n')
+            source->lineno++;
+        return rc;
+    }
 }
 
 
@@ -2073,26 +2137,23 @@ charsource_socket_rdch(charsource_t *base_source)
 static size_t
 charsource_socket_read(charsource_t *base_source, void *buf, size_t len)
 {   charsource_socket_t *source = (charsource_socket_t *)base_source;
-    return recv(source->fd, buf, len, source->recv_flags);
+    size_t bytes = recv(source->fd, buf, len, source->recv_flags);
+    char *p = (char *)buf;
+    char *endp = p+bytes;
+    while (p < endp)
+        if (*p++ == '\n')
+            source->lineno++;
+    return bytes;
 }
 
 
 
 
-static charsource_t *
-charsource_skt_init(charsource_socket_t *source,
-                    charsource_delete_fn_t *delete_fn,
-                    charsource_rdch_fn_t *rdch, charsource_read_fn_t *read,
-                    const char *name, int fd, int recv_flags)
-{   charsource_init(&source->base, rdch, read, delete_fn,
-                    /*close*/NULL,  "inet:%s", name);
-    source->fd = fd;
-    source->recv_flags = recv_flags;
-    return &source->base;
+static int
+charsource_skt_linecount(charsource_t *base_source)
+{   charsource_socket_t *source = (charsource_file_t *)base_source;
+    return source->lineno;
 }
-
-
-
 
 
 
@@ -2123,9 +2184,11 @@ charsource_socket_init(charsource_socket_t *source,
                        const char *name, int fd, int recv_flags)
 {    charsource_init(&source->base,
                      &charsource_socket_rdch, &charsource_socket_read,
+                     &charsource_socket_linecount,
                      delete_fn, &charsource_socket_close, "inet:%s", name);
      source->fd = fd;
      source->recv_flags = recv_flags;
+     source->lineno = 1; /* start at line 1 */
      return &source->base;
 }
 
@@ -2208,6 +2271,8 @@ typedef struct
 STATIC_INLINE int
 charsource_string_rdch(charsource_t *base_source)
 {   charsource_string_t *source = (charsource_string_t *)base_source;
+    OMIT(fprintf(stdout, "%s: string source '%s' rdch\n",
+                       codeid(), base_source->name););
     return source->string == NULL || source->pos >= source->eos? EOF:
            *source->pos++;
 }
@@ -2237,6 +2302,24 @@ charsource_string_read(charsource_t *base_source, void *buf, size_t len)
 
 
 
+static int
+charsource_string_linecount(charsource_t *base_source)
+{   charsource_string_t *source = (charsource_string_t *)base_source;
+    const char *p = source->string;
+    const char *endp = source->pos;
+    int lineno = 0; /* start at line number 0 */
+    while (p<endp)
+        if (*p++ == '\n')
+            lineno++;
+    OMIT(fprintf(stdout, "%s: string source '%s' char %d eval line %d\n",
+                 base_source->name, codeid(), (int)(endp-p), lineno););
+    return lineno;
+}
+
+
+
+
+
 /* initialize a string that may or may not be freed */
 static charsource_t *
 charsource_string_anyinit(charsource_string_t *source,
@@ -2245,7 +2328,8 @@ charsource_string_anyinit(charsource_string_t *source,
                           const char *name, const char *string, size_t len)
 {   charsource_init(&source->base,
                     &charsource_string_rdch, &charsource_string_read,
-                    delete_fn, close, "$%s", name);
+                    &charsource_string_linecount, delete_fn, close,
+                    "$%s", name);
     source->string = string;
     source->eos = string+len;
     source->pos = string;
@@ -2395,6 +2479,8 @@ charsource_cstring_new(const char *name, const char *string, size_t len)
 typedef struct
 {   charsource_t base;
     const char **ref_string;  /* pointer to the string buffer pointer */
+    const char *line1;        /* pointer to the initial string buffer */
+    int line1no;
 } charsource_lineref_t;
 
 
@@ -2418,25 +2504,92 @@ static void
 charsource_lineref_close(charsource_t *base_source)
 {   charsource_lineref_t *source = (charsource_lineref_t *)base_source;
     source->ref_string = NULL;
+    source->line1 = NULL;
+    source->line1no = -1;
 }
 
 
 
 
+static int
+charsource_lineref_linecount(charsource_t *base_source)
+{   charsource_lineref_t *source = (charsource_lineref_t *)base_source;
+    if (source == NULL || source->ref_string == NULL)
+        return 0;
+    else
+    {
+        const char *endp = *source->ref_string;
+        const char *p = source->line1;
+        int lineno = source->line1no;
 
-/* initialize a string that may or may not be freed */
+        while (p<endp)
+            if (*p++ == '\n')
+                lineno++;
+        OMIT({
+            const char *endless6 = endp-6;
+            int len_beg = 6;
+            int len_end = 6;
+            p = source->line1;
+            if (p+len_beg > endp)
+                len_beg = endp-p;
+            if (endless6 < p+len_beg)
+            {   len_end = endp-(p+len_beg);
+                endless6 = p+len_beg;
+            }
+            fprintf(stdout, "%s: %d chars '%.*s...%.*s'\n",
+                    codeid(), (int)(endp-p), len_beg, p, len_end, endless6);
+            fprintf(stdout, "%s: lineref source '%s' eval line %d\n",
+                   codeid(), base_source->name, lineno);
+        });
+        return lineno;
+    }
+}
+
+
+
+/*! initialize a string that may or may not be freed
+ *    @param source    - charsource_lineref object to be initialized
+ *    @param delete_fn - NULL or function used to free resources held
+ *    @param rewind    - true if name/lineno is from previous location
+ *    @param name      - name of the charsource where charsource defined
+ *    @param lineno    - line number on which the charsource is being defined
+ *    @param ref_string - string parse location from which input is being taken
+ *                       (the string at this location is updated as characgters
+ *                        are read)
+ *  No action is taken on charsource_delete if delete_fn is NULL.
+ */
 STATIC_INLINE charsource_t *
 charsource_lineref_init(charsource_lineref_t *source,
-                        charsource_delete_fn_t *delete_fn,
+                        charsource_delete_fn_t *delete_fn, bool rewind,
                         const char *name, int lineno, const char **ref_string)
 {
-    /*printf("%s: src name '%s'\n", codeid(), name);*/
-    charsource_init(&source->base,
-                    &charsource_lineref_rdch, /*read*/NULL,
-                    delete_fn,
-                    &charsource_lineref_close, "%s@%d", name, lineno);
+    int namelen = strlen(name);
+    char lastch = namelen==0? '\0': name[namelen-1];
+    if (rewind)
+        charsource_init(&source->base,
+                        &charsource_lineref_rdch, /*read*/NULL,
+                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_close, "%s:+",
+                        name); /* use same name as source */
+    else if (lastch == '+') {
+        bool endsinnum = namelen < 2? FALSE: isdigit(name[namelen-2]);
+        charsource_init(&source->base,
+                        &charsource_lineref_rdch, /*read*/NULL,
+                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_close, "%.*s%d+",
+                        endsinnum? namelen: namelen-1, name, lineno);
+    } else
+        charsource_init(&source->base,
+                        &charsource_lineref_rdch, /*read*/NULL,
+                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_close, "%s:%d",
+                        name, lineno);
+
+    OMIT(printf("%s: src lineref for '%s' line %d is '%s'\n", codeid(),
+                name, lineno, &source->base.name[0]););
     source->ref_string = ref_string;
-    source->base.lineno = 0; /* we can't keep track of this */
+    source->line1no = rewind? lineno: 0;
+    source->line1 = *ref_string;
     return &source->base;
 }
 
@@ -2456,7 +2609,7 @@ charsource_lineref_delete(charsource_t *source)
 
 
 extern charsource_t *
-charsource_lineref_new(const char *name, int lineno, const char **ref_string)
+charsource_lineref_new(const char *name, int lineno, bool rewind, const char **ref_string)
 {   charsource_lineref_t *source = NULL;
 
     if (NULL != ref_string)
@@ -2464,7 +2617,7 @@ charsource_lineref_new(const char *name, int lineno, const char **ref_string)
                  FTL_MALLOC(sizeof(charsource_lineref_t));
         if (NULL != source)
             charsource_lineref_init(source, &charsource_lineref_delete,
-                                    name, lineno, ref_string);
+                                    rewind, name, lineno, ref_string);
     }
     return (charsource_t *)source;
 }
@@ -2515,13 +2668,28 @@ charsource_ch_rdch(charsource_t *base_source)
 
 
 
+static int
+charsource_ch_linecount(charsource_t *base_source)
+{   charsource_ch_t *source = (charsource_ch_t *)base_source;
+    int lineno = 0; /* start at line number 0 */
+    if (source->read)
+        return lineno;
+    else
+    {   if (source->ch == '\n')
+            return lineno+1;
+        else
+            return lineno;
+    }
+}
+
+
 
 /* initialize a string that may or may not be freed */
 static charsource_t *
 charsource_ch_init(charsource_ch_t *source, charsource_delete_fn_t *delete_fn,
                    int ch)
 {   charsource_init(&source->base, &charsource_ch_rdch, /*read*/NULL,
-                    delete_fn, /*close*/NULL,
+                    charsource_ch_linecount, delete_fn, /*close*/NULL,
                     "<%s>", "UNRDCH");
     source->read = FALSE;
     source->ch = ch;
@@ -2559,6 +2727,112 @@ charsource_ch_new(int ch)
 
 
 
+
+
+
+
+
+#if 0 /* not necessary */
+/*****************************************************************************
+ *                                                                           *
+ *          No Character Character Sources                                   *
+ *          ==============================                                   *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+
+/* This is a pseudo character source providing no characters.
+ *
+ * It's only function is to record a character source and line number so that
+ * we can temporarily appear to rewind the input to a former input position -
+ * so as to cater for the execution of processed data already read in from the
+ * main parser input, for example.
+ */
+
+
+
+
+
+typedef struct
+{   charsource_t base;
+    const char *rewind_source;
+    int rewind_lineno;
+} charsource_rewind_t;
+
+
+
+
+
+
+
+static int
+charsource_rewind_rdch(charsource_t *base_source)
+{   return EOF;
+    /* it's job is done once read character is called - we revert to the 'real'
+       source and line number
+    */
+}
+
+
+
+
+
+static int
+charsource_rewind_linecount(charsource_t *base_source)
+{   /* charsource_rewind_t *source = (charsource_rewind_t *)base_source; */
+    /* always the stored line number */
+    return -1;
+}
+
+
+
+
+/* initialize a string that may or may not be freed */
+static charsource_t *
+charsource_rewind_init(charsource_rewind_t *source,
+                       charsource_delete_fn_t *delete_fn,
+                       const char *rewind_source, int rewind_lineno)
+{   charsource_init(&source->base, &charsource_rewind_rdch, /*read*/NULL,
+                    charsource_rewind_linecount, delete_fn, /*close*/NULL,
+                    "%s", rewind_source);
+    source->rewind_lineno = rewind_lineno;
+    return &source->base;
+}
+
+
+
+
+
+
+static void
+charsource_rewind_delete(charsource_t *source)
+{   if (NULL != source)
+        FTL_FREE(source);
+}
+
+
+
+
+
+extern charsource_t *
+charsource_rewind_new(const char *rewind_source, int rewind_lineno)
+{   charsource_rewind_t *source = (charsource_rewind_t *)
+                              FTL_MALLOC(sizeof(charsource_rewind_t));
+
+    if (NULL != source)
+        charsource_rewind_init(source, &charsource_rewind_delete,
+                               rewind_source, rewind_lineno);
+
+    return (charsource_t *)source;
+}
+
+
+#endif
 
 
 
@@ -2621,10 +2895,11 @@ static charsource_t *
 charsource_prompting_init(charsource_prompting_t *source,
                           charsource_delete_fn_t *delete_fn,
                           FILE *consolein, FILE *consoleout, const char *prompt)
-{    charsource_stream_init(&source->file_base, delete_fn,
+{
+    OMIT(printf("%s: create prompting source\n", codeid()););
+    charsource_stream_init(&source->file_base, delete_fn,
                             &charsource_prompting_rdch, /*read*/NULL,
-                            "*console*",
-                            consolein);
+                            "*console*", consolein);
      source->prompt_stream = consoleout;
      source->prompt_needed = TRUE;
      source->prompt = prompt;
@@ -2939,6 +3214,7 @@ static bool cause_sigint(void); /* forward reference to Ctrl-C handler */
 
 typedef struct
 {   charsource_string_t string_base;
+    int lineno;
     const char *prompt;
     history_file_t hist;
     bool prompt_needed;
@@ -2960,7 +3236,7 @@ charsource_readline_rdch(charsource_t *base_source)
         if (source->prompt_needed)
         {   char *nextline;
 
-            DEBUGCONSOLE(DPRINTF("calling readline\n");)
+            DEBUG_CONSOLE(DPRINTF("calling readline\n");)
 #ifdef USE_READLINE
             nextline = readline(source->prompt);
 #endif
@@ -2975,7 +3251,7 @@ charsource_readline_rdch(charsource_t *base_source)
 #endif
                 )
                        (void)cause_sigint();
-                       // probably we won't have a try block
+                       /* probably we won't have a try block */
 #endif
             } while (nextline == NULL
 #ifdef EAGAIN
@@ -2991,16 +3267,17 @@ charsource_readline_rdch(charsource_t *base_source)
 #endif
             source->prompt_needed = FALSE;
             if (nextline != NULL)
-            {   charsource_string_setstring(base_source, nextline,
+            {   source->lineno++;
+                charsource_string_setstring(base_source, nextline,
                                             strlen(nextline));
-                DEBUGCONSOLE(DPRINTF("got '%s'\n", nextline);)
+                DEBUG_CONSOLE(DPRINTF("got '%s'\n", nextline);)
                 ch = charsource_string_rdch(base_source);
                 if (ch == EOF)
                 {   ch='\n';
                     source->prompt_needed = TRUE;
                 } else
                     add_history(nextline);
-                DEBUGCONSOLE(DPRINTF("first ch: '%c'\n", ch);)
+                DEBUG_CONSOLE(DPRINTF("first ch: '%c'\n", ch);)
             } else
             {   charsource_string_close(base_source);
                 ch = EOF;
@@ -3010,7 +3287,7 @@ charsource_readline_rdch(charsource_t *base_source)
         {   ch='\n';
             source->prompt_needed = TRUE;
         }
-        DEBUGCONSOLE(else DPRINTF("next ch: '%c'\n", ch);)
+        DEBUG_CONSOLE(else DPRINTF("next ch: '%c'\n", ch);)
 
         return ch;
     }
@@ -3019,23 +3296,34 @@ charsource_readline_rdch(charsource_t *base_source)
 
 
 
+static int
+charsource_readline_linecount(charsource_t *base_source)
+{   charsource_readline_t *source = (charsource_readline_t *)base_source;
+    OMIT(fprintf(stderr, "%s: readline '%s' line %d\n",
+                 codeid(), base_source->name, source->lineno););
+    return source->lineno;
+}
+
 
 
 
 static charsource_t *
 charsource_readline_init(charsource_readline_t *source,
                          charsource_delete_fn_t *delete_fn, const char *prompt)
-{    charsource_t *rl;
-     source->prompt = prompt;
-     source->prompt_needed = TRUE;
+{   charsource_t *rl;
+    source->lineno = 1; /* start at line 1 */
+    source->prompt = prompt;
+    source->prompt_needed = TRUE;
 #ifdef USE_LINENOISE
-     linenoiseConsoleInit();
+    linenoiseConsoleInit();
 #endif
-     rl = charsource_string_init(&source->string_base, delete_fn, "*console*",
-                                 /* string */NULL, 0);
-     source->string_base.base.rdch = &charsource_readline_rdch;
-     (void)history_open(&source->hist);
-     return rl;
+    OMIT(printf("%s: create readline init\n", codeid()););
+    rl = charsource_string_init(&source->string_base, delete_fn, "*console*",
+                                /* string */NULL, 0);
+    source->string_base.base.rdch = &charsource_readline_rdch;
+    source->string_base.base.linecount = &charsource_readline_linecount;
+    (void)history_open(&source->hist);
+    return rl;
 }
 
 
@@ -3166,6 +3454,30 @@ instack_popdel(instack_t *ref_stack)
 
 
 
+/*! Remove the given charsource if it is still to be found on the stack
+ *  return TRUE if the charsource was found (and removed)
+ */
+extern bool
+instack_remove(instack_t *ref_stack, charsource_t *onstack)
+{   
+    if (onstack == NULL)
+        /* nothing to take off - aleady done */
+        return TRUE;
+    else
+    {
+        while (*ref_stack != NULL && *ref_stack != onstack)
+            ref_stack = &(*ref_stack)->link;
+        if (*ref_stack == onstack)
+        {   /* take it out of the stack */
+            *ref_stack = (*ref_stack)->link;
+            return TRUE;
+        } else
+            return FALSE;
+    }
+}
+
+
+
 
 extern int
 instack_getc(instack_t *ref_stack)
@@ -3196,27 +3508,72 @@ instack_ungetc(instack_t *ref_stack, int ch)
 
 
 
+static int
+charsource_line_print(charsource_t *src, charsink_t *sink,
+                      const char *srcname, int lineno, const char *line)
+{
+    int n = 0;
+    int srcnamelen = srcname == NULL? 0: strlen(srcname);
+    char lastch = srcnamelen <= 0? '\0': srcname[srcnamelen-1];
+
+    if (srcname == NULL)
+        srcname = "<no source>";
+
+    OMIT(fprintf(stdout, "%s: read charsource '%s' %s:%d\n", codeid(),
+                 src->name, srcname, charsource_lineno(src)););
+    if (NULL == sink)
+    {   n += fprintf(stderr, "%s %s", codeid(), srcname);
+        if (lineno >= 0)
+        {
+            if (lastch != '+')
+                n += fprintf(stderr, ":");
+            n += fprintf(stderr, "%d", lineno);
+        }
+        n += fprintf(stderr, "%s", line);
+    } else
+    {   n += charsink_sprintf(sink, "%s %s", codeid(), srcname);
+        if (lineno >= 0)
+        {
+            if (lastch != '+')
+                n += charsink_sprintf(sink, ":");
+            n += charsink_sprintf(sink, "%d", lineno);
+        }
+        n += charsink_sprintf(sink, "%s", line);
+    }
+    return n;
+}
+
+
+
+
+
+
+static void
+instack_outer(instack_t stack, 
+              const char **out_outer_srcname, int *out_outer_lineno)
+{   charsource_t *src = stack;
+    if (NULL != src)
+    {   /* print the whole stack except the outermost level */
+        while (NULL != src->link)
+            src = src->link;
+        *out_outer_lineno = charsource_lineno(src);
+        *out_outer_srcname = charsource_name(src);
+    }
+}
+
+
+
+
 
 static int
 instack_print(instack_t stack, charsink_t *sink)
 {   charsource_t *src = stack;
     int n = 0;
     if (NULL != src)
-    {   /* print all but the outermost */
+    {   /* print the whole stack except the outermost level */
         while (NULL != src->link)
-        {   int lineno = charsource_lineno(src);
-            if (NULL == sink)
-            {   n += fprintf(stderr, "%s %s:", codeid(), charsource_name(src));
-                if (lineno > 0)
-                    n += fprintf(stderr, "%d:", lineno);
-                n += fprintf(stderr, " in\n");
-            } else
-            {   n += charsink_sprintf(sink, "%s %s:", codeid(),
-                                      charsource_name(src));
-                if (lineno > 0)
-                    n += charsink_sprintf(sink, "%d:", lineno);
-                n += charsink_sprintf(sink, " in\n");
-            }
+        {   n += charsource_line_print(src, sink, charsource_name(src),
+                                       charsource_lineno(src), " in\n");
             src = src->link;
         }
     }
@@ -3272,6 +3629,26 @@ code_place_set(code_place_t *place, const char *sourcename, int lineno)
         strncpy(&place->posname[0], sourcename, sizeof(place->posname));
         place->posname[sizeof(place->posname)-1] = '\0';
         memcpy(&place->posname[0], prefix, strlen(prefix));
+    }
+}
+
+
+
+
+STATIC_INLINE bool
+code_place_get(const code_place_t *place,
+               const char **out_source, int *out_lineno)
+{   if (place == NULL)
+    {
+        *out_source = "";
+        *out_lineno = 0;
+        return FALSE;
+    }
+    else
+    {
+        *out_source = &place->posname[0];
+        *out_lineno = place->lineno;
+        return TRUE;
     }
 }
 
@@ -3359,6 +3736,16 @@ linesource_pop(linesource_t *lines)
 
 
 
+/*! Remove the given charsource if it is still to be found on the stack
+ *  of line sources, return TRUE if the charsource was found (and removed)
+ */
+extern bool
+linesource_remove(linesource_t *lines, charsource_t *onstack)
+{   return instack_remove(&lines->in, onstack);
+}
+
+
+
 
 STATIC_INLINE bool /* not empty */
 linesource_popdel(linesource_t *lines)
@@ -3409,9 +3796,10 @@ linesource_eof(linesource_t *source)
 
 
 
-extern int
-vreport_line(charsink_t *sink, linesource_t *source,
-             const char *format, va_list ap)
+static int
+vreport_line_at(charsink_t *sink, linesource_t *source,
+                const char *srcpos, int lineno, 
+                const char *format, va_list ap)
 {   if (NULL == source)
     {
         if (NULL == sink)
@@ -3421,22 +3809,32 @@ vreport_line(charsink_t *sink, linesource_t *source,
     } else {
         int n = 0;
 
-        OMIT(printf("%s: sink is %sset - source is '%s'\n",
-                      codeid(),NULL==sink? "un":"",
-                      linesource_source(source)););
+        DEBUG_LNO(printf("%s: sink is %sset - source at %s:%d\n",
+                         codeid(),NULL==sink? "un":"", srcpos, lineno););
+
+        n += charsource_line_print(linesource_charsource(source), sink,
+                                   srcpos, lineno, ": ");
+
         if (NULL == sink)
-        {   n += fprintf(stderr, "%s %s:%d: ",
-                         codeid(), linesource_source(source),
-                         linesource_lineno(source));
             return n + vfprintf(stderr, format, ap);
-        } else
-        {   int n = 0;
-            n += charsink_sprintf(sink, "%s %s:%d: ",
-                                  codeid(), linesource_source(source),
-                                  linesource_lineno(source));
+        else
             return n + charsink_vsprintf(sink, format, ap);
-        }
     }
+}
+
+
+
+
+extern int
+vreport_line(charsink_t *sink, linesource_t *source, 
+             const char *format, va_list ap)
+{   int n;
+    if (source == NULL)
+        n = vreport_line_at(sink, source, NULL, -1, format, ap);
+    else
+        n = vreport_line_at(sink, source, linesource_source(source),
+                            linesource_lineno(source), format, ap);
+    return n;
 }
 
 
@@ -3446,19 +3844,34 @@ vreport_line(charsink_t *sink, linesource_t *source,
 extern int
 vreport(charsink_t *sink, linesource_t *source, const char *format, va_list ap)
 {   int n = 0;
+    const char *report_source = NULL;
+    int report_lineno = -1;
 
     if (source != NULL)
-    {
-        const char *at_source = instack_source(source->in);
-        int at_lineno = instack_lineno(source->in);
+    {   charsource_t *src = linesource_charsource(source);
+        const char *current_source = charsource_name(src);
+        int current_lineno = charsource_lineno(src);
+        
+        instack_outer(source->in, &report_source, &report_lineno);
 
         /* report rest of the stack if it is different to last time */
-        if (!code_place_eq(&source->report_place, at_source, at_lineno))
-        {   code_place_set(&source->report_place, at_source, at_lineno);
+        if (!code_place_eq(&source->report_place,
+                           current_source, current_lineno))
+        {
+            OMIT(printf("%s: set error place %s:%d\n",
+                        codeid(), sourcename, lineno););
+            code_place_set(&source->report_place,
+                           current_source, current_lineno);
             n += instack_print(source->in, sink);
+        } else {
+            /* report only the (repeated) inner position */
+            report_source = current_source;
+            report_lineno = current_lineno;
         }
-    }
-    return n+vreport_line(sink, source, format, ap);
+    } 
+    
+    return n+vreport_line_at(sink, source, report_source, report_lineno,
+                             format, ap);
 }
 
 
@@ -3515,9 +3928,34 @@ STATIC_INLINE char escape_ch(char ch)
 
 
 
+/* Set the start source and line number for the next linesource_read.
+*/
+extern void
+linesource_start_set(linesource_t *source, code_place_t *start_line)
+{
+    if (!source->eof)
+    {   /* remember the position at the start of this line */
+        const char *posname;
+        int lineno;
+        code_place_get(start_line, &posname, &lineno);
+        DEBUG_LNO(
+            printf("%s: source place %s:%d\n", codeid(), posname, lineno);
+        );
+        code_place_set(&source->place, posname, lineno);
+    }
+}
+
+
+
 /* Reads in the whole of the next line but stores only the first maxlen-1
    bytes of it in the line buffer provided.
    The buffer is always written with a final zero (if there is a byte spare)
+   The address of the start line should be set using linesource_start_set
+   before invoking this: e.g. using
+        code_place_t start;
+        code_place_set(&start, instack_source(source->in),
+                       instack_lineno(source->in);
+        linesource_start_set(source, &start);
 */
 extern void
 linesource_read(linesource_t *source, charsink_t *line)
@@ -3527,10 +3965,6 @@ linesource_read(linesource_t *source, charsink_t *line)
         bool escaped = FALSE;
         bool instring = FALSE;
         int brackets = 0;
-
-        /* remember the position at the start of this line */
-        code_place_set(&source->place, instack_source(source->in),
-                       instack_lineno(source->in));
 
         while ((gotch || EOF != (ch = instack_getc(&source->in))) &&
                (escaped || instring || brackets>0 ||
@@ -3763,7 +4197,7 @@ extern /*internal*/ value_t *
 (value_init)(value_t *val, type_t kind, bool on_heap)
 {   val->kind = kind;
     val->link = NULL;
-    DEBUGVALLINK(DPRINTF("%p: new %s link NULL\n",
+    DEBUG_VALLINK(DPRINTF("%p: new %s link NULL\n",
                          &val->link, value_type_name(val)););
     val->on_heap = on_heap;
     val->local = on_heap && !type_values_simple(kind);
@@ -3777,7 +4211,7 @@ extern /*internal*/ value_t *
     } else
         val->heap_next = NULL;
 
-    DEBUGGC(DPRINTF("New %s value %p %sdeleteable\n",
+    DEBUG_GC(DPRINTF("New %s value %p %sdeleteable\n",
                     type_name(kind), val,  on_heap? "":"not ");)
     return val;
 }
@@ -3786,7 +4220,7 @@ extern /*internal*/ value_t *
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 extern value_t *
 value_info(value_t *val, int lineno)
 {   val->lineno = lineno;
@@ -3983,24 +4417,24 @@ value_delete(value_t **ref_val)
 extern int /* <0 for less than, ==0 for equal, >0 for greater */
 value_cmp(const value_t *v1, const value_t *v2)
 {   if (v1 == NULL) {
-        DEBUGCMP(DPRINTF("cmp: v1 NULL v2 %sNULL\n", v2 == NULL? "":"not "););
+        DEBUG_CMP(DPRINTF("cmp: v1 NULL v2 %sNULL\n", v2 == NULL? "":"not "););
         return v2 == NULL? 0: -1;
     } else if (v2 == NULL) {
-        DEBUGCMP(DPRINTF("cmp: v1 not NULL v2 NULL\n", v2 == NULL? "":"not "););
+        DEBUG_CMP(DPRINTF("cmp: v1 not NULL v2 NULL\n", v2 == NULL? "":"not "););
         return 1;
     } else if (!type_equal(v1->kind, v2->kind)) {
-        DEBUGCMP(DPRINTF("cmp: v1 (%s) v2 (%s) type differs\n",
+        DEBUG_CMP(DPRINTF("cmp: v1 (%s) v2 (%s) type differs\n",
                          type_name(v1->kind), type_name(v2->kind)););
-        return v1->kind - v2->kind;
+        return v1->kind == v2->kind? 0: v1->kind > v2->kind? 1: -1;
     } else if (v1 == v2) {
-        DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) v2 same address\n",
+        DEBUG_CMP(DPRINTF("cmp: v1 (%p:%s) v2 same address\n",
                          v1, type_name(v1->kind)););
         return 0;
     } else if (NULL == v1->kind || NULL == v1->kind->compare) {
-        DEBUGCMP(DPRINTF("cmp: v1 no comparison fn\n"););
+        DEBUG_CMP(DPRINTF("cmp: v1 no comparison fn\n"););
         return /* really we want "incomparable" value */-1;
     } else {
-        DEBUGCMP(DPRINTF("cmp: v1 (%p:%s) cmp v2 (%p:%s) using fn\n",
+        DEBUG_CMP(DPRINTF("cmp: v1 (%p:%s) cmp v2 (%p:%s) using fn\n",
                          v1, type_name(v1->kind), v2, type_name(v2->kind)););
         return (*v1->kind->compare)(v1, v2);
     }
@@ -4035,7 +4469,7 @@ static void
 value_mark_version(value_t *val, int heap_version)
 {   if (PTRVALID(val) && !value_marked(val, heap_version))
     {   val->heap_version = heap_version;
-        DEBUGGC(DPRINTF("Mark %s value %p ver %d %s\n",
+        DEBUG_GC(DPRINTF("Mark %s value %p ver %d %s\n",
                         value_type_name(val), val, heap_version,
                         val->kind == NULL ||
                         val->kind->mark_version == NULL?"": "(recurse)");)
@@ -4065,7 +4499,7 @@ value_heap_init(void)
 static int
 value_heap_nextversion(void)
 {   value_heap.version++;
-    DEBUGGC(DPRINTF("Collection %d\n", value_heap.version);)
+    DEBUG_GC(DPRINTF("Collection %d\n", value_heap.version);)
     return value_heap.version;
 }
 
@@ -4083,7 +4517,7 @@ value_list_locals(void)
         {   fprintf(stderr, "%s: Local %s value %p at %d versions ago",
                     codeid(), value_type_name(val), val,
                     heap_version - val->heap_version);
-            DEBUGVALINIT(fprintf(stderr, " - line %5d: ", val->lineno););
+            DEBUG_VALINIT(fprintf(stderr, " - line %5d: ", val->lineno););
             OMIT(VALUE_SHOW("", val););
             DO(fprintf(stderr, "\n"););
         }
@@ -4103,7 +4537,7 @@ value_mark_local(int heap_version)
 
         if (val->heap_version != heap_version && value_islocal(val))
         {   value_mark_version(val, heap_version);
-            DEBUGGC(DPRINTF("Local %s value %p marked at ver %d\n",
+            DEBUG_GC(DPRINTF("Local %s value %p marked at ver %d\n",
                             value_type_name(val), val, heap_version);)
         }
         ref_value = &(val->heap_next);
@@ -4128,10 +4562,10 @@ value_heap_collect(void)
                    DPRINTF("%s: deleting %s local value %p ver %d (!=%d)\n",
                            codeid(), value_type_name(val), val,
                            val->heap_version, heap_version);)
-            DEBUGGC(DPRINTF("Collect %s value %p ver %d (!=%d)\n",
+            DEBUG_GC(DPRINTF("Collect %s value %p ver %d (!=%d)\n",
                             value_type_name(val), val, val->heap_version,
                             heap_version);)
-            DEBUGGCU(if (val->heap_version == HEAP_VERSION_UNUSED)
+            DEBUG_GCU(if (val->heap_version == HEAP_VERSION_UNUSED)
                          DPRINTF("Collect %s value %p had UNUSED ver %d "
                                  "(!=%d)\n",
                                  value_type_name(val), val, val->heap_version,
@@ -4162,7 +4596,7 @@ value_heap_collect(void)
 
 #define value_type_value(typeval) (&(typeval)->val)
 
-static type_id_t type_id_generator = 0; // last type ID generated
+static type_id_t type_id_generator = 0; /* last type ID generated */
 
 static value_type_t type_type_val;
 type_t type_type = &type_type_val;
@@ -4214,7 +4648,7 @@ type_init(value_type_t *kind, bool on_heap,
     kind->del = val_delete_fn;
     kind->mark_version = val_mark_version_fn;
 
-    DEBUGGC(DPRINTF("New type %s type %p (id %d) %sdeleteable\n",
+    DEBUG_GC(DPRINTF("New type %s type %p (id %d) %sdeleteable\n",
                     name, kind, type_id, on_heap? "":"not "););
     return value_type_value(kind);
 }
@@ -4446,7 +4880,7 @@ value_int_init(value_int_t *no, unumber_t number, bool on_heap)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_int_init(no, number, on_heap) \
     value_info((value_int_init)(no, number, on_heap), __LINE__)
 #endif
@@ -4482,7 +4916,7 @@ value_uint_new(unumber_t number)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_int_new(number) \
     value_info((value_int_new)(number), __LINE__)
 #endif
@@ -4653,7 +5087,7 @@ parse_int_base(const char **ref_line, parser_state_t *state,
     bool ok;
     const char *line = *ref_line;
 
-    DEBUGTRACE(DPRINTF("(int: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(int: '%s'\n", *ref_line);)
     
     if (parse_key(&line, "("))
     {   const value_t *intval;
@@ -4670,7 +5104,7 @@ parse_int_base(const char **ref_line, parser_state_t *state,
     if (ok)
         *ref_line = line;
 
-    DEBUGTRACE(DPRINTF(")int %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")int %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -5184,7 +5618,7 @@ parse_ipaddr(const char **ref_line, addr_ip_t *out_ip)
                 memcpy(&ip, retip, sizeof(ip));
                 ok = TRUE;
             }
-            DEBUGSOCK(
+            DEBUG_SOCK(
                 else if (NULL == ent)
                 {   fprintf(stderr, "no IP address for %s\n", &ipname[0]);
                     /* debug on windows only
@@ -5685,10 +6119,10 @@ value_string_chars(const value_t *string)
 
 
 static value_type_t type_stringlit_val;
-// a new implementation of type_string for malloc'd literal strings
+/* a new implementation of type_string for malloc'd literal strings */
 
 static value_type_t type_cstringlit_val;
-// a new implementation of type_string for static literal strings
+/* a new implementation of type_string for static literal strings */
 
 
 
@@ -5750,7 +6184,7 @@ value_cstring_init(value_string_t *str, const char *string, size_t len,
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_cstring_init(str, string, len, on_heap) \
     value_info((value_cstring_init)(str, string, len, on_heap), __LINE__)
 #endif
@@ -5793,7 +6227,7 @@ value_string_init(value_string_t *str, char *string, size_t len, bool on_heap)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_string_init(str, string, len, on_heap) \
     value_info((value_string_init)(str, string, len, on_heap), __LINE__)
 #endif
@@ -5864,7 +6298,7 @@ value_string_alloc_new(size_t len, char **out_string)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_string_new(string, len) \
     value_info((value_string_new)(string, len), __LINE__)
 #endif
@@ -5971,7 +6405,7 @@ typedef struct
 
 
 
-static value_type_t type_substring_val;  // a new implementation of type_string
+static value_type_t type_substring_val;  /*a new implementation of type_string*/
 
 
 
@@ -6042,7 +6476,7 @@ value_substring_init(value_substring_t *str, value_stringbase_t *refstr,
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_substring_init(str, refstr, offset, len, on_heap)         \
     value_info((value_substring_init)(str, refstr, offset, len, on_heap),  \
                __LINE__)
@@ -6217,6 +6651,8 @@ value_code_init(value_code_t *code, const value_t *string,
                 const char *sourcename, int lineno, bool on_heap)
 {   value_t *initval;
     code->string = string;
+    DEBUG_LNO(printf("%s: CODE obj defined at %s:%d\n",
+                     codeid(), sourcename, lineno););
     code_place_set(&code->place, sourcename, lineno);
     initval = value_init(&code->value, type_code, on_heap);
     value_unlocal(string);
@@ -6280,6 +6716,8 @@ value_code_place(const value_t *value, const char **out_posname,
     {   const value_code_t *code = (const value_code_t *)value;
         *out_posname = &code->place.posname[0];
         *out_lineno  = code->place.lineno;
+        DEBUG_LNO(printf("%s: CODE obj start read as %s:%d\n",
+                         codeid(), *out_posname, *out_lineno););
         ok = TRUE;
     }
     /* else type error */
@@ -7299,7 +7737,7 @@ extern bool
 dir_set(dir_t *dir, const value_t *nameval, const value_t *value)
 {   bool ok = FALSE;
 
-    DEBUGDIR(printf("%s: dir - set name %p to %p (%s) in dir %p\n",
+    DEBUG_DIR(printf("%s: dir - set name %p to %p (%s) in dir %p\n",
                     codeid(), nameval, value, value_type_name(value), dir);)
     if (PTRVALID(dir))
     {   if (PTRVALID(dir->lookup))
@@ -7341,7 +7779,7 @@ extern const value_t *
 dir_get(dir_t *dir, const value_t *name)
 {   if (PTRVALID(dir) &&
         PTRVALID(dir->get))
-    {   DEBUGDIR(printf("%s: dir - get name %p (%s) from dir %p (%s)\n",
+    {   DEBUG_DIR(printf("%s: dir - get name %p (%s) from dir %p (%s)\n",
                         codeid(), name, value_type_name(name),
                         dir, value_type_name(dir_value(dir)));)
         return (*dir->get)(dir, name);
@@ -7358,7 +7796,7 @@ static const value_t *
 dir_get_from_lookup(dir_t *dir, const value_t *name)
 {   const value_t **ref_value = NULL;
 
-    /*DEBUGDIR*/
+    /*DEBUG_DIR*/
     OMIT(printf("%s: dir - get name %p (%s) using %slookup dir %p (%s)\n",
                     codeid(), name, value_type_name(name),
                     dir==NULL || dir->lookup == NULL? "bad ": "",
@@ -7408,7 +7846,7 @@ static unsigned
 dir_count_from_forall(dir_t *dir)
 {   unsigned len = 0;
 
-    DEBUGDIR(printf("%s: dir - count using forall dir %p\n", codeid(), dir);)
+    DEBUG_DIR(printf("%s: dir - count using forall dir %p\n", codeid(), dir);)
     if (PTRVALID(dir) &&
         PTRVALID(dir->forall))
         (void)(*dir->forall)(dir, &dir_for_count, &len);
@@ -7477,7 +7915,7 @@ dir_init(dir_t *dir, type_t dir_subtype,
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define dir_init(dir, kind, add, lookup, get, forall, on_heap) \
     value_info((dir_init)(dir, kind, add, lookup, get, forall, on_heap), \
                __LINE__)
@@ -8051,7 +8489,7 @@ dir_vec_init(dir_vec_t *vecdir)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define dir_vec_init(vecdir) value_info((dir_vec_init)(vecdir), __LINE__)
 #endif
 
@@ -8072,7 +8510,7 @@ dir_vec_new(void)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 extern dir_t *
 dir_info(dir_t *dir, int lineno)
 {   dir_value(dir)->lineno = lineno;
@@ -9481,7 +9919,7 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
             if (vec == NULL)
                 vec = dir_vec_new();
             if (PTRVALID(vec))
-                dir_int_set(vec, entryno, entry);
+                dir_int_set(vec, (int)entryno, entry);
             entryno++;
         }
     }
@@ -9698,7 +10136,7 @@ dir_dynseq_new(datatype_t *entry_dt, memreader_t *rdr,
 
 
 
-#if 0  // doesn't make sense to create a parser?
+#if 0  /* doesn't make sense to create a parser? */
 
 /* Parse a sequence of the same datatype */
 static const value_t *
@@ -10413,7 +10851,7 @@ dir_series_init(dir_series_t *series,
         series->inc = inc;
         series->last = last;
 
-        DEBUGSERIES(DPRINTF("series: %ld +%ld .. %ld\n", first, inc, last););
+        DEBUG_SERIES(DPRINTF("series: %ld +%ld .. %ld\n", first, inc, last););
 
         dir_init(&series->dir, &type_dir_series_val,
                  /*add*/NULL, /*lookup*/NULL,
@@ -10433,7 +10871,7 @@ dir_series_new_vals(const value_t *firstval, const value_t *secondval,
                     const value_t *lastval)
 {   dir_series_t *series;
 
-    DEBUGSERIES(DPRINTF("firstval %s, secondval %s, lastval %s\n",
+    DEBUG_SERIES(DPRINTF("firstval %s, secondval %s, lastval %s\n",
                         value_type_name(firstval), value_type_name(secondval),
                         value_type_name(lastvalval));)
 
@@ -11837,12 +12275,12 @@ static bool
 dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
 {   if (PTRVALID(pos) &&
         PTRVALID(newdir))
-    {   DEBUGVALLINK(DPRINTF("%p: stack push at pos in %s\n",
+    {   DEBUG_VALLINK(DPRINTF("%p: stack push at pos in %s\n",
                              &newdir->value.link,
                              value_type_name(&newdir->value)););
         newdir->value.link = *pos;
         dir_env_end_set(newdir, env_end);
-        DEBUGDIR(DPRINTF("%s: dir_stack - set end in dir %p\n",
+        DEBUG_DIR(DPRINTF("%s: dir_stack - set end in dir %p\n",
                          codeid(), newdir);)
         *pos = dir_value(newdir);
         value_unlocal(dir_value(newdir));
@@ -11863,7 +12301,7 @@ dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end)
 
     if (NULL != dir && NULL != newdir)
     {   return_pos = &newdir->value.link;
-        DEBUGVALLINK(DPRINTF("%p: stack push dir in %s\n",
+        DEBUG_VALLINK(DPRINTF("%p: stack push dir in %s\n",
                              &newdir->value.link,
                              value_type_name(&newdir->value)););
         newdir->value.link = dir_value(dir->stack);
@@ -12008,7 +12446,7 @@ dir_stack_lookup(dir_t *basedir, const value_t *name)
     {   dir_t *dir = dirstack->stack;
 
         ftl_assert(dir != basedir);
-        DEBUGDIR(printf("%s: dir_stack - first lookup name %p in dir %p\n",
+        DEBUG_DIR(printf("%s: dir_stack - first lookup name %p in dir %p\n",
                         codeid(), name, dir);)
         /* find a directory where this variable is set */
         /* TODO: need to take account of dirs with "get" only (e.g. sys.env) */
@@ -12019,12 +12457,12 @@ dir_stack_lookup(dir_t *basedir, const value_t *name)
 
             ftl_assert(dir != (dir_t *)dir->value.link);
             if (PTRVALID(nextdir) && dir_env_end(nextdir))
-            {   DEBUGDIR(DPRINTF("** lookup blocked **\n");)
+            {   DEBUG_DIR(DPRINTF("** lookup blocked **\n");)
                 dir = NULL;
             } else
                 dir = nextdir;
 
-            DEBUGDIR(printf("%s: dir_stack - next  lookup name %p in dir %p\n",
+            DEBUG_DIR(printf("%s: dir_stack - next  lookup name %p in dir %p\n",
                             codeid(), name, dir);)
         }
     }
@@ -12044,7 +12482,7 @@ dir_stack_get(dir_t *basedir, const value_t *name)
     {   dir_t *dir = dirstack->stack;
 
         if (dir != basedir)
-        {   DEBUGDIR(DPRINTF("%s: dir_stack - first get name %p (%s) "
+        {   DEBUG_DIR(DPRINTF("%s: dir_stack - first get name %p (%s) "
                              "in dir %p (%s)\n",
                              codeid(), name, value_type_name(name),
                              dir, value_type_name(dir_value(dir)));)
@@ -12055,17 +12493,17 @@ dir_stack_get(dir_t *basedir, const value_t *name)
 
                 ftl_assert(dir != (dir_t *)dir->value.link);
                 if (PTRVALID(nextdir) && dir_env_end(dir))
-                {   DEBUGDIR(DPRINTF("** get blocked **\n");)
+                {   DEBUG_DIR(DPRINTF("** get blocked **\n");)
                     dir = NULL;
                 } else
                     dir = nextdir;
 
-                DEBUGDIR(printf("%s: dir_stack - next  get name %p (%s) "
+                DEBUG_DIR(printf("%s: dir_stack - next  get name %p (%s) "
                                 "in dir %p (%s)\n",
                                 codeid(), name, value_type_name(name),
                                 dir, value_type_name(dir_value(dir)));)
             }
-        } DEBUGDIR(
+        } DEBUG_DIR(
             else DPRINTF("%s: dir_stack - first dir in stack %p (%s) "
                          "is itself\n",
                          codeid(), dir, value_type_name(dir_value(dir)));
@@ -12153,7 +12591,7 @@ dir_stack_init(dir_stack_t *dirstack, type_t dir_stack_subtype, bool on_heap)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define dir_stack_init(dirstack, dir_stack_subtype, on_heap) \
     dir_info((dir_stack_init)(dirstack, dir_stack_subtype, \
                               on_heap), __LINE__)
@@ -12179,7 +12617,7 @@ dir_stack_new(void)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define dir_stack_new() \
     dir_info((dir_stack_new)(), __LINE__)
 #endif
@@ -12449,7 +12887,7 @@ value_env_new(void)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_env_new() \
     value_info((value_env_new)(), __LINE__)
 #endif
@@ -12542,12 +12980,12 @@ value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
 {   if (PTRVALID(name) &&
         PTRVALID(env))
     {   if (PTRVALID(pos))
-        {   DEBUGVALLINK(DPRINTF("%p: push unbound at pos in %s\n",
+        {   DEBUG_VALLINK(DPRINTF("%p: push unbound at pos in %s\n",
                                  &pos->link, value_type_name(pos)););
             pos->link = name;
         }
         else
-        {   DEBUGVALLINK(DPRINTF("%p: push unbound new in %s\n",
+        {   DEBUG_VALLINK(DPRINTF("%p: push unbound new in %s\n",
                                  &name->link, value_type_name(name)););
             name->link = env->unbound;
             env->unbound = name;
@@ -12606,7 +13044,7 @@ value_env_bind(value_env_t *envdir, const value_t *value)
             }
         }
     }
-    value_unlocal(value);  // should be in the environment now
+    value_unlocal(value);  /* should be in the environment now */
 
     return newenvdirval;
 }
@@ -12619,7 +13057,7 @@ value_env_bind(value_env_t *envdir, const value_t *value)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_env_bind(envdir, value)                   \
     value_info((value_env_bind)(envdir, value), __LINE__)
 #endif
@@ -12642,7 +13080,7 @@ value_env_sum(value_env_t **ref_baseenv, value_env_t *plusenv)
         value_t *unbound = value_env_unbound(plusenv);
         value_t *baseenv_unbound = value_env_unbound(*ref_baseenv);
 
-        DEBUGENV(DPRINTF("env sum: (%s+%s) + (%s+%s)\n",
+        DEBUG_ENV(DPRINTF("env sum: (%s+%s) + (%s+%s)\n",
                          baseenv_env==NULL?"":"dir",
                          baseenv_unbound==NULL?"":"unbound",
                          env==NULL?"":"dir", unbound==NULL?"":"unbound"););
@@ -12926,7 +13364,7 @@ value_closure_new(const value_t *code, value_env_t *env)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_closure_new(code, env)                    \
     value_info((value_closure_new)(code, env), __LINE__)
 #endif
@@ -13126,7 +13564,7 @@ value_closure_argcount(const value_t *closureval)
 
 
 
-#if 0 != DEBUGVALINIT(1+)0
+#if 0 != DEBUG_VALINIT(1+)0
 #define value_closure_bind(closure, val)                        \
     value_info((value_closure_bind)(closure, val), __LINE__)
 #endif
@@ -13742,11 +14180,11 @@ static void
 parser_restore(parser_state_t *parser_state,
                const parser_state_t *saved, dir_t *saved_stack)
 {   int errors = parser_state->errors;
-    //dir_stack_t *stack;
+    /*dir_stack_t *stack; */
     *parser_state = *saved;
     parser_state->errors = errors;
-    //stack = parser_env_stack(parser_state);
-    //stack->stack = saved_stack;
+    /*stack = parser_env_stack(parser_state); */
+    /*stack->stack = saved_stack; */
     parser_env_return(parser_state, (dir_stack_pos_t)&saved_stack);
 }
 
@@ -13860,7 +14298,7 @@ parser_expand(parser_state_t *state, outchar_t *out,
     int ch;
     int lastch = EOF;
 
-    DEBUGEXPD(printf("expanding '%s'[%d]\n", phrase, len);)
+    DEBUG_EXPD(printf("expanding '%s'[%d]\n", phrase, len);)
     instack_push(in, inmain);
 
     while (EOF != (ch = instack_getc(in)))
@@ -14818,7 +15256,7 @@ parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
             *ref_line = line;
     }
 
-    DEBUGOP(DPRINTF("%s: op %sfound at ...%s\n", codeid(), ok? "":"not ",
+    DEBUG_OP(DPRINTF("%s: op %sfound at ...%s\n", codeid(), ok? "":"not ",
                     line);)
 
     return ok;
@@ -14843,16 +15281,16 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
 
     (void)parse_space(&line);
 
-    DEBUGOP(DPRINTF("%s: expr prec %d ...%s\n", codeid(), prec, line););
+    DEBUG_OP(DPRINTF("%s: expr prec %d ...%s\n", codeid(), prec, line););
 
     if (!op_defs_get(ops, prec, &opdefs))
-    {   DEBUGOP(DPRINTF("%s: lowest precidence - parse base\n", codeid()););
+    {   DEBUG_OP(DPRINTF("%s: lowest precidence - parse base\n", codeid()););
         ok = (*ops->parse_arg)(ref_line, ops, out_newterm);
     } else
     if (parse_op(&line, ops, opdefs, &op) && assoc_prefix(op.assoc) &&
         parse_space(&line))
     {   /* deal with prefix operators */
-        DEBUGOP(DPRINTF("%s: prec %d parse %s op - parse prefix\n",
+        DEBUG_OP(DPRINTF("%s: prec %d parse %s op - parse prefix\n",
                         codeid(), prec, assoc_name(op.assoc)););
         switch (op.assoc)
         {   case assoc_fx:
@@ -14877,7 +15315,7 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
         }
     } else
     {   /* try to parse a lower precidence term */
-        DEBUGOP(DPRINTF("%s: prec %d parse lower, diadic or postfix op\n",
+        DEBUG_OP(DPRINTF("%s: prec %d parse lower, diadic or postfix op\n",
                         codeid(), prec););
         if (parse_op_expr(ref_line, ops, prec+1, out_newterm) &&
             parse_space(ref_line))
@@ -14887,15 +15325,15 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
             ok = TRUE;
             line = *ref_line;
 
-            DEBUGOP(VALUE_SHOW_ST("left val: ", ops->state, *out_newterm);)
-            DEBUGOP(DPRINTF("%s: prec %d got low prec left - "
+            DEBUG_OP(VALUE_SHOW_ST("left val: ", ops->state, *out_newterm);)
+            DEBUG_OP(DPRINTF("%s: prec %d got low prec left - "
                             "now parse ...%s\n",
                             codeid(), prec, line););
 
             while (ok && !complete && parse_op(&line, ops, opdefs, &op) &&
                    parse_space(&line))
             {
-                DEBUGOP(DPRINTF("%s: prec %d parse diadic or postfix %s op\n",
+                DEBUG_OP(DPRINTF("%s: prec %d parse diadic or postfix %s op\n",
                                 codeid(), prec, assoc_name(op.assoc)););
                 switch (op.assoc)
                 {   case assoc_yf:
@@ -14970,7 +15408,7 @@ parse_opterm(const char **ref_line, parser_state_t *state,
     ops.state = state;
     ops.opdefs = opdefs;
     ops.parse_arg = parse_arg;
-    DEBUGOP(DIR_SHOW("op defs: ", opdefs););
+    DEBUG_OP(DIR_SHOW("op defs: ", opdefs););
     return parse_op_expr(ref_line, &ops, /*prec*/0, out_term);
 }
 
@@ -15340,7 +15778,7 @@ struct value_func_lhv_s
 
 
 
-static value_type_t type_func_lhv_val; // type implementation
+static value_type_t type_func_lhv_val; /* type implementation */
 
 
 
@@ -15817,8 +16255,8 @@ struct value_mem_rebase_s {
 
 
 
-static value_type_t type_mem_rebase_val; // implementation type for rebased mem
-static value_type_t type_mem_rebase_shared_val; // " for shared rebased mem
+static value_type_t type_mem_rebase_val; /*implementation type for rebased mem*/
+static value_type_t type_mem_rebase_shared_val; /* " for shared rebased mem */
 
 
 
@@ -16202,9 +16640,9 @@ mod_parse_cmd(dir_t *dir, const char **ref_line, const value_t **out_cmd)
     const char *start = *ref_line;
 
     if (parse_id(ref_line, &cmdname[0], sizeof(cmdname))) {
-        DEBUGMODEXEC(fprintf(stderr, "%s: exec - got '%s', search in %p\n",
+        DEBUG_MODEXEC(fprintf(stderr, "%s: exec - got '%s', search in %p\n",
                              codeid(), &cmdname[0], dir););
-        DEBUGMODEXEC(DIR_SHOW("dir: ", dir);)
+        DEBUG_MODEXEC(DIR_SHOW("dir: ", dir);)
         cmd = dir_string_get(dir, cmdname);
     }
     if (cmd != NULL)
@@ -16238,7 +16676,7 @@ mod_parse_argv(dir_t *dir, const char ***ref_argv, int *ref_argn,
     if (*ref_argn > 0)
     {   const char *cmdname = (*ref_argv)[0];
         cmd = dir_string_get(dir, cmdname);
-        ok = TRUE;
+        ok = (cmd != NULL);
     }
 
     if (ok)
@@ -16593,7 +17031,7 @@ parse_env(const char **ref_line, parser_state_t *state,
     const value_t *index = NULL;
     bool unbound = FALSE;
 
-    DEBUGTRACE(DPRINTF("(env: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(env: '%s'\n", *ref_line);)
     parse_space(ref_line);
 
     ok = TRUE;
@@ -16643,7 +17081,7 @@ parse_env(const char **ref_line, parser_state_t *state,
         *out_val = (const value_t *)env;
     }
 
-    DEBUGTRACE(DPRINTF(")env %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")env %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -16672,7 +17110,7 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
     bool first = TRUE;
     bool series_possible = TRUE;
 
-    DEBUGTRACE(DPRINTF("(vecarg: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(vecarg: '%s'\n", *ref_line);)
         
     vectmp[0] = NULL;
     vectmp[1] = NULL;
@@ -16732,7 +17170,7 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
     if (ok)
     {   if (series)
         {   const value_t *final = NULL;
-            DEBUGSERIES(DPRINTF("up to: '%s'\n", *ref_line);)
+            DEBUG_SERIES(DPRINTF("up to: '%s'\n", *ref_line);)
             if (!parse_empty(ref_line) && *ref_line[0] != '>')
                 ok = (*expr_fn)(ref_line, state, &final);
             if (ok)
@@ -16752,7 +17190,7 @@ parse_vecarg(const char **ref_line, parser_state_t *state, const char *delim,
             *out_val = dir_value(vec);
         }
     }
-    DEBUGTRACE(
+    DEBUG_TRACE(
         DPRINTF(")vecarg %s: '%s'", ok?"OK":"FAIL", *ref_line);
         if (ok) {
             DPRINTF(" = ");
@@ -16780,7 +17218,7 @@ parse_indexname(const char **ref_line, parser_state_t *state,
     const char *line = *ref_line;
     number_t n;
     
-    DEBUGTRACE(DPRINTF("(indexname: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(indexname: '%s'\n", *ref_line);)
 
     if (parse_int_val(&line, &n))
     {   *out_val = value_int_new(n);
@@ -16806,7 +17244,7 @@ parse_indexname(const char **ref_line, parser_state_t *state,
         *ref_line = line;
     }
 
-    DEBUGTRACE(
+    DEBUG_TRACE(
         DPRINTF(")indexname %s: '%s'", ok?"OK":"FAIL", *ref_line);
         if (ok) {
             DPRINTF(" = ");
@@ -16830,7 +17268,7 @@ parse_index(const char **ref_line, parser_state_t *state,
 {   bool ok = FALSE;
     const char *line = *ref_line;
     
-    DEBUGTRACE(DPRINTF("(index: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(index: '%s'\n", *ref_line);)
 
     if (parse_key(&line, "["))
     {   ok = parse_env(&line, state, out_val) &&
@@ -16849,7 +17287,7 @@ parse_index(const char **ref_line, parser_state_t *state,
         *ref_line = line;
     }
 
-    DEBUGTRACE(
+    DEBUG_TRACE(
         DPRINTF(")index %s: '%s'", ok?"OK":"FAIL", *ref_line);
         if (ok) {
             DPRINTF(" = ");
@@ -17078,7 +17516,7 @@ parse_index_path(const char **ref_line, parser_state_t *state,
     dir_t *parent = indexed;
     const value_t *new_id = NULL;
 
-    DEBUGTRACE(DPRINTF("(index path: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(index path: '%s'\n", *ref_line);)
 
     ok = parse_index_expr(ref_line, state, &new_id) && parse_space(ref_line);
     OMIT(printf("%s: index was %s ...%s\n",
@@ -17118,7 +17556,7 @@ parse_index_path(const char **ref_line, parser_state_t *state,
         *out_id = new_id;
     }
 
-    DEBUGTRACE(DPRINTF(")index path %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")index path %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -17220,14 +17658,11 @@ parse_code(const char **ref_line, parser_state_t *state,
         const char *line = *ref_line;
         int brackets = 1;
         int ch;
-
-        *out_sourcepos = parser_source(state);
-        *out_lineno = parser_lineno(state);
-
-        /* we've always consumed the whole of the current line - so
-           report the last one, as well as we can */
-        if (*out_lineno > 0)
-            (*out_lineno)--;
+        
+        *out_sourcepos = parser_source(state); /* must include whole reference*/
+        *out_lineno = parser_lineno(state);    /* linesource place no good */
+        DEBUG_LNO(printf("%s: CODE obj starts at %s:%d\n",
+                         codeid(), *out_sourcepos, *out_lineno););
 
         while ((ch = *line) != '\0' && !(brackets == 1 && ch == '}'))
         {   charsink_putc(sink, ch);
@@ -17273,7 +17708,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
 
     parse_space(ref_line);
 
-    DEBUGTRACE(DPRINTF("(base: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(base: '%s'\n", *ref_line);)
     if (NULL != out_isenv)
         *out_isenv = FALSE;
 
@@ -17293,6 +17728,8 @@ parse_base_env(const char **ref_line, parser_state_t *state,
              parse_key_always(ref_line, state, ">") && parse_space(ref_line);
     } else
     if (parse_code(ref_line, state, &strval, &def_source, &def_lineno)) {
+        DEBUG_LNO(printf("%s: new code parsed at %s:%d\n",
+                         codeid(), def_source, def_lineno);); 
         *out_val = value_code_new(strval, def_source, def_lineno);
     } else
     if (parse_int_expr(ref_line, state, &val))
@@ -17303,7 +17740,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
         {   const value_t *v = dir_string_get(parser_env(state), &strbuf[0]);
             if (NULL == v)
             {   parser_error(state, "undefined symbol '%s'\n", strbuf);
-                DEBUGENV(DIR_SHOW("env: ", parser_env(state));)
+                DEBUG_ENV(DIR_SHOW("env: ", parser_env(state));)
                 ok = FALSE;
             }
             *out_val = value_nl(v);
@@ -17313,7 +17750,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
             ok = FALSE;
     }
 
-    DEBUGTRACE(DPRINTF(")base %s: '%s'\n", ok? "OK":"FAILED", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")base %s: '%s'\n", ok? "OK":"FAILED", *ref_line);)
 
     return ok;
 }
@@ -17404,7 +17841,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
         value_env_t *env = NULL; /* we are constructing this */
         const value_t *code = NULL; /* we construct this too */
 
-    DEBUGTRACE(DPRINTF("(env expr: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(env expr: '%s'\n", *ref_line);)
 
     ok = parse_base_env(ref_line, state, &lhs, &lhs_is_env);
     /* lhs_is_env will be true if [<id-dir>] is parsed - and lhs will be a
@@ -17568,7 +18005,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
 
                 value_t *unbound = value_env_unbound(env);
 
-                DEBUGENV(DPRINTF("env expr: closure unbound %sNULL "
+                DEBUG_ENV(DPRINTF("env expr: closure unbound %sNULL "
                                  "code %sNULL\n",
                                  NULL==unbound? "":"not ",
                                  NULL==code? "":"not "););
@@ -17585,7 +18022,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
     if (!ok)
         *out_val = NULL;
 
-    DEBUGTRACE(DPRINTF(")env expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")env expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -17655,6 +18092,8 @@ parse_index_lhvalue(const char **ref_line, parser_state_t *state,
             value_env_t *env = value_env_new();
             value_t *code = value_code_new(id, "<lhv>", parser_lineno(state));
             value_t *get;
+            DEBUG_LNO(printf("%s: new code lhv at line %d\n",
+                             codeid(), parser_lineno(state));); 
             value_env_pushdir(env, parent, /*env_end*/FALSE);
             get = value_closure_new(code, env);
             *out_val = &value_null;
@@ -17691,7 +18130,7 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
     bool is_local;
     bool is_lhv = FALSE;
 
-    DEBUGTRACE(DPRINTF("(lookup: '%s'\n", *ref_line););
+    DEBUG_TRACE(DPRINTF("(lookup: '%s'\n", *ref_line););
 
     parse_space(ref_line);
 
@@ -17733,7 +18172,7 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
         }
     }
     
-    DEBUGTRACE(
+    DEBUG_TRACE(
         DPRINTF(")lookup %s: '%s'", ok?"OK":"FAIL", *ref_line);
         if (ok) {
             DPRINTF(" = ");
@@ -17771,10 +18210,10 @@ parse_operator_expr(const char **ref_line, parser_state_t *state,
                     const value_t **out_val)
 {   /* parse based on defined operator definitions */
     bool ok;
-    DEBUGTRACE(DPRINTF("(op expr: '%s'\n", *ref_line););
+    DEBUG_TRACE(DPRINTF("(op expr: '%s'\n", *ref_line););
     ok = parse_opterm(ref_line, state, &parse_retrieval_base,
                       state->opdefs, out_val);
-    DEBUGTRACE(DPRINTF(")op expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")op expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -17883,7 +18322,7 @@ extern const value_t *
 invoke(const value_t *code, parser_state_t *state)
 {   const value_t *val = NULL;
     const char *placename;
-    int lineno;
+    int lineno = -1;
     charsource_lineref_t line;
 
     if (NULL != code)
@@ -17891,12 +18330,13 @@ invoke(const value_t *code, parser_state_t *state)
         {   const char *buf;
             size_t len;
 
-            DEBUGMOD(DPRINTF("%s: invoke - code\n", codeid());)
+            DEBUG_MOD(DPRINTF("%s: invoke - code\n", codeid());)
             value_code_place(code, &placename, &lineno);
+            value_code_buf(code, &buf, &len);
             linesource_push(parser_linesource(state),
                             charsource_lineref_init(&line, /*delete*/NULL,
+                                                    /*rewind*/FALSE,
                                                     placename, lineno, &buf));
-            value_code_buf(code, &buf, &len);
             /* will garbage collection the discarded value */
             if (!parse_cmdlist(&buf, state, &val))
             {   parser_error(state, "badly formed code\n");
@@ -17923,7 +18363,7 @@ invoke(const value_t *code, parser_state_t *state)
             {   if (value_type_equal(codeval, type_code))
                 {   dir_stack_pos_t pos;
 
-                    DEBUGMOD(DPRINTF("%s: invoke - code closure\n", codeid());)
+                    DEBUG_MOD(DPRINTF("%s: invoke - code closure\n", codeid());)
                     value_code_buf(codeval, &buf, &len);
                     /* we will garbage collect the discarded value */
                     if (NULL == dir)
@@ -17933,6 +18373,7 @@ invoke(const value_t *code, parser_state_t *state)
                     linesource_push(parser_linesource(state),
                                     charsource_lineref_init(&line,
                                                             /*delete*/NULL,
+                                                            /*rewind*/FALSE,
                                                             placename, lineno,
                                                             &buf));
                     if (!parse_cmdlist(&buf, state, &val))
@@ -17949,7 +18390,7 @@ invoke(const value_t *code, parser_state_t *state)
                     value_cmd_t *cmd = (value_cmd_t *)codeval;
                     const value_t *boundarg = dir_get_builtin_arg(dir, 1);
 
-                    DEBUGMOD(DPRINTF("%s: invoke - cmd closure\n", codeid());)
+                    DEBUG_MOD(DPRINTF("%s: invoke - cmd closure\n", codeid());)
                     if (value_type_equal(boundarg, type_code))
                     {   (void)value_code_buf(boundarg, &buf, &len);
                     } else
@@ -17959,9 +18400,12 @@ invoke(const value_t *code, parser_state_t *state)
                     {   charsink_string_t expandline;
                         charsink_t *expandsink =
                             charsink_string_init(&expandline);
-                        parser_expand(state, expandsink, buf, len);
-                        charsink_string_buf(expandsink, &buf, &len);
 
+                        /* expand string (buf, len) into expandsink */
+                        parser_expand(state, expandsink, buf, len);
+
+                        /* execute command taking expandsink as parse input */
+                        charsink_string_buf(expandsink, &buf, &len);
                         val = value_cmd_exec(cmd)(&buf, code, state);
 
                         charsink_string_close(expandsink);
@@ -17979,7 +18423,7 @@ invoke(const value_t *code, parser_state_t *state)
                         DIR_SHOW("push: ", dir);
                     )
                     pos = parser_env_push(state, dir, /*outer_visible*/TRUE);
-                    DEBUGMOD(DPRINTF("%s: invoke - fn closure with %sreturn\n",
+                    DEBUG_MOD(DPRINTF("%s: invoke - fn closure with %sreturn\n",
                                      codeid(), pos==NULL?"no ":"");)
                     val = (*value_func_exec(fn))(code, state);
                     parser_env_return(state, pos);
@@ -18045,7 +18489,7 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
     bool ok = TRUE;
     const value_t *newarg = NULL;
 
-    DEBUGTRACE(DPRINTF("(subst args: '%s'\n", *ref_line););
+    DEBUG_TRACE(DPRINTF("(subst args: '%s'\n", *ref_line););
 
     while (ok && parse_pling(ref_line) && parse_space(ref_line))
         *ref_val = invoke(*ref_val, state);
@@ -18069,7 +18513,7 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
     if (NULL == *ref_val)
         *ref_val = &value_null;
 
-    DEBUGTRACE(DPRINTF(")subst args %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")subst args %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -18094,7 +18538,8 @@ parse_substitution_argv(const char *fnname,
     bool complete = FALSE; /* run out of requirement for arguments */
     bool pling = FALSE;
     bool goodarg = TRUE;
-    bool autoexec = !token_strings;// invoke closures with no remaining arguments
+    bool autoexec = !token_strings;
+                    /* invoke closures with no remaining arguments */
 
     /* execute *ref_argn if argument is pling or if it is a bound closure */
     while (ok && (
@@ -18109,7 +18554,7 @@ parse_substitution_argv(const char *fnname,
             line = (*ref_argv)[0];
         } else
             complete = TRUE;
-        DEBUGMOD(DPRINTF("%s: invoke argv function\n", codeid()););
+        DEBUG_MOD(DPRINTF("%s: invoke argv function\n", codeid()););
         *ref_val = invoke(*ref_val, state);
     }
 
@@ -18120,7 +18565,7 @@ parse_substitution_argv(const char *fnname,
                               parse_empty(&line)))
     {   const value_t *code = *ref_val;
 
-        DEBUGMOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
+        DEBUG_MOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
                          codeid(), fnname==NULL? "function": fnname,
                          token_strings? " as string": "", line););
         (*ref_argv)++;
@@ -18145,10 +18590,10 @@ parse_substitution_argv(const char *fnname,
             } else
                 complete = TRUE;
 
-            DEBUGMOD(DPRINTF("%s: invoke argv '%s' function after substitute\n",
+            DEBUG_MOD(DPRINTF("%s: invoke argv '%s' function after substitute\n",
                              codeid(), fnname==NULL? "function": fnname););
             *ref_val = invoke(*ref_val, state);
-            DEBUGMOD(DPRINTF("%s: returns '%s' value\n",
+            DEBUG_MOD(DPRINTF("%s: returns '%s' value\n",
                              codeid(), type_name((*ref_val)->kind)););
         }
     }
@@ -18162,12 +18607,12 @@ parse_substitution_argv(const char *fnname,
     if (ok  && value_type_equal(*ref_val, type_closure))
     {
         if (NULL == value_closure_unbound(*ref_val))
-        {   DEBUGMOD(DPRINTF("%s: invoke argv %s function after substitute\n",
+        {   DEBUG_MOD(DPRINTF("%s: invoke argv %s function after substitute\n",
                              codeid(), fnname==NULL? "a": fnname););
             *ref_val = invoke(*ref_val, state);
         }
         else
-        {   DEBUGMOD(
+        {   DEBUG_MOD(
                 const value_t *code = NULL;
                 dir_t *env = NULL;
                 const value_t *unbound = NULL;
@@ -18211,7 +18656,7 @@ parse_substitution(const char **ref_line, parser_state_t *state,
                    const value_t **out_val)
 {   bool ok;
     
-    DEBUGTRACE(DPRINTF("(substitute: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(substitute: '%s'\n", *ref_line);)
 
     if (parse_operator_expr(ref_line, state, out_val) && parse_space(ref_line))
     {   OMIT(DPRINTF("substitute args: '%s'\n", *ref_line););
@@ -18221,7 +18666,7 @@ parse_substitution(const char **ref_line, parser_state_t *state,
         ok = FALSE;
     }
 
-    DEBUGTRACE(DPRINTF(")substitute %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")substitute %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
 
     return ok;
 }
@@ -18242,8 +18687,8 @@ parse_expr(const char **ref_line, parser_state_t *state,
     const char *line = *ref_line;
     dir_t *parent = NULL;
 
-    DEBUGTRACE(DPRINTF("(expr: '%s'\n", *ref_line);)
-    DEBUGENV(DIR_SHOW("expr env: ", parser_env(state));)
+    DEBUG_TRACE(DPRINTF("(expr: '%s'\n", *ref_line);)
+    DEBUG_ENV(DIR_SHOW("expr env: ", parser_env(state));)
     *out_val = NULL;
 
     while (ok && parse_space(&line) &&
@@ -18270,7 +18715,7 @@ parse_expr(const char **ref_line, parser_state_t *state,
         ok = parse_substitution(ref_line, state, out_val) &&
              parse_space(ref_line);
 
-    DEBUGTRACE(DPRINTF(")expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -18287,7 +18732,7 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
 
     parse_space(ref_line);
 
-    DEBUGTRACE(DPRINTF("(cmdlist: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(cmdlist: '%s'\n", *ref_line);)
 
     ok = (parse_empty(ref_line) || *ref_line[0]=='}' || *ref_line[0]==';')
          ||
@@ -18306,7 +18751,7 @@ parse_cmdlist(const char **ref_line, parser_state_t *state,
     if (parse_space(ref_line) && !parse_empty(ref_line))
         parser_error_longstring(state, *ref_line, "error in");
 
-    DEBUGTRACE(DPRINTF(")cmdlist %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
+    DEBUG_TRACE(DPRINTF(")cmdlist %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
 }
 
@@ -18500,7 +18945,7 @@ exception_throw(const value_t *this_fn, parser_state_t *state,
 static const value_t *
 fn_exception_signal(const value_t *this_fn, parser_state_t *state)
 {
-    const char *args[] = {"signo", NULL}; // expects 1 argument
+    const char *args[] = {"signo", NULL}; /* expects 1 argument */
     return exception_throw(this_fn, state, "signal", args);
 }
 
@@ -18590,7 +19035,7 @@ typedef struct {
 
 static void interrupt_handler(int signo)
 {
-    // find state
+    /* find state */
     DEBUG_SIGNAL(fprintf(stderr, "%s: signal %d\n", codeid(), signo););
     if (global_int_state == NULL || !throw_signal(global_int_state, signo))
         exiting = TRUE;
@@ -18849,9 +19294,9 @@ mod_execv(const value_t **out_val,
 static const value_t *
 mod_invoke_cmd(const char **ref_line, const value_t *value,
                parser_state_t *state)
-{   DEBUGTRACE(DPRINTF("mod exec: %s %s\n",
+{   DEBUG_TRACE(DPRINTF("mod exec: %s %s\n",
                        value_type_name(value), *ref_line);)
-    DEBUGENV(VALUE_SHOW("mod exec env: ", dir_value(parser_env(state)));)
+    DEBUG_ENV(VALUE_SHOW("mod exec env: ", dir_value(parser_env(state)));)
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code;
@@ -18868,12 +19313,12 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
         } else
         if (value_type_equal(code, type_cmd))
         {   /* special case - commands do their own parsing */
-            DEBUGMOD(DPRINTF("%s: invoke closure code\n", codeid());)
+            DEBUG_MOD(DPRINTF("%s: invoke closure code\n", codeid());)
             value = mod_invoke_cmd(ref_line, code, state);
             return value;
         } else
         {   if (parse_substitution_args(ref_line, state, &value))
-            {   DEBUGMOD(DPRINTF("%s: invoke closure non-code\n", codeid());)
+            {   DEBUG_MOD(DPRINTF("%s: invoke closure non-code\n", codeid());)
                 return value_nl(invoke(value, state));
             } else
             {   parser_error(state, "error in parsing closure arguments\n");
@@ -18883,7 +19328,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     } else
     if (value_type_equal(value, type_cmd))
     {   value_cmd_t *cmd = (value_cmd_t *)value;
-        DEBUGMOD(DPRINTF("%s: invoke direct cmd at '%.10s...'\n",
+        DEBUG_MOD(DPRINTF("%s: invoke direct cmd at '%.10s...'\n",
                          codeid(), *ref_line);)
         return (*cmd->exec)(ref_line, value, state);
     } else
@@ -18894,7 +19339,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
         {   const char *buf;
             size_t len;
 
-            DEBUGMOD(DPRINTF("%s: invoke direct code at '%.10s..'\n",
+            DEBUG_MOD(DPRINTF("%s: invoke direct code at '%.10s..'\n",
                              codeid(), *ref_line);)
             value_code_buf(value, &buf, &len);
             OMIT(printf("executing: '%.*s'[%d]\n", len, buf, len);)
@@ -18913,7 +19358,7 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     } else
     if (value_type_equal(value, type_func))
     {   if (parse_substitution_args(ref_line, state, &value))
-        {   DEBUGMOD(DPRINTF("%s: invoke direct function\n", codeid());)
+        {   DEBUG_MOD(DPRINTF("%s: invoke direct function\n", codeid());)
             return invoke(value, state);
         } else
         {   parser_error(state, "error in parsing closure arguments\n");
@@ -18924,11 +19369,11 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
                                               /*outer_visible*/FALSE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value);)
-        DEBUGMOD(DPRINTF("%s: push enclosing directory\n", codeid());)
+        DEBUG_MOD(DPRINTF("%s: push enclosing directory\n", codeid());)
         value = mod_exec(ref_line, state);
         /* return to external environment */
         (void)parser_env_return(state, pos);
-        DEBUGMOD(DPRINTF("%s: popped enclosing directory\n", codeid());)
+        DEBUG_MOD(DPRINTF("%s: popped enclosing directory\n", codeid());)
         return value;
     }
     else
@@ -19024,9 +19469,9 @@ static const value_t *
 mod_invoke_argv(const char *fnname,
                 const char ***ref_argv, int *ref_argn, const char *execpath,
                 const value_t *value, const char *delim, parser_state_t *state)
-{   DEBUGTRACE(DPRINTF("mod argv exec: %s [%d]\n",
+{   DEBUG_TRACE(DPRINTF("mod argv exec: %s [%d]\n",
                        value_type_name(value), *ref_argn););
-    DEBUGENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state))););
+    DEBUG_ENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state))););
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code = NULL;
@@ -19043,17 +19488,17 @@ mod_invoke_argv(const char *fnname,
         } else
         if (value_type_equal(code, type_cmd))
         {   /* special case - commands do their own parsing */
-            DEBUGMOD(DPRINTF("%s: invoke argv closure code\n", codeid()););
+            DEBUG_MOD(DPRINTF("%s: invoke argv closure code\n", codeid()););
             retval = mod_invoke_argv(fnname, ref_argv, ref_argn, execpath,
                                      code, delim, state);
             /* i.e. use code below to process cmd */
         } else
-        {   DEBUGMOD(DPRINTF("%s: invoke argv closure argument\n",
+        {   DEBUG_MOD(DPRINTF("%s: invoke argv closure argument\n",
                              codeid()););
             if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
                                         /*token_strings*/delim==NULL, &value))
             {   retval = value;
-                DEBUGMOD(DPRINTF("%s: applied argv substitution OK\n",
+                DEBUG_MOD(DPRINTF("%s: applied argv substitution OK\n",
                                  codeid()););
             } else
             {   parser_error(state, "error in parsing closure arguments\n");
@@ -19069,7 +19514,7 @@ mod_invoke_argv(const char *fnname,
         /*size_t len = */(void)argv_to_string(ref_argv, ref_argn, delim,
                                               &linebuf[0], sizeof(linebuf));
 
-        DEBUGMOD(DPRINTF("%s: invoke argv direct cmd - arg \"%s\"\n",
+        DEBUG_MOD(DPRINTF("%s: invoke argv direct cmd - arg \"%s\"\n",
                          codeid(), line););
         return (*cmd->exec)(&line, value, state);
     } else
@@ -19078,7 +19523,7 @@ mod_invoke_argv(const char *fnname,
         size_t len = 0;
 
         value_code_buf(value, &buf, &len);
-        DEBUGMOD(DPRINTF("%s: invoke argv direct code - '%.10s\n",
+        DEBUG_MOD(DPRINTF("%s: invoke argv direct code - '%.10s\n",
                          codeid(), buf);)
         OMIT(printf("executing: '%s'[%d]\n", buf, len);)
         /* will garbage collection the discarded value */
@@ -19091,10 +19536,10 @@ mod_invoke_argv(const char *fnname,
     } else
     if (value_type_equal(value, type_func))
     {
-        DEBUGMOD(DPRINTF("%s: invoke argv direct fn\n", codeid()););
+        DEBUG_MOD(DPRINTF("%s: invoke argv direct fn\n", codeid()););
         if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
                                     /*token_strings*/delim==NULL, &value))
-        {   DEBUGMOD(DPRINTF("%s: invoked argv direct function\n", codeid()););
+        {   DEBUG_MOD(DPRINTF("%s: invoked argv direct function\n", codeid()););
             return value;
         } else
         {   parser_error(state, "error in parsing function arguments\n");
@@ -19105,13 +19550,13 @@ mod_invoke_argv(const char *fnname,
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
                                               /*outer_visible*/FALSE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
-        DEBUGMOD(DPRINTF("%s: push enclosing argv directory\n", codeid()););
+        DEBUG_MOD(DPRINTF("%s: push enclosing argv directory\n", codeid()););
         if (!mod_execv(&value, ref_argv, ref_argn, delim, execpath,
                        parser_env(state), state))
             value = &value_null;
         /* return to external environment */
         (void)parser_env_return(state, pos);
-        DEBUGMOD(DPRINTF("%s: popped enclosing argv directory\n", codeid());)
+        DEBUG_MOD(DPRINTF("%s: popped enclosing argv directory\n", codeid());)
         return value;
     }
     else
@@ -19130,9 +19575,10 @@ mod_exec(const char **ref_line, parser_state_t *state)
     dir_t *dir = parser_env(state);
 
     if (mod_parse_cmd(dir, ref_line, &value) && parse_space(ref_line)) {
-        DEBUGMODEXEC(fprintf(stderr, "%s: exec - found cmd\n", codeid()););
+        DEBUG_MODEXEC(fprintf(stderr, "%s: exec - found cmd\n", codeid()););
         return mod_invoke_cmd(ref_line, value, state);
     } else {
+        /* execute command with FN_UNDEF_HOOK */
         const value_t *pcmdsval =
             dir_stringl_get(dir_stack_dir(state->env),
                             FTLDIR_PARSE, strlen(FTLDIR_PARSE));
@@ -19142,11 +19588,11 @@ mod_exec(const char **ref_line, parser_state_t *state)
             const value_t *on_undef = dir_stringl_get(pcmds, FN_UNDEF_HOOK,
                                                       strlen(FN_UNDEF_HOOK));
             if (on_undef != NULL && on_undef != &value_null) {
-                DEBUGMODEXEC(fprintf(stderr, "%s: exec - found undef handler\n",
+                DEBUG_MODEXEC(fprintf(stderr, "%s: exec - found undef handler\n",
                                      codeid()););
                 return mod_invoke_cmd(ref_line, on_undef, state);
             } else {
-                DEBUGMODEXEC(fprintf(stderr, "%s: exec - not found\n",
+                DEBUG_MODEXEC(fprintf(stderr, "%s: exec - not found\n",
                                      codeid()););
                 return NULL;
             }
@@ -19170,7 +19616,7 @@ static bool mod_parse_script(const value_t **out_val,
     bool parsed_ok = FALSE;
     const value_t *value = NULL;
 
-    DEBUGEXECV(printf("open '%s' on path '%s' - %s\n", cmd_file, execpath,
+    DEBUG_EXECV(printf("open '%s' on path '%s' - %s\n", cmd_file, execpath,
                       NULL == fin? "failed": "OK"););
     if (NULL != fin)
     {   const char **script_argv = *ref_argv;
@@ -19247,7 +19693,7 @@ static bool mod_parse_script(const value_t **out_val,
 
 
 /*! Parse and execute the prefix symbols from argv until the next
- *  delimiter (e.g. comma) or until --
+ *  delimiter (e.g. comma) or until '--'
  *
  *    @param out_val   - value returned by prefix symbols (NULL on error)
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
@@ -19274,13 +19720,14 @@ mod_execv(const value_t **out_val,
     bool parsed_ok = FALSE;
     const char *symbol = (*ref_argv)[0]; 
 
-    DEBUGEXECV(DPRINTF("mod execv start: %s ...[%d] (path %s)\n",
-                       symbol, *ref_argn,
-                       execpath == NULL? "<NONE>": execpath););
+    DEBUG_EXECV(DPRINTF("mod execv start: %s ...[%d] (path %s delim '%s')\n",
+                        symbol, *ref_argn,
+                        execpath == NULL? "<NONE>": execpath,
+                        delim==NULL? "<unset>": delim););
     /* Parse the command first */
     if (delim != NULL? mod_parse_argv(dir, ref_argv, ref_argn, &value):
                        mod_parse_optargv(dir, ref_argv, ref_argn, &value))
-    {   DEBUGEXECV(DPRINTF("mod execv parsed %s '%s'\n",
+    {   DEBUG_EXECV(DPRINTF("mod execv parsed %s '%s'\n",
                            value_type_name(value), symbol););
         if (value == NULL || value == &value_null)
         {   value = NULL; /* signal an error */
@@ -19288,7 +19735,9 @@ mod_execv(const value_t **out_val,
                          delim==NULL? "option": "function", symbol);
         }
         else
-        {   parsed_ok = TRUE;
+        {   /* delim unlikely to be NULL ... --<opt> won't usually match a file
+             * name */
+            parsed_ok = TRUE;
             /* execute the command with the next tokens in argv */
             value = mod_invoke_argv(symbol, ref_argv, ref_argn,
                                     execpath, value, delim, state);
@@ -19301,13 +19750,37 @@ mod_execv(const value_t **out_val,
         parsed_ok = mod_parse_script(&value, ref_argv, ref_argn,
                                      delim, execpath, state);
     }
-    else
+    
+    if (!parsed_ok)
     {
-        DEBUGEXECV(DPRINTF("mod execv can't parse %s '%s'\n",
-                            value_type_name(value), symbol););
+        /* try to execute command with FN_UNDEF_HOOK */
+        const value_t *pcmdsval =
+            dir_stringl_get(dir_stack_dir(state->env),
+                            FTLDIR_PARSE, strlen(FTLDIR_PARSE));
+        if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir))
+        {
+            dir_t *pcmds = (dir_t *)pcmdsval;
+            const value_t *on_undef = dir_stringl_get(pcmds, FN_UNDEF_HOOK,
+                                                      strlen(FN_UNDEF_HOOK));
+            if (on_undef != NULL && on_undef != &value_null) {
+                DEBUG_MODEXEC(fprintf(stderr, "%s: exec - found undef handler\n",
+                                     codeid()););
+                parsed_ok = TRUE;
+                value = mod_invoke_argv(symbol, ref_argv, ref_argn, execpath,
+                                        on_undef, delim, state);
+               
+            } else {
+                DEBUG_MODEXEC(fprintf(stderr, "%s: exec - not found\n",
+                                     codeid()););
+                value = NULL;
+            }
+        }        
     }
+    DEBUG_EXECV(if (!parsed_ok)
+                   DPRINTF("mod execv can't parse %s '%s'\n",
+                            value_type_name(value), symbol););
                     
-    DEBUGEXECV(if (*ref_argn <= 0)
+    DEBUG_EXECV(if (*ref_argn <= 0)
                    DPRINTF("mod execv end: FINISHED\n");
                else
                    DPRINTF("mod execv end: %s ...[%d]\n",
@@ -19405,7 +19878,7 @@ rcfile_run(parser_state_t *state, const char *code_name)
          snprintf(&rcfile_name_buf[0], sizeof(rcfile_name_buf),
                   ENV_FTL_RCFILE_DEFAULT(code_name));
          using_default = TRUE;
-         DEBUGRCFILE(DPRINTF("%s: rc file '%s'\n", code_name, rcfile_name););
+         DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", code_name, rcfile_name););
     }
 
     if (rcfile_name != NULL)
@@ -19420,7 +19893,7 @@ rcfile_run(parser_state_t *state, const char *code_name)
                 if (NULL != rc_home)
                 {   sprintf(rc_home, "%s%s"OS_FILE_SEP"%s",
                             homedir, ENV_FTL_HOMEDIR_HOME, rcfile_name);
-                    DEBUGRCFILE(DPRINTF("%s: full rc file name '%s'\n",
+                    DEBUG_RCFILE(DPRINTF("%s: full rc file name '%s'\n",
                                         code_name, rc_home););
                     rcfile = fopen(rc_home, "r");
                     if (NULL == rcfile && !using_default)
@@ -19429,7 +19902,7 @@ rcfile_run(parser_state_t *state, const char *code_name)
                     FTL_FREE(rc_home);
                 }
             }
-            DEBUGRCFILE(else DPRINTF("%s: no %s directory\n",
+            DEBUG_RCFILE(else DPRINTF("%s: no %s directory\n",
                                      code_name, ENV_FTL_HOMEDIR);)
         }
     }
@@ -19440,7 +19913,7 @@ rcfile_run(parser_state_t *state, const char *code_name)
         linesource_push(parser_linesource(state), rcstream);
     }
 
-    DEBUGRCFILE(
+    DEBUG_RCFILE(
         else
            printf("%s: didn't open rcfile %s: %s (rc %d)\n",
                   code_name, rcfile_name==NULL?"<>": rcfile_name,
@@ -19463,7 +19936,7 @@ static bool default_register_result(parser_state_t *state, const char *cmd,
     
     if (!value_type_equal(result, type_null))
     {
-        // printf("RESULT: ");
+        /* printf("RESULT: "); */
         value_fprint(stdout,
                      dir_value(parser_root(state)), result);
         fprintf(stdout, "\n");
@@ -19477,15 +19950,21 @@ static bool default_register_result(parser_state_t *state, const char *cmd,
 
 
 /*! Execute argv as delimiter or option separated ftl commands
- *  Only the initial commands that consist of --opt style tokens are parsed.
- *  as separate FTL commands.
+ *
  *  The argv provided is updated and provides the remaining tokens.
  *    @param state     - current parser state
- *    @param code_name - name to call the parser during this phase
  *    @param execpath  - file directory path from which to take FTL sources
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
  *    @param ref_argn  - updatable reference number of syms in array
+ *    @param delim     - NULL for --opt processing otherwise a delimiter token
  *    @param fndir     - directory to take parsing function definitions from
+ *    @param with_results - function for dealing with command results
+ *    @param with_results_arg - argument to provide with \c with_results
+ *
+ *  If delim is NULL only the initial commands that consist of --opt style
+ *  tokens are parsed (until the following --opt style entry or until --).
+ *  Otherwise command sequences between delim options are parsed.
+ *
  *  This function may cause a garbage collection
  */
 extern bool
@@ -19506,7 +19985,8 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
 
     while (executing_prefix && *ref_argn > 0)
     {   const char *cmd = (*ref_argv)[0];
-        DEBUGENV(dir_t *startdir = parser_env_stack(state)->stack;)
+
+        DEBUG_ENV(dir_t *startdir = parser_env_stack(state)->stack;)
         if (NULL != val)
             value_unlocal(val);
 
@@ -19516,19 +19996,19 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
             executing_prefix = FALSE;
         } else
         {
-            DEBUGEXECV(DPRINTF("MOD EXECV (%s) --- %s ...[%d]\n",
+            DEBUG_EXECV(DPRINTF("MOD EXECV (%s) --- %s ...[%d]\n",
                                delim == NULL? "opt": delim,
                                (*ref_argv)[0], *ref_argn););
             executing_prefix = mod_execv(&val, ref_argv, ref_argn, delim,
                                          execpath, fndir, state);
-            DEBUGEXECV(DPRINTF("MOD EXECV --- %s\n",
+            DEBUG_EXECV(DPRINTF("MOD EXECV --- %s\n",
                                executing_prefix? "OK": "FAILED"););
             if (executing_prefix && val == NULL)
                 syntax_ok = FALSE;
         }
 
         if (executing_prefix)
-        {   DEBUGEXECV(VALUE_SHOW("MOD EXECV report val: ", val););
+        {   DEBUG_EXECV(VALUE_SHOW("MOD EXECV report val: ", val););
             if (val!= NULL)
             {   if (with_results != NULL)
                     executing_prefix = (*with_results)(state, cmd, val,
@@ -19546,9 +20026,9 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                 }
             }
 
-            DEBUGENV(
+            DEBUG_ENV(
                 if (parser_env_stack(state)->stack != startdir)
-                {   DEBUGENV(printf("%s: env update %p -> %p\n",
+                {   DEBUG_ENV(printf("%s: env update %p -> %p\n",
                                     codeid(), startdir,
                                     parser_env(state));)
                     DIR_SHOW("start:  ", startdir);
@@ -19581,11 +20061,11 @@ parser_report_trailing(parser_state_t *state, const char *msg,
                        const char *phrase)
 {
     char *p;
-    int width;
+    ptrdiff_t width;
     int lines = 0;
 
     p = strchr(phrase, '\n');
-    width = p == NULL? strlen(phrase)+1: p - phrase;
+    width = p == NULL? (int)strlen(phrase)+1: p - phrase;
     /*printf("%s: width of trailing line %d is %d\n", codeid(), lines, width);*/
     parser_report(state, "%s%.*s\n", msg, width, phrase);
     while (p != NULL && lines < FTL_ERROR_TRAIL_LINES) {
@@ -19594,7 +20074,7 @@ parser_report_trailing(parser_state_t *state, const char *msg,
         width = p == NULL? strlen(phrase): p - phrase;
         /*printf("%s: width of trailing line %d is %d\n",
           codeid(), lines, width); */
-        parser_report(state, "%.*s\n", width, phrase);
+        parser_report(state, "%.*s\n", (int)width, phrase);
         lines++;
     }
 }
@@ -19654,22 +20134,53 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
             charsink_t *linesink = charsink_string_init(&line);
             charsink_string_t expandline;
             charsink_t *expandsink = charsink_string_init(&expandline);
+            code_place_t line_start_pos;
+            //charsource_rewind_t linestart_src;
 
+            DEBUG_LNO(DPRINTF("\n%s: pre-line at %s:%d\n",
+                              codeid(), parser_source(state),
+                              parser_lineno(state)););
+            code_place_set(&line_start_pos,
+                           parser_source(state), parser_lineno(state));
+            linesource_start_set(parser_linesource(state), &line_start_pos);
             /* copy line from source to linesink and get buffer */
             linesource_read(parser_linesource(state), linesink);
             /* TODO: wrap linesource_read in its own try block? to catch
              * ctrl-C? */
             charsink_string_buf(linesink, &phrase, &len);
+            DEBUG_LNO(DPRINTF("%s: post-line at %s:%d - pre-expand\n",
+                              codeid(), parser_source(state),
+                              parser_lineno(state)););
 
             /* expand \ and $ in buffer writing to expandsink and get buffer */
             parser_expand(state, expandsink, phrase, len);
             charsink_string_buf(expandsink, &phrase, &len);
             charsink_string_close(linesink);
 
+            /* now parse the text expanded into expandsink */
             parse_space(&phrase);
 
             if (!parse_empty(&phrase))
-            {   DEBUGENV(dir_t *startdir = parser_env_stack(state)->stack;)
+            {
+                charsource_lineref_t phrase_src;
+                charsource_t *linestart_src;
+                DEBUG_ENV(dir_t *startdir = parser_env_stack(state)->stack;);
+                OMIT(DPRINTF("%s: parsing line '%s'\n", codeid(), phrase););
+                linestart_src = charsource_lineref_init
+                                    (&phrase_src, /*del*/NULL, /*rewind*/TRUE,
+                                     &line_start_pos.posname[0],
+                                     line_start_pos.lineno, &phrase);
+                linesource_push(parser_linesource(state), linestart_src);
+
+                DEBUG_LNO(DPRINTF("%s: post-expand %sline now %s:%d "
+                                  "(chars still %s:%d)\n",
+                                  codeid(), phrase[0] == '\0'? "EMPTY ":"",
+                                  &line_start_pos.posname[0],
+                                  line_start_pos.lineno,
+                                  parser_source(state), parser_lineno(state));
+                          parser_error(state, "demo error here\n");
+                    );
+
                 if (NULL != val)
                     value_unlocal(val);
 
@@ -19701,9 +20212,9 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                 } else
                     parser_error(state, "unknown command '%s'\n", phrase);
 
-                DEBUGENV(
+                DEBUG_ENV(
                     if (parser_env_stack(state)->stack != startdir)
-                    {   DEBUGENV(printf("%s: env update %p -> %p\n",
+                    {   DEBUG_ENV(printf("%s: env update %p -> %p\n",
                                         codeid(), startdir,
                                         parser_env(state));)
                         DIR_SHOW("start:  ", startdir);
@@ -19715,6 +20226,7 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                     val = NULL; /* mustn't return garbage collected value */
                     parser_collect(state);
                 }
+                linesource_remove(parser_linesource(state), linestart_src);
             }
             charsink_string_close(expandsink);
         }
@@ -19766,10 +20278,12 @@ argv_cli(parser_state_t *state, const char *code_name, const char *execpath,
          const char **argv, int argc)
 {   const value_t *value = NULL;
     codeid_set(code_name);
-    return parser_argv_exec(state, &argv, &argc, ",", execpath,
+    return parser_argv_exec(state, &argv, &argc, /*delim*/",", execpath,
                             parser_env(state),
-                            /*expect_no_locals*/TRUE,
-                            &default_register_result, NULL,
+                            /* expect_no_locals */TRUE,
+                            /* function dealing with results from command
+                             * evaluations */&default_register_result,
+                            /*with_results_arg*/NULL,
                             &value);
 }
 
@@ -20364,12 +20878,22 @@ fn_readline(const value_t *this_fn, parser_state_t *state)
         charsink_t *linesink = charsink_string_init(&line);
         charsink_string_t expandline;
         charsink_t *expandsink = charsink_string_init(&expandline);
+        linesource_t *linesource = parser_linesource(state);
+        code_place_t start;
 
-        linesource_read(parser_linesource(state), linesink);
+        code_place_set(&start, instack_source(linesource->in),
+                       instack_lineno(linesource->in));
+
+        /* read a line of source into linesink */
+        linesource_start_set(linesource, &start);
+        linesource_read(linesource, linesink);
+
+        /* expand linesink into expandsink */
         charsink_string_buf(linesink, &phrase, &len);
         parser_expand(state, expandsink, phrase, len);
-        charsink_string_buf(expandsink, &phrase, &len);
 
+        /* create string from expansion */
+        charsink_string_buf(expandsink, &phrase, &len);
         val = value_string_new(phrase, len);
 
         charsink_string_close(linesink);
@@ -21057,8 +21581,11 @@ fnparse_code(const char **ref_line, parser_state_t *state,
     const char *srcpos;
     int srcline;
 
-    if (parse_code(ref_line, state, &strval, &srcpos, &srcline))
+    if (parse_code(ref_line, state, &strval, &srcpos, &srcline)) {
+        DEBUG_LNO(printf("%s: new 'code' at %s:%d\n",
+                         codeid(), srcpos, srcline);); 
         return value_code_new(strval, srcpos, srcline);
+    }
     else
         return &value_null;
 }
@@ -23173,9 +23700,9 @@ fn_rndseed(const value_t *this_fn, parser_state_t *state)
             seedlen = sizeof(seedint);
         }
         seedparts = (unsigned int *)seedbin;
-        seedpartcount = seedlen/sizeof(unsigned int);
+        seedpartcount = (int)(seedlen/sizeof(unsigned int));
         seedlen -= seedpartcount * sizeof(unsigned int);
-        // make a seed by exclusive-oring all the unsigned ints in the binary
+        /* make a seed by exclusive-oring all the unsigned ints in the binary */
         while (seedpartcount-- > 0)
             seed ^= *seedparts++;
         seedbin = (char *)seedparts;
@@ -23387,7 +23914,7 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
    size_t totalbytes = units<<sz_ln2;
    const char *b1end = b1 + totalbytes;
 
-   DEBUGMEMDIFF(printf("%s: diff %d bytes\n", codeid(), b1end - b1););
+   DEBUG_MEMDIFF(printf("%s: diff %d bytes\n", codeid(), b1end - b1););
    while (b1 < b1end) {
       int entries = 0;
       int n = 0;
@@ -23396,7 +23923,7 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
       while (&b1[n] < b1end && b1[n] == b2[n])
          n++;
 
-      DEBUGMEMDIFF(printf("%s: prefix %d bytes\n", codeid(), n););
+      DEBUG_MEMDIFF(printf("%s: prefix %d bytes\n", codeid(), n););
       n = n & ~((1<<sz_ln2) - 1);  /* align down */
       b1 += n;
       b2 += n;
@@ -23408,7 +23935,7 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
       }
       entries = n >> sz_ln2;
 
-      DEBUGMEMDIFF(printf("%s: differ %d bytes %d units\n",
+      DEBUG_MEMDIFF(printf("%s: differ %d bytes %d units\n",
                           codeid(), n, entries););
       while (entries > 0) {
          int entused;
@@ -23423,7 +23950,7 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
          entries -= entused;
          diffunits += entused;
          addr += bytused;
-         DEBUGMEMDIFF(printf("%s: consumed %d units %d bytes\n",
+         DEBUG_MEMDIFF(printf("%s: consumed %d units %d bytes\n",
                              codeid(), entused, bytused););
          b1 += bytused;
          b2 += bytused;
@@ -24121,7 +24648,7 @@ fn_chop(const value_t *this_fn, parser_state_t *state)
         const char *buf;
         const char *initbuf;
         size_t buflen = 0;
-        int len;
+        long len;
         number_t stride = value_int_number(strideval);
         dir_t *vec = dir_vec_new();
         int veclen = 0;
@@ -24328,7 +24855,7 @@ static const value_t *fn_binsplit(const value_t *this_fn, parser_state_t *state)
         bool little_endian = !value_bool_is_false(littleval);
         bool is_signed = !value_bool_is_false(signedval);
         size_t unitbytes = (size_t)value_int_number(unitbytesval);
-        datatype_t *intdt = datatype_int_new(is_signed, unitbytes,
+        datatype_t *intdt = datatype_int_new(is_signed, (int)unitbytes,
                                              little_endian);
         if (intdt == NULL) {
             parser_error(state, "%s-endian %d-byte integers not available "
@@ -25343,7 +25870,7 @@ zip_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
     if (zipval->len > 0)
     {   /* vals is a dir */
         dir_t *dir_vals = (dir_t *)zipped;
-        zipped = dir_int_get(dir_vals, zipval->index);
+        zipped = dir_int_get(dir_vals, (int)zipval->index);
         if (zipped == NULL) {
             /*printf("%s: index %d gave nothing\n", codeid(), zipval->index);*/
             cont = name;
@@ -26448,9 +26975,9 @@ genfn_mem_dump(const value_t *this_fn, parser_state_t *state,
                                                force_volatile);
 
                         if (ok) {
-                            int entries = len >> sz_ln2;
+                            int entries = (int)(len >> sz_ln2);
                             const char *addr_format = "%08X: ";
-                            mem_dump(buf, ix, entries, sz_ln2, addr_format,
+                            mem_dump(buf, (unsigned)ix, entries, (int)sz_ln2, addr_format,
                                      /* addr_unit_size */1, with_chars);
                         }
 

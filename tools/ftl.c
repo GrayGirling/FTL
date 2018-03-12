@@ -141,14 +141,20 @@
 #define DO(x) x
 #define IGNORE(x) 
 
-/* #define DEBUGGC DO */
+/* #define DEBUGGC   DO */
+/* #define DEBUG_CLI DO */
 
 #ifdef NDEBUG
 #undef DEBUGGC
+#undef DEBUG_CLI
 #endif
 
 #ifndef DEBUGGC
 #define DEBUGGC      IGNORE
+#endif
+
+#ifndef DEBUG_CLI
+#define DEBUG_CLI    IGNORE
 #endif
 
 /* #define DPRINTF ci_log */
@@ -503,20 +509,25 @@ const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
 
 
 
+
+/*! Load standard libraries, including those that are compile-time options
+ */
 static bool ftl_libs_init(parser_state_t *state)
 {
     bool ok = TRUE;
     
+    DEBUG_CLI(fprintf(stderr, "%s: adding tool commands\n", CODEID););
     if (!cmds_ftl(state))
     {   fprintf(stderr, "%s: failed to load application-specific "
                 "commands\n", CODEID);
         ok = FALSE;
     }
+
 #ifdef USE_FTLLIB_ELF
     if (ok)
     {   dir_t *cmds = parser_root(state);
         dir_t *elf_cmds = dir_id_new();
-        fprintf(stderr, "%s: adding ELF commands\n", CODEID);//GRAY
+        DEBUG_CLI(fprintf(stderr, "%s: adding ELF commands\n", CODEID););
         if (cmds_elf(state, elf_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_ELF, elf_cmds);
         else
@@ -530,6 +541,7 @@ static bool ftl_libs_init(parser_state_t *state)
     if (ok)
     {   dir_t *cmds = parser_root(state);
         dir_t *xml_cmds = dir_id_new();
+        DEBUG_CLI(fprintf(stderr, "%s: adding XML commands\n", CODEID););
         if (cmds_xml(state, elf_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_XML, xml_cmds);
         else
@@ -539,27 +551,15 @@ static bool ftl_libs_init(parser_state_t *state)
     }
 #endif
 
-#ifdef USE_FTLLIB_ELF
-    if (ok)
-    {   dir_t *cmds = parser_root(state);
-        dir_t *elf_cmds = dir_id_new();
-        if (cmds_elf(state, elf_cmds))
-            mod_add_dir(cmds, FTL_DIR_CMDS_ELF, elf_cmds);
-        else
-        {   fprintf(stderr, "%s: failed to load ELF commands\n", CODEID);
-            ok = FALSE;
-        }
-    }
-#endif
-
     return ok;
 }
+
 
 
 static void ftl_libs_end(parser_state_t *state)
 {
 #ifdef USE_FTLLIB_ELF
-    cmds_ftl_end(state);
+    cmds_elf_end(state);
 #endif
 
 #ifdef USE_FTLLIB_XML
@@ -616,6 +616,58 @@ static bool option_result(parser_state_t *state, const char *cmd,
 
 
 
+/*! Read a prolog file from a string
+ */
+static int /*rc*/ read_prolog(parser_state_t *state,
+                              const char *sourceid, const char *prolog_file,
+                              const char *prolog_text)
+{
+    const char *tool_path = getenv(ENV_PATH);
+    int exit_rc = EXIT_OK;
+
+    if (NULL != prolog_file && prolog_file[0] != '\0')
+    {   charsource_t *fin =
+           charsource_file_path_new(tool_path, prolog_file,
+                                    strlen(prolog_file));
+        if (NULL == fin)
+            printf("%s: can't find file '%s' for %s on path\n",
+                  codeid(), prolog_file, sourceid);
+        else
+        {
+            if (NULL == parser_expand_exec(state, fin, NULL, NULL,
+                                            /*no_locals*/TRUE))
+            {  fprintf(stderr,
+                       "%s: attempted execution of file \"%s\" for %s failed\n",
+                       codeid(), prolog_file, sourceid);
+               exit_rc = EXIT_BAD_PRLGFILE;
+            }
+            //charsource_delete(&fin);
+        }
+    } else
+
+    {   charsource_t *prolog =
+            charsource_cstring_new(sourceid, prolog_text, strlen(prolog_text));
+        DEBUG_CLI(printf("%s: checking prolog '%s'\n", codeid(), sourceid););
+        if (NULL == prolog)
+            printf("%s: couldn't open text prolog\n", codeid());
+        else
+        {
+            if (NULL == parser_expand_exec(state, prolog, NULL, NULL,
+                                            /*no_locals*/TRUE))
+            {  fprintf(stderr, "%s: attempted execution of "
+                       "text prolog '%s' failed\n", codeid(), sourceid);
+               exit_rc = EXIT_BAD_PRLGSTR;
+            }
+            DEBUG_CLI(printf("%s: prolog '%s' expanded\n",
+                             codeid(), sourceid););
+            //charsource_delete(&prolog);
+        }
+    }
+    return exit_rc;
+}
+
+
+
 extern int
 main(int argc, char **argv)
 {   const char *err;
@@ -646,6 +698,7 @@ main(int argc, char **argv)
         else
 	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
 	    cmds_generic(state, app_argc, &app_argv[0]);
+            DEBUG_CLI(printf("%s: opened internal commands\n", codeid()););
 	    if (!ftl_libs_init(state))
             {
                 exit_rc = EXIT_BAD_FTLINIT;
@@ -656,45 +709,20 @@ main(int argc, char **argv)
                 bool do_args = opt_argc > 0;
 
                 if (do_prolog)
-                {    const char *prolog_file = getenv(ENV_PROLOG);
-                     const char *rltool_path = getenv(ENV_PATH);
-
-                     if (NULL != prolog_file && prolog_file[0] != '\0')
-                     {   charsource_t *fin =
-                             charsource_file_path_new(rltool_path, prolog_file,
-                                                      strlen(prolog_file));
-                         if (NULL == fin)
-                             printf("%s: can't find prolog '%s' on path\n",
-                                    codeid(), prolog_file);
-                         else
-                         if (NULL == parser_expand_exec(state, fin, NULL, NULL,
-                                                        /*no_locals*/TRUE))
-                         {   fprintf(stderr, "%s: attempted execution of "
-                                     "prolog file \"%s\" failed\n",
-                                     codeid(), prolog_file);
-                             exit_rc = EXIT_BAD_PRLGFILE;
-                         }
-                     } else
-                     {   charsource_t *prolog =
-                             charsource_cstring_new("prolog", &prolog_text[0],
-                                                    sizeof(prolog_text));
-                         if (NULL == prolog)
-                             printf("%s: couldn't open text prolog\n", CODEID);
-                         else if (NULL == parser_expand_exec(state, prolog,
-                                                             /*cmdstr*/NULL,
-                                                             /*rc_file*/NULL,
-                                                             /*no_locals*/TRUE))
-                         {   fprintf(stderr, "%s: attempted execution of "
-                                     "text prolog failed\n", codeid());
-                             exit_rc = EXIT_BAD_PRLGSTR;
-                         }
-                     }
+                {   exit_rc = read_prolog(state, "prolog", getenv(ENV_PROLOG),
+                                          &prolog_text[0]);
                 }
 
                 if (exit_rc == EXIT_OK && do_args)
                 {   // parse --<option> ..
                     const value_t *opt_parse_dirval =
                         dir_string_get(parser_env(state), FTL_DIR_OPTIONS);
+                    
+                    /*DEBUG_CLI GRAY*/DO(fprintf(stderr, "%s: %sparsing options%s\n",
+                                      codeid(),
+                                      opt_parse_dirval == NULL? "not ":"",
+                                      opt_parse_dirval == NULL?
+                                      " (no " FTL_DIR_OPTIONS " obj)":""););
                     if (opt_parse_dirval != NULL)
                     {
                         optresult_t arg;
@@ -715,6 +743,8 @@ main(int argc, char **argv)
 
                 if (exit_rc == EXIT_OK)
                 {
+                    DEBUG_CLI(fprintf(stderr, "%s: init commandline commands\n",
+                                       codeid()););
                     if (NULL != cmd_file)
                     {   charsource_t *fin =
                             charsource_file_path_new(getenv(ENV_PATH), cmd_file,
@@ -733,7 +763,10 @@ main(int argc, char **argv)
                         }
                     } else if (do_args)
                     {
-                        if (!argv_cli(state, CODEID, getenv(ENV_PATH),
+                        DEBUG_CLI(fprintf(stderr,
+                                          "%s: executing %d cmd line args\n",
+                                           codeid(), app_argc););
+                        if (!argv_cli(state, codeid(), getenv(ENV_PATH),
                                       opt_argv, opt_argc))
                             exit_rc = EXIT_BAD_FTLCMDS;
                     } else
@@ -761,7 +794,9 @@ main(int argc, char **argv)
 	}
     }
     
+    DEBUG_CLI(printf(CODEID " ending FTL\n"););
     ftl_end();
+    DEBUG_CLI(printf(CODEID " exit rc %d\n", exit_rc););
     return exit_rc;
 }
 

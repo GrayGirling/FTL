@@ -580,7 +580,7 @@ static void freeCompletions(linenoiseCompletions *lc) {
  * structure as described in the structure definition. */
 static int completeLine(struct linenoiseState *ls) {
     linenoiseCompletions lc = { 0, NULL };
-    int nread, nwritten;
+    long nread, nwritten;
     char c = 0;
 
     completionCallback(ls->buf,&lc);
@@ -677,7 +677,7 @@ static void abInit(struct abuf *ab) {
     ab->len = 0;
 }
 
-static void abAppend(struct abuf *ab, const char *s, int len) {
+static void abAppend(struct abuf *ab, const char *s, size_t len) {
     char *new = realloc(ab->b,ab->len+len);
 
     if (new == NULL) return;
@@ -736,12 +736,12 @@ static void refreshSingleLine(struct linenoiseState *l) {
  * cursor position, and number of columns of the terminal. */
 static void refreshMultiLine(struct linenoiseState *l) {
     char seq[64];
-    int plen = strlen(l->prompt);
-    int rows = (plen+l->len+l->cols-1)/l->cols; /* rows used by current buf. */
-    int rpos = (plen+l->oldpos+l->cols)/l->cols; /* cursor relative row. */
+    int plen = (int)strlen(l->prompt);
+    int rows = (int)(plen+l->len+l->cols-1)/l->cols; /* rows used by current buf. */
+    int rpos = (int)(plen+l->oldpos+l->cols)/l->cols; /* cursor relative row. */
     int rpos2; /* rpos after refresh. */
     int col; /* colum position, zero-based. */
-    int old_rows = l->maxrows;
+    int old_rows = (int)l->maxrows;
     ttyio_t fd = l->ofd;
     int j;
     struct abuf ab;
@@ -789,7 +789,7 @@ static void refreshMultiLine(struct linenoiseState *l) {
     }
 
     /* Move cursor to right position. */
-    rpos2 = (plen+l->pos+l->cols)/l->cols; /* current cursor relative row. */
+    rpos2 = (int)(plen+l->pos+l->cols)/l->cols; /* current cursor relative row. */
     lndebug("rpos2 %d", rpos2);
 
     /* Go up till we reach the expected positon. */
@@ -987,11 +987,11 @@ static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t 
     if (tty_write(l.ofd,prompt,l.plen) == -1) return -1;
     while(1) {
         char c;
-        int nread;
+        size_t nread;
         char seq[3];
 
         nread = tty_read(l.ifd,&c,1);
-        if (nread <= 0) return l.len;
+        if (nread <= 0) return (int)l.len;
 
         /* Only autocomplete when the callback is set. It returns < 0 when
          * there was an error reading from fd. Otherwise it will return the
@@ -999,7 +999,7 @@ static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t 
         if (c == 9 && completionCallback != NULL) {
             c = completeLine(&l);
             /* Return on errors */
-            if (c < 0) return l.len;
+            if (c < 0) return (int)l.len;
             /* Read next character when 0 */
             if (c == 0) continue;
         }
@@ -1148,7 +1148,7 @@ void linenoisePrintKeyCodes(void) {
     memset(quit,' ',4);
     while(1) {
         char c;
-        int nread;
+        size_t nread;
 
         nread = tty_read(conin,&c,1);
         if (nread <= 0) continue;
@@ -1167,7 +1167,7 @@ void linenoisePrintKeyCodes(void) {
 /* This function calls the line editing function linenoiseEdit() using
  * the STDIN file descriptor set in raw mode. */
 static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
-    int count;
+    size_t count;
     ttyio_t conin  = tty_stdin();
     ttyio_t conout = tty_stdout();
 
@@ -1190,7 +1190,7 @@ static int linenoiseRaw(char *buf, size_t buflen, const char *prompt) {
         disableRawMode(conin, conout);
         printf("\n");
     }
-    return count;
+    return (int)count;
 }
 
 /* The high level function that is the main API of the linenoise library.

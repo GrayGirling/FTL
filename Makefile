@@ -34,6 +34,11 @@ DEFS_READLINE=
 INCS_READLINE=
 OBJS_READLINE=
 
+LIBS_LIBELF=-lelf
+DEFS_LIBELF=
+INCS_LIBELF=
+OBJS_LIBELF=
+
 ifeq ($(ARCH),osx)
     LIBS_READLINE=
     DEFS_READLINE=-DUSE_LINENOISE
@@ -43,6 +48,8 @@ ifeq ($(ARCH),osx)
     #DEFS_READLINE=-DUSE_READLINE
     #INCS_READLINE=-I /opt/local/include/readline -I /opt/local/include
     #OBJS_READLINE=
+    INCS_LIBELF=-I /opt/local/include/libelf -I /opt/local/include
+    LIBS_LIBELF=-L /opt/local/lib -lelf
 
     CC_OPT_DEBUGSYMS=-O0 -g3 
     CFLAGS_CC=-Wno-tautological-compare
@@ -67,16 +74,13 @@ endif
 endif
 
 DEFINES  := 
-LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET)
+LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF)
 INCLUDES := -I include
 CFLAGS   := $(CFLAGS_CC) -Wall $(CC_OPT_DEBUGSYMS) $(INCLUDES)
-
 LIBFTL_DEFS = $(DEFINES) $(DEFS_READLINE)
-LIBFTL_INCS = $(INCLUDES) $(INCS_READLINE)
-
 # DYNAMIC FTL ENVIRONMENTS
 
-FTLEXTS := ftlext-test.so
+# FTLEXTS := ftlext-test.so
 
 # TOOL CONSTRUCTION
 
@@ -93,8 +97,9 @@ PENV_LIBS := $(LIBS)
 ifeq ($(add_elf),yes)
 FTL_OBJS += libftl_elf.o
 LIBELF_DEFS = -DUSE_LIB_$(elf_lib_type)
+LIBELF_INCS = $(INCS_LIBELF)
 FTL_DEFS += -DUSE_FTLLIB_ELF 
-FTL_LIBS += -lelf
+FTL_LIBS += $(LIBS_LIBELF)
 endif
 
 ifeq ($(add_xml),yes)
@@ -118,7 +123,7 @@ libftl.o: libftl.c
 	$(CC) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
 
 libftl_elf.o: libftl_elf.c
-	$(CC) $(CFLAGS) $(LIBELF_DEFS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(LIBELF_DEFS) $(LIBELF_INCS) -c -o $@ $<
 
 penv.o: penv.c
 	$(CC) $(CFLAGS) $(PENV_DEFS) $(PENV_INCS) -c -o $@ $<
