@@ -95,8 +95,8 @@ typedef void value_delete_fn_t(value_t *value);
 /* set the heap version of that values dependent on this value belong to */
 typedef void value_markver_fn_t(const value_t *value, int version);
 
-typedef int value_print_fn_t(outchar_t *out,
-			     const value_t *root, const value_t *value);
+typedef int value_print_fn_t(outchar_t *out, const value_t *root,
+                             const value_t *value, bool detailed);
 
 typedef const value_t *value_parse_fn_t(const char **ref_line,
                                         const value_t *this_cmd,

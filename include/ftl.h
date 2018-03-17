@@ -473,13 +473,21 @@ extern bool
 value_istype(const value_t *val, type_t kind);
 
 extern int
-value_print(outchar_t *out, const value_t *root, const value_t *val);
+value_print_detail(outchar_t *out, const value_t *root, const value_t *val,
+                   bool detailed);
+    
+#define value_print(out, root, val) \
+    value_print_detail(out,root,val,/*detail*/FALSE)
 
 extern int
 value_cmp(const value_t *v1, const value_t *v2);
 
 extern int
-value_fprint(FILE *out, const value_t *root, const value_t *val);
+value_fprint_detail(FILE *out, const value_t *root, const value_t *val,
+                    bool detailed);
+    
+#define value_fprint(out, root, val) \
+    value_fprint_detail(out,root,val,/*detail*/FALSE)
 
 #define VALUE_SHOW_RT(msg, root, val) \
 {   printf("%s", msg);                \

@@ -4343,7 +4343,8 @@ value_castable(const value_t *val, type_t kind)
 
 
 extern int
-value_print(outchar_t *out, const value_t *root, const value_t *val)
+value_print_detail(outchar_t *out, const value_t *root, const value_t *val,
+                   bool detailed)
 {   if (out != NULL && val != NULL && PTRVALID(val->kind) &&
         PTRVALID(val->kind->print))
     {   if (prtstk.depth >= PRINTSTACK_MAX)
@@ -4359,7 +4360,7 @@ value_print(outchar_t *out, const value_t *root, const value_t *val)
             else
             {   int len;
                 prtstk.entry[prtstk.depth++] = val;
-                len = (*val->kind->print)(out, root, val);
+                len = (*val->kind->print)(out, root, val, detailed);
                 prtstk.depth--;
                 return len;
             }
@@ -4368,15 +4369,17 @@ value_print(outchar_t *out, const value_t *root, const value_t *val)
         return 0;
 }
 
+/* value_print() is #define of the above */
 
 
 
 
 extern int
-value_fprint(FILE *out, const value_t *root, const value_t *val)
+value_fprint_detail(FILE *out, const value_t *root, const value_t *val,
+                    bool detailed)
 {   charsink_stream_t charbuf;
     charsink_t *sink = charsink_stream_init(&charbuf, out);
-    int n = value_print(sink, root, val);
+    int n = value_print_detail(sink, root, val, detailed);
     charsink_stream_close(sink);
     return n;
 }
@@ -4614,7 +4617,8 @@ extern type_id_t type_id_new(void)
 
 
 static int
-value_type_print(outchar_t *out, const value_t *root, const value_t *value)
+value_type_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   const value_type_t *typeval = (const value_type_t *)value;
     (void)root;
     return outchar_printf(out, "$"ROOT_DIR_TYPE".%s", typeval->name);
@@ -4752,7 +4756,8 @@ type_t type_null = &type_null_val;
 value_t value_null;
 
 static int
-value_null_print(outchar_t *out, const value_t *root, const value_t *value)
+value_null_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   (void)root;
     return outchar_printf(out, "NULL");
 }
@@ -4849,8 +4854,8 @@ value_int_setnumber(value_t *value, number_t number)
 
 
 
-static int value_int_print(outchar_t *out,
-                           const value_t *root, const value_t *value)
+static int value_int_print(outchar_t *out, const value_t *root,
+                           const value_t *value, bool detailed)
 {   number_t n = value_int_number(value);
     number_t absn = n;
     if (absn < 0)
@@ -5495,7 +5500,8 @@ ipaddr_fprint(FILE *out, const addr_ip_t *ip)
 
 
 static int
-value_ipaddr_print(outchar_t *out, const value_t *root, const value_t *value)
+value_ipaddr_print(outchar_t *out, const value_t *root, const value_t *value,
+                   bool detailed)
 {   const value_ipaddr_t *ip = (const value_ipaddr_t *)value;
     (void)root;
     return outchar_printf(out, "%u.%u.%u.%u",
@@ -5704,7 +5710,8 @@ macaddr_fprint(FILE *out, const addr_mac_t *mac)
 
 
 static int
-value_macaddr_print(outchar_t *out, const value_t *root, const value_t *value)
+value_macaddr_print(outchar_t *out, const value_t *root, const value_t *value,
+                    bool detailed)
 {   const value_macaddr_t *mac = (const value_macaddr_t *)value;
     (void)root;
     return outchar_printf(out, "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -6024,7 +6031,8 @@ string_print_as_id(outchar_t *out, const char *str, size_t len)
 
 
 static int
-value_string_print(outchar_t *out, const value_t *root, const value_t *value)
+value_string_print(outchar_t *out, const value_t *root, const value_t *value,
+                   bool detailed)
 {   const char *chars;
     size_t len;
     (void)root;
@@ -6344,7 +6352,7 @@ value_wcstring_new(const wchar_t *wcstr, size_t wcstr_chars)
                 }
             }
         }
-        DO(else fprintf(stderr, "%s: failed to get length of"
+        OMIT(else fprintf(stderr, "%s: failed to get length of "
                         "unicode string - error %d\n", codeid(), errno);)
     }
     return newstr;
@@ -6622,8 +6630,8 @@ value_code_delete(value_t *value)
 
 
 static int
-value_code_print(outchar_t *out,
-                 const value_t *root, const value_t *value)
+value_code_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   const char *chars;
     size_t len;
     (void)root;
@@ -6833,7 +6841,7 @@ value_stream_close(value_t *value)
 
 static int
 value_stream_print(outchar_t *out,
-                   const value_t *root, const value_t *value)
+                   const value_t *root, const value_t *value, bool detailed)
 {   charsource_t *source;
     charsink_t   *sink;
     (void)root;
@@ -7578,6 +7586,7 @@ typedef struct
     int len;
     bool first;
     bool bracketed;
+    bool detailed;
     const char *delim;
     number_t index_expect;
 } dir_bind_print_arg_t;
@@ -7617,7 +7626,7 @@ value_dir_bind_print(dir_t *dir, const value_t *name,
         if (value_type_equal(name, type_string))
             pr->len += value_string_print_as_id(out, root, name);
         else
-            pr->len += value_print(out, root, name);
+            pr->len += value_print_detail(out, root, name, pr->detailed);
         pr->len += outchar_printf(out, "=");
         OMIT(pr->len += outchar_printf(out, "(%s)#%p ",
                                          value_type_name(value), value);)
@@ -7635,12 +7644,14 @@ value_dir_bind_print(dir_t *dir, const value_t *name,
 
 
 static int
-dir_print(outchar_t *out, const value_t *root, const value_t *value)
+dir_print(outchar_t *out, const value_t *root, const value_t *value,
+          bool detailed)
 {   dir_bind_print_arg_t pr;
 
     pr.out = out;
     pr.root = root;
     pr.len = 0;
+    pr.detailed = detailed;
 
     if (value_istype(value, type_dir))
     {   dir_t *dir = (dir_t *)value;
@@ -7680,7 +7691,7 @@ value_dir_bind_print_name(dir_t *dir, const value_t *name,
     if (value_type_equal(name, type_string))
         pr->len += value_string_print_as_id(pr->out, pr->root, name);
     else
-        pr->len += value_print(pr->out, pr->root, name);
+        pr->len += value_print_detail(pr->out, pr->root, name, pr->detailed);
     return NULL;
 }
 
@@ -8430,12 +8441,13 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
             pr->len += outchar_printf(pr->out, pr->delim);
 
         if (index != pr->index_expect)
-        {   pr->len += value_print(pr->out, pr->root, name);
+        {   pr->len += value_print_detail(pr->out, pr->root, name,
+                                          pr->detailed);
             pr->len += outchar_printf(pr->out, "=");
         }
         OMIT(pr->len += outchar_printf(pr->out, "(%s)#%p ",
-                                         value_type_name(value), value);)
-        pr->len += value_print(pr->out, pr->root, value);
+                                       value_type_name(value), value););
+        pr->len += value_print_detail(pr->out, pr->root, value, pr->detailed);
 
         pr->index_expect = index+1;
     }
@@ -8450,7 +8462,8 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
 
 
 static int
-dir_vec_print(outchar_t *out, const value_t *root, const value_t *value)
+dir_vec_print(outchar_t *out, const value_t *root, const value_t *value,
+              bool detailed)
 {   dir_bind_print_arg_t pr;
 
     pr.out = out;
@@ -10819,7 +10832,8 @@ dir_series_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg)
 
 
 static int
-dir_series_print(outchar_t *out, const value_t *root, const value_t *value)
+dir_series_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   int len = 0;
 
     if (value_istype(value, type_dir))
@@ -12716,6 +12730,7 @@ typedef struct
     const value_t *root;
     int len;
     int vals;
+    bool detailed;
 } dir_env_bind_print_arg_t;
 
 
@@ -12723,6 +12738,18 @@ typedef struct
 
 
 
+
+
+
+static void *
+value_env_bind_findroot(dir_t *dir, const value_t *name,
+                        const value_t *value, void *arg)
+{   dir_env_bind_print_arg_t *pr = (dir_env_bind_print_arg_t *)arg;
+    if (pr->root == dir_value(dir))
+        return dir;
+    else
+        return NULL;
+}
 
 
 
@@ -12738,11 +12765,12 @@ value_env_bind_print(dir_t *dir, const value_t *name,
         if (value_type_equal(name, type_string))
             pr->len += value_string_print_as_id(pr->out, pr->root, name);
         else
-            pr->len += value_print(pr->out, pr->root, name);
+            pr->len += value_print_detail(pr->out, pr->root, name,
+                                          pr->detailed);
         pr->len += outchar_printf(pr->out, "=");
         OMIT(pr->len += outchar_printf(pr->out, "(%s)#%p ",
                                          value_type_name(value), value);)
-        pr->len += value_print(pr->out, pr->root, value);
+        pr->len += value_print_detail(pr->out, pr->root, value, pr->detailed);
         pr->vals++;
         return NULL;
     }
@@ -12771,8 +12799,8 @@ value_list_lastbefore(const value_t *list, const value_t *end)
 
 
 static int
-value_env_print_relative(outchar_t *out,
-                         const value_t *root, const value_t *value,
+value_env_print_relative(outchar_t *out, const value_t *root, bool unbound_only,
+                         const value_t *value, bool detailed,
                          bool *out_root_relative)
 {   dir_env_bind_print_arg_t pr;
 
@@ -12780,6 +12808,7 @@ value_env_print_relative(outchar_t *out,
     pr.root = root;
     pr.len = 0;
     pr.vals = 0;
+    pr.detailed = detailed;
 
     if (value_istype(value, type_dir))
     {   value_env_t *envdir = (value_env_t *)value;
@@ -12787,10 +12816,14 @@ value_env_print_relative(outchar_t *out,
 
         if (PTRVALID(dir->forall))
         {   value_t *unbound = envdir->unbound;
-            value_t *found_root;
+            value_t *env_root = FALSE;
 
             pr.len += outchar_printf(out, "[");
-            found_root = (*dir->forall)(dir, &value_env_bind_print, &pr);
+
+            if (detailed)
+                env_root = (*dir->forall)(dir, &value_env_bind_print, &pr);
+            else
+                env_root = (*dir->forall)(dir, &value_env_bind_findroot, &pr);;
 
             while (PTRVALID(unbound))
             {   if (pr.vals > 0)
@@ -12798,17 +12831,17 @@ value_env_print_relative(outchar_t *out,
                 if (value_type_equal(unbound, type_string))
                     pr.len += value_string_print_as_id(out, root, unbound);
                 else
-                    pr.len += value_print(out, root, unbound);
+                    pr.len += value_print_detail(out, root, unbound, detailed);
                 unbound = unbound->link;
                 pr.vals++;
             }
 
             pr.len += outchar_printf(out, "]");
             if (NULL == out_root_relative)
-            {   if (PTRVALID(found_root))
+            {   if (PTRVALID(env_root))
                     pr.len += outchar_printf(out, ":$root");
             } else
-                *out_root_relative = PTRVALID(found_root);
+                *out_root_relative = PTRVALID(env_root);
         }
     }
 
@@ -12822,8 +12855,10 @@ value_env_print_relative(outchar_t *out,
 
 
 static int
-value_env_print(outchar_t *out, const value_t *root, const value_t *value)
-{   return value_env_print_relative(out, root, value, /*out_found_root*/NULL);
+value_env_print(outchar_t *out, const value_t *root, const value_t *value,
+                bool detailed)
+{   return value_env_print_relative(out, root, /*unbound_only*/FALSE,
+                                    value, detailed, /*out_found_root*/NULL);
 }
 
 
@@ -13278,15 +13313,18 @@ value_closure_delete(value_t *value)
 
 
 
-static int value_closure_print(outchar_t *out,
-                               const value_t *root, const value_t *value)
+static int value_closure_print(outchar_t *out, const value_t *root,
+                               const value_t *value, bool detailed)
 {   size_t n = 0;
     value_closure_t *closure = (value_closure_t *)value;
 
     /*n = outchar_printf(out, "(");*/
     if (PTRVALID(closure->env))
     {   bool relative_to_root = FALSE;
-        n += value_env_print_relative(out, root, value_env_value(closure->env),
+        bool unbound_only = PTRVALID(closure->code) && !detailed;
+        n += value_env_print_relative(out, root, unbound_only,
+                                      value_env_value(closure->env),
+                                      detailed,
                                       &relative_to_root);
         if (NULL == closure->code)
         {   if (relative_to_root)
@@ -13299,7 +13337,7 @@ static int value_closure_print(outchar_t *out,
         }
     }
     if (PTRVALID(closure->code))
-        n += value_print(out, root, closure->code);
+        n += value_print_detail(out, root, closure->code, detailed);
     /*n += outchar_printf(out, ")");*/
 
     return (int)n;
@@ -13753,13 +13791,14 @@ parser_source(parser_state_t *parser_state)
 
 static int
 value_coroutine_print(outchar_t *out,
-                      const value_t *root, const value_t *value)
+                      const value_t *root, const value_t *value, bool detailed)
 {   int outlen=0;
     if (value_istype(value, type_coroutine))
     {   parser_state_t *state = (parser_state_t *)value;
         outlen += outchar_printf(out, "$coroutine.{in=%s:%d}",
                                  parser_source(state), parser_lineno(state));
-        /*outlen += value_print(out, root, dir_stack_value(state->env));
+        /*outlen += value_print_detail(out, root, dir_stack_value(state->env),
+                                       detailed);
           outlen += outchar_putc(out, '}');*/
     }
     return outlen;
@@ -15510,7 +15549,8 @@ type_t type_cmd = &type_cmd_val;
 
 
 static int
-value_cmd_print(outchar_t *out, const value_t *root, const value_t *value)
+    value_cmd_print(outchar_t *out, const value_t *root, const value_t *value,
+                    bool detailed)
 {   int n = 0;
     (void)root;
     if (PTRVALID(value) && value_istype(value, type_cmd))
@@ -15677,7 +15717,8 @@ value_func_args(value_func_t *func)
 
 
 static int
-value_func_print(outchar_t *out, const value_t *root, const value_t *value)
+value_func_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   int n = 0;
     (void)root;
     if (PTRVALID(value) && value_istype(value, type_func))
@@ -15790,14 +15831,15 @@ static value_type_t type_func_lhv_val; /* type implementation */
 
 
 static int
-value_func_lhv_print(outchar_t *out, const value_t *root, const value_t *value)
+value_func_lhv_print(outchar_t *out, const value_t *root,
+                     const value_t *value, bool detailed)
 {   int n = 0;
     (void)root;
     if (PTRVALID(value) && value_istype(value, type_func))
     {   value_func_lhv_t *lhv_func = (value_func_lhv_t *)value;
         /*value_func_t *func = &lhv_func->fn;*/
         n += outchar_printf(out, "{");
-        n += value_print(out, root, lhv_func->lv_name);
+        n += value_print_detail(out, root, lhv_func->lv_name, detailed);
         n += outchar_printf(out, "="BUILTIN_ARG"1}");
     }
     return n;
@@ -15941,7 +15983,8 @@ values_func_init(void)
 
 
 static int
-value_mem_print(outchar_t *out, const value_t *root, const value_t *value)
+    value_mem_print(outchar_t *out, const value_t *root, const value_t *value,
+                    bool detailed)
 {   int n = 0;
     (void)root;
     if (PTRVALID(value) && value_istype(value, type_mem))
@@ -16826,7 +16869,8 @@ const value_t *value_false = &value_closure_false.value;
 
 
 static int
-value_bool_print(outchar_t *out, const value_t *root, const value_t *value)
+value_bool_print(outchar_t *out, const value_t *root, const value_t *value,
+                 bool detailed)
 {   (void)root;
     if (value == value_false)
         return outchar_printf(out, "FALSE");
@@ -19792,9 +19836,9 @@ mod_execv(const value_t **out_val,
                                      delim, execpath, state);
     }
     
-    if (!parsed_ok)
+    if (!parsed_ok && delim != NULL)
     {
-        /* try to execute command with FN_UNDEF_HOOK */
+        /* try to execute command (but not option) with FN_UNDEF_HOOK */
         const value_t *pcmdsval =
             dir_stringl_get(dir_stack_dir(state->env),
                             FTLDIR_PARSE, strlen(FTLDIR_PARSE));
@@ -20330,14 +20374,21 @@ argv_cli_ending(parser_state_t *state, const char *code_name,
                 const char *execpath, const char **argv, int argc,
                 bool *out_ends_with_comma)
 {   const value_t *value = NULL;
+    bool ok;
     codeid_set(code_name);
-    return parser_argv_exec(state, &argv, &argc, /*delim*/",", execpath,
-                            parser_env(state),
-                            /* expect_no_locals */TRUE,
-                            /* function dealing with results from command
-                             * evaluations */&default_register_result,
-                            /*with_results_arg*/NULL,
-                            &value, out_ends_with_comma);
+    ok = parser_argv_exec(state, &argv, &argc, /*delim*/",", execpath,
+                          parser_env(state),
+                          /* expect_no_locals */TRUE,
+                          /* function dealing with results from command
+                           * evaluations */&default_register_result,
+                          /*with_results_arg*/NULL,
+                          &value, out_ends_with_comma);
+    if (ok && argc > 0)
+    {   parser_error(state, "%d command line argument%s unused - %s%s\n",
+                     argc, argc>1? "s":"", argv[0], argc>1? " ...":"");
+        ok = FALSE;
+    }
+    return ok;
 }
 
 
@@ -22857,8 +22908,9 @@ fn_stringify(const value_t *this_fn, parser_state_t *state)
         if (!value_stream_sink(stream, &sink))
             parser_error(state, "stream not open for output\n");
         else
-            val = value_int_new(value_print(sink, dir_value(parser_root(state)),
-                                            obj));
+            val = value_int_new(
+                      value_print_detail(sink, dir_value(parser_root(state)),
+                                         obj, /*detailed*/FALSE));
     } else
         parser_report_help(state, this_fn);
 
@@ -24044,7 +24096,8 @@ fn_str(const value_t *this_fn, parser_state_t *state)
         const char *body;
         size_t blen;
 
-        value_print(sink, dir_value(parser_root(state)), obj);
+        value_print_detail(sink, dir_value(parser_root(state)), obj,
+                           /*detailed*/FALSE);
         charsink_string_buf(sink, &body, &blen);
         val = value_string_new(body, blen);
         charsink_string_close(sink);
@@ -24236,7 +24289,8 @@ genfn_fmt_v(char *buf, size_t buflen, fprint_flags_t flags, int precision,
     (void)buf;
     (void)buflen;
 
-    value_print(sink, dir_value(parser_root(state)), argval);
+    value_print_detail(sink, dir_value(parser_root(state)), argval,
+                       /*detailed*/FALSE);
     charsink_string_buf(sink, &strbuf, &strsize);
     if (precision > 0 && precision < (int)strsize)
         strsize = precision;

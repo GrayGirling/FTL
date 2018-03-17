@@ -187,12 +187,11 @@ usage(const char* msg)
 	fprintf(stderr, "error: %s\n", msg);
 
     fprintf(stderr, "\nusage:\n");
-    fprintf(stderr, "  "CODEID" [-r <randseed>] [-e|-ne] [-c <commands> | [-f] <cmdfile>] "
+    fprintf(stderr, "  "CODEID" [-e|-ne] [-c <commands> | [-f] <cmdfile>] "
 	    "[[--] <script arg>...]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "     [-f] <cmdfile>     - read commands from this file instead of the console\n");
     fprintf(stderr, "     -c \"cmd;cmd;...\"   - execute initial commands\n");
-    fprintf(stderr, "     -r <n>             - set random seed\n");
     fprintf(stderr, "     -[n]e | --[no]emit - "
 		    "[don't] echo executed commands\n");
     fprintf(stderr, "     -q | --quiet       - "
@@ -241,15 +240,6 @@ parse_args(int argc, char **argv,
 		} else
 		    err = "ran out of arguments";
 	    } else
-	    if ((parse_key(&arg, "-r") || parse_key(&arg, "--randomseed")) &&
-		parse_empty(&arg))
-	    {   if (++argn < argc)
-		{   unsigned int seed = (unsigned)strtoul(argv[argn], NULL, 0);
-		    IGNORE(DPRINTF("seed: %d\n", seed));
-		    srand(seed);
-		} else
-		    err = "ran out of arguments";
-	    } else
 	    if ((parse_key(&arg, "-q") || parse_key(&arg, "--quiet")) &&
 		parse_empty(&arg))
 		*out_quiet = TRUE;
@@ -258,12 +248,14 @@ parse_args(int argc, char **argv,
 		parse_empty(&arg))
 		*out_echo = TRUE;
 	    else
-	    if ((parse_key(&arg, "-ne") || parse_key(&arg, "--noemit") ||
+	    if ((parse_key(&arg, "-ne") || parse_key(&arg, "--ne") ||
+            parse_key(&arg, "--noemit") ||
                  parse_key(&arg, "--noecho")) &&
 		parse_empty(&arg))
 		*out_echo = TRUE;
 	    else
-            if ((parse_key(&arg, "-np") || parse_key(&arg, "--noprolog")) &&
+            if ((parse_key(&arg, "-np") || parse_key(&arg, "--np") ||
+            parse_key(&arg, "--noprolog")) &&
 		parse_empty(&arg))
 		*out_do_prolog = FALSE;
 	    else
@@ -761,31 +753,77 @@ main(int argc, char **argv)
                                     codeid(), cmd_file);
                             exit_rc = EXIT_BAD_CMDFRUN;
                         }
-                    } else if (do_args)
-                    {
-                        DEBUG_CLI(fprintf(stderr,
-                                          "%s: executing %d cmd line args\n",
-                                           codeid(), app_argc););
-                        if (!argv_cli(state, codeid(), getenv(ENV_PATH),
-                                      opt_argv, opt_argc))
-                            exit_rc = EXIT_BAD_FTLCMDS;
                     } else
-                    {   if (!quiet)
+                    {
+                        bool do_console = !do_args;
+                        bool insist_console = false;
+
+                        if (do_console && !quiet)
                         {   int ftlmaj, ftlmin, ftldebug;
                             ftl_version(&ftlmaj, &ftlmin, &ftldebug);
                             printf("%s: v%s:%d.%d%s\n",
-                                   CODEID, VERSION, ftlmaj, ftlmin,
+                                   codeid(), VERSION, ftlmaj, ftlmin,
 #ifdef NDEBUG
                                    ""
 #else
                                    " (debug)"
 #endif
-                           );
+                                  );
                         }
-                        cli(state, init, CODEID);
 
-                        if (!quiet)
-                            printf("%s: finished\n", CODEID);
+                        if (do_args)
+                        {
+                            DEBUG_CLI(
+                                fprintf(stderr,
+                                        "%s: executing %d command line args\n",
+                                        codeid(), opt_argc););
+                            if (!argv_cli_ending(state, codeid(),
+                                                 getenv(ENV_PATH),
+                                                 opt_argv, opt_argc,
+                                                 &insist_console))
+                            {   usage(NULL);
+                                exit_rc = EXIT_BAD_FTLCMDS;
+                            }
+                        }
+
+#ifdef FTL_CMDNAME_NOCLI
+                        if (exit_rc == EXIT_OK)
+                        {
+                            bool allow_console = true;
+                            const value_t *code =
+                                dir_string_get(parser_env(state),
+                                               FTL_CMDNAME_NOCLI);
+                            if (code != NULL)
+                            {
+                                const value_t *cmd_response;
+                                DEBUG_CLI(printf(CODEID
+                                                 " calling '%s' function\n",
+                                          FTL_CMDNAME_NOCLI););
+                                cmd_response = invoke(code, state);
+                                allow_console = cmd_response != value_false;
+                                do_console = do_console & allow_console;
+                            }
+                            DEBUG_CLI(
+                                else
+                                    printf(CODEID
+                                           " couldn't find '%s' function\n",
+                                           FTL_CMDNAME_NOCLI);
+                            );
+                        }
+#endif
+
+                        if (exit_rc == EXIT_OK)
+                        {
+                            if (do_console || insist_console)
+                            {
+                                DEBUG_CLI(fprintf(stderr, "%s: executing from console\n",
+                                                  codeid()););
+                                cli(state, init, codeid());
+
+                                if (!quiet)
+                                    printf("%s: finished\n", CODEID);
+                            }
+                        }
                     }
                 }
 	        ftl_libs_end(state);
