@@ -7629,8 +7629,8 @@ value_dir_bind_print(dir_t *dir, const value_t *name,
             pr->len += value_print_detail(out, root, name, pr->detailed);
         pr->len += outchar_printf(out, "=");
         OMIT(pr->len += outchar_printf(out, "(%s)#%p ",
-                                         value_type_name(value), value);)
-        pr->len += value_print(out, root, value);
+                                       value_type_name(value), value););
+        pr->len += value_print_detail(out, root, value, pr->detailed);
 
         return NULL;
     }
@@ -12820,10 +12820,10 @@ value_env_print_relative(outchar_t *out, const value_t *root, bool unbound_only,
 
             pr.len += outchar_printf(out, "[");
 
-            if (detailed)
-                env_root = (*dir->forall)(dir, &value_env_bind_print, &pr);
+            if (unbound_only)
+                env_root = (*dir->forall)(dir, &value_env_bind_findroot, &pr);
             else
-                env_root = (*dir->forall)(dir, &value_env_bind_findroot, &pr);;
+                env_root = (*dir->forall)(dir, &value_env_bind_print, &pr);
 
             while (PTRVALID(unbound))
             {   if (pr.vals > 0)
