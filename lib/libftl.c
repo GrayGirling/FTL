@@ -3741,6 +3741,21 @@ linesource_pop(linesource_t *lines)
 
 
 
+/*! Replace the current instack of char sources with an empty stack
+ *  Return the previous stack
+ */
+extern charsource_t *
+linesource_drain(linesource_t *lines)
+{   charsource_t *oldstack = lines->in;
+    instack_init(&lines->in);
+    return oldstack;
+}
+
+
+
+
+
+
 /*! Remove the given charsource if it is still to be found on the stack
  *  of line sources, return TRUE if the charsource was found (and removed)
  */
@@ -20177,7 +20192,16 @@ parser_report_trailing(parser_state_t *state, const char *msg,
 
 
 
-/* This function may cause a garbage collection */
+/*  Start a new instack pushing given sources on to it and execute until empty
+ *  Sources are
+ *     - a file, given by name (if not NULL)
+ *     - a string (if not NULL)
+ *     - a provided charsource_t (if not NULL)
+ *  Each is pushed onto the instack in reverse order so that the execution order
+ *  will be as above.
+ *  When complete the original instack is replaced.
+ *  This function may cause a garbage collection
+ */
 extern const value_t *
 parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                        const char *cmd_str, const char *rcfile_id,
@@ -23104,7 +23128,10 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
                          "couldn't open file \"%s\" to read - %s (rc %d)\n",
                          &filename[0], strerror(errno), errno);
         } else
-            linesource_push(parser_linesource(state), inchars);
+        {   (void)parser_expand_exec_int(state, inchars, NULL, NULL,
+                                         /*expect_no_locals*/FALSE,
+                                         /*interactive*/FALSE);
+        }
     } else
         parser_error(state, "file name expected\n");
 

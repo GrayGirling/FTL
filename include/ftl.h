@@ -412,6 +412,12 @@ linesource_push(linesource_t *lines, charsource_t *source);
 extern charsource_t *
 linesource_pop(linesource_t *lines);
 
+/*! Replace the current instack of char sources with an empty stack
+ *  Return the previous stack
+ */
+extern charsource_t *
+linesource_drain(linesource_t *lines);
+    
 extern const char *
 linesource_source(linesource_t *lines);
 
@@ -1654,6 +1660,9 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
 /*! Execute the commands provided from three sources in order
  *  This is an internal function implementing a range of others (that follow
  *  as macro definitions)
+ *
+ *  The parser's current instack is saved and restored once the instack provided
+ *  here is completed.
  *
  *  First execute the commands in \c rcfile_id - which is found on the
  *     RC directory path - unless \c rcfile_id is NULL
