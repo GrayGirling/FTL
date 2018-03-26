@@ -16499,6 +16499,160 @@ values_mem_init(void)
 
 /*****************************************************************************
  *                                                                           *
+ *          Parsing Tokens                                                   *
+ *          ==============                                                   *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+typedef struct argv_token_s {
+    const char ***ref_argv;/* &array of strings */
+    int *ref_argc;         /* &number of strings in array */
+    const char *delim;    /* NULL: parse options, or parse delim sep sentence */
+    const char *term;      /* terminating token for sentence */
+} argv_token_t;
+
+
+
+#define ARGV_TOKEN_fmt "argv %d '%s'... delim '%s' term '%s'"
+#define ARGV_TOKEN_arg(argv) \
+    *(argv)->ref_argc, (*(argv)->ref_argv)[0], \
+    (argv)->delim==NULL? "<none>": (argv)->delim,   \
+    (argv)->term==NULL? "<none>": (argv)->term
+
+
+static void argv_init(argv_token_t *args, const char ***ref_argv,
+                      int *ref_argc, const char *delim,
+                      const char *term)
+{
+    args->ref_argv = ref_argv;
+    args->ref_argc = ref_argc;
+    args->delim    = delim;
+    args->term     = term;
+}
+
+
+
+static const char *argv_token(argv_token_t *args)
+{
+    return (*args->ref_argc) > 0? (*(args->ref_argv))[0]: NULL;
+}
+
+
+
+/* returns TRUE if there is a token still to be read */
+static bool argv_next(argv_token_t *args)
+{   DEBUG_ARGV(
+        const char *token = argv_token(args);
+        DPRINTF("%s: shift '%s'\n", codeid(),
+                token == NULL? "<nothing>": token);
+    );
+    if ((*args->ref_argc) > 0)
+    {   (*args->ref_argc)--;
+        (*args->ref_argv)++;
+        return (*args->ref_argc) > 0;
+    } else
+        return FALSE;
+}
+
+
+
+static bool is_option(const char *token)
+{
+    return token[0] == '-' && token[1] != '\0';
+}
+
+
+static bool argv_is_delim(argv_token_t *args, const char *token)
+{
+    bool is_delim = token != NULL && args->delim != NULL &&
+                    0 == strcmp(token, args->delim);
+    DEBUG_ARGV(DPRINTF("%s: '%s' is%s a delimiter\n",
+                       codeid(), token == NULL? "<nothing>": token,
+                       is_delim? "": " not"););
+    return is_delim;
+}
+
+
+static bool argv_delimited(argv_token_t *args)
+{
+    return args->delim != NULL;
+}
+
+
+
+static bool argv_argcount(argv_token_t *args)
+{
+    return *(args->ref_argc);
+}
+
+
+
+static const char **argv_tokens(argv_token_t *args)
+{
+    return *(args->ref_argv);
+}
+
+
+
+static bool argv_sentence_end(argv_token_t *args, const char *token)
+{   if (token == NULL)
+        return TRUE;
+    else if (args->term != NULL && 0 == strcmp(token, args->term))
+        return TRUE;
+    else if (args->delim == NULL) {
+        /* This is part of an --options sequence */
+        return is_option(token);
+    }
+    else {
+        /* This is part of an token sentence sequence */
+        return 0 == strcmp(token, args->delim);
+    }
+}
+
+
+static bool argv_at_end(argv_token_t *args, const char *token)
+{   if (token == NULL)
+        return TRUE;
+    else if (args->term != NULL && 0 == strcmp(token, args->term))
+        return TRUE;
+    else if (args->delim == NULL) {
+        /* This is part of an --options sequence */
+        return 0 == strcmp("--", token);
+    }
+    else {
+        /* This is part of an token sentence sequence */
+        return FALSE;
+    }
+}
+
+
+/* Returns TRUE if there is a token still to be read in the current sentence
+ *
+ * If args->delim != NULL then a sentence is
+ *      <tok>... [<delim> | <term> | EOF]
+ * otherwise it is
+ *      -[-]<headtok> <tok>... [-[-]<headtok> | <term> | <EOF>]
+ *
+ * In each case the terminating symbol remains current after parsing.
+ */
+static bool argv_sentence_next(argv_token_t *args)
+{   if (argv_next(args))
+        return !argv_sentence_end(args, argv_token(args));
+    else
+        return FALSE;
+}
+    
+    
+
+    
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Modules                                                          *
  *          =======                                                          *
  *                                                                           *
@@ -16731,23 +16885,21 @@ mod_parse_cmd(dir_t *dir, const char **ref_line, const value_t **out_cmd)
  *  and ref_argn are updated to point to the next symbol in the list.
  */
 extern bool
-mod_parse_argv(dir_t *dir, const char ***ref_argv, int *ref_argn,
-               const value_t **out_val)
+mod_parse_argv(dir_t *dir, argv_token_t *args, const value_t **out_val)
 {   const value_t *cmd = NULL;
     bool ok = FALSE;
+    const char *cmdname = argv_token(args);
 
-    if (*ref_argn > 0)
-    {   const char *cmdname = (*ref_argv)[0];
-        cmd = dir_string_get(dir, cmdname);
+    if (cmdname != NULL)
+    {   cmd = dir_string_get(dir, cmdname);
         ok = (cmd != NULL);
+        DEBUG_ARGV(printf("%s: %sfound command '%s'\n",
+                          codeid(), ok? "":"not ", cmdname););
     }
 
     if (ok)
     {   *out_val = cmd;
-        DEBUG_ARGV(printf("%s: shift argv %d '%s'\n",
-                          codeid(), *ref_argn, (*ref_argv)[0]););
-        (*ref_argn)--;
-        (*ref_argv)++;
+        argv_next(args);
     }
     return ok;
 }
@@ -16768,28 +16920,28 @@ mod_parse_argv(dir_t *dir, const char ***ref_argv, int *ref_argn,
  *  and ref_argn are updated to point to the next symbol in the list.
  */
 extern bool
-mod_parse_optargv(dir_t *dir, const char ***ref_argv, int *ref_argn,
-                  const value_t **out_val)
+mod_parse_optargv(dir_t *dir, argv_token_t *args, const value_t **out_val)
 {   const value_t *cmd = NULL;
     bool ok = FALSE;
+    const char *cmdname = argv_token(args);
 
-    if (*ref_argn > 0)
-    {   const char *cmdname = (*ref_argv)[0];
-        if (cmdname[0] == '-') {
+    if (cmdname != NULL)
+    {   if (cmdname[0] == '-' && cmdname[1] != '\0') {
             cmdname++;
             if (cmdname[0] == '-')
                 cmdname++;
             ok = TRUE;
             cmd = dir_string_get(dir, cmdname);
         }
+        DEBUG_ARGV(printf("%s: %sfound option '%s'\n",
+                          codeid(), ok? "":"not ", cmdname););
     }
 
     if (ok)
     {   *out_val = cmd;
-        DEBUG_ARGV(printf("%s: shift --argv %d '%s'\n",
-                          codeid(), *ref_argn, (*ref_argv)[0]););
-        (*ref_argn)--;
-        (*ref_argv)++;
+        DEBUG_ARGV(printf("%s: shift --" ARGV_TOKEN_fmt "\n",
+                          codeid(), ARGV_TOKEN_arg(args)););
+        argv_next(args);
         return TRUE;
     } else
         return FALSE;
@@ -18589,7 +18741,6 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
 
 
 
-
 /*! Parse ['^' <expr|token_as_string> '^'*]
  *  Parse token_as_string if token_strings is TRUE otherwise parse expressions.
  *  This function may cause a garbage collection
@@ -18597,102 +18748,121 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
  *  the first token following --option.
  */
 static bool
-parse_substitution_argv(const char *fnname,
-                        const char ***ref_argv, int *ref_argn,
-                        parser_state_t *state, const char *delim,
-                        bool token_strings,
+parse_substitution_argv(const char *fnname, argv_token_t *args,
+                        parser_state_t *state, bool token_strings,
                         const value_t **ref_val)
 {   /* '^'* [<retrieval> '^'*]* */
     bool ok = TRUE;
     const value_t *newarg = NULL;
-    const char *line = (*ref_argv)[0];  /* treat token as a line of FTL */
     bool complete = FALSE; /* run out of requirement for arguments */
-    bool pling = FALSE;
-    bool goodarg = TRUE;
+    bool do_invoke = FALSE;
+    bool do_subst = TRUE;
     bool autoexec = !token_strings;
                     /* invoke closures with no remaining arguments */
 
+    DEBUG_ARGV(DPRINTF("%s: subst argv '%s' " ARGV_TOKEN_fmt "\n",
+                       codeid(), fnname==NULL? "function": fnname,
+                       ARGV_TOKEN_arg(args)););
     /* execute *ref_argn if argument is pling or if it is a bound closure */
-    while (ok && (
-           (pling = (*ref_argn > 0 &&
-                     parse_argv_pling(&line) && parse_empty(&line))) ||
-           (autoexec &&
-                value_type_equal(*ref_val, type_closure) &&
-                NULL == value_closure_unbound(*ref_val))))
-    {   if (pling)
+    do {
+        const char *line = argv_token(args);
+
+        if (line != NULL && parse_argv_pling(&line) && parse_empty(&line))
         {
-            DEBUG_ARGV(DPRINTF("%s: subst auto ! argv %d '%s'\n",
-                               codeid(), *ref_argn, (*ref_argv)[0]););
-            (*ref_argv)++;
-            (*ref_argn)--;
-            line = (*ref_argv)[0];
+            DEBUG_ARGV(DPRINTF("%s: subst auto ! " ARGV_TOKEN_fmt "\n",
+                               codeid(), ARGV_TOKEN_arg(args)););
+            /* shift ! and read next token */
+            complete = !argv_sentence_next(args);
         } else
+        if (autoexec && value_type_equal(*ref_val, type_closure) &&
+            NULL == value_closure_unbound(*ref_val))
             complete = TRUE;
-        DEBUG_MOD(DPRINTF("%s: invoke argv function\n", codeid()););
-        *ref_val = invoke(*ref_val, state);
-    }
+        else
+            do_invoke = false;
 
-    while (ok && *ref_argn > 0 && !complete &&
-           (delim == NULL?
-                (*ref_argv)[0][0] != '-':
-                0 != strcmp(delim, (*ref_argv)[0]))
-           &&
-           (goodarg = token_strings?
-                          NULL != (newarg = value_string_new_measured(line)):
-                          parse_operator_expr(&line, state, &newarg) &&
-                              parse_empty(&line))
-          )
-    {   const value_t *code = *ref_val;
-
-        DEBUG_MOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
-                         codeid(), fnname==NULL? "function": fnname,
-                         token_strings? " as string": "", line););
-        *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
-
-        if (NULL == *ref_val)
-            ok = FALSE;
-
-        DEBUG_ARGV(DPRINTF("%s: subst argv %d '%s' delim %s\n",
-                           codeid(), *ref_argn, (*ref_argv)[0], delim););
-        (*ref_argv)++;
-        (*ref_argn)--;
-        line = (*ref_argv)[0];
-
-        while (ok && *ref_argn > 0 &&
-               (delim == NULL?
-                    (*ref_argv)[0][0] != '-':
-                     0 != strcmp(delim, (*ref_argv)[0]))
-               &&
-               (
-                (pling = (*ref_argn > 0 &&
-                          parse_argv_pling(&line) && parse_empty(&line))) ||
-                (autoexec &&
-                     value_type_equal(*ref_val, type_closure) &&
-                     NULL == value_closure_unbound(*ref_val))
-               )
-            )
-        {   if (pling)
-            {
-                DEBUG_ARGV(DPRINTF("%s: subst post auto ! argv %d '%s'\n",
-                                   codeid(), *ref_argn, (*ref_argv)[0]););
-                (*ref_argv)++;
-                (*ref_argn)--;
-                line = (*ref_argv)[0];
-            } else
-                complete = TRUE;
-
-            DEBUG_MOD(DPRINTF("%s: invoke argv '%s' function after substitute\n",
-                             codeid(), fnname==NULL? "function": fnname););
+        if (do_invoke)
+        {
+            DEBUG_ARGV(DPRINTF("%s: invoke argv '%s' %scomplete\n",
+                               codeid(), fnname==NULL? "function": fnname,
+                               complete? "": "not "););
             *ref_val = invoke(*ref_val, state);
-            DEBUG_MOD(DPRINTF("%s: returns '%s' value\n",
-                             codeid(), type_name((*ref_val)->kind)););
         }
-    }
+    } while (do_invoke && !complete);
+    
+    while (!complete && do_subst)
+    {   const value_t *code = *ref_val;
+        const char *line = argv_token(args);
 
-    if (!goodarg)
-    {   parser_error(state, "can't parse %s argument - '%s'\n",
-                     fnname==NULL? "the": fnname, line);
-        ok = FALSE;
+        do_subst = FALSE;
+        if (!argv_sentence_end(args, line))
+        {
+            if (token_strings)
+            {   newarg = value_string_new_measured(line);
+                do_subst = (NULL != newarg);
+            }
+            else
+            {   do_subst = parse_operator_expr(&line, state, &newarg) &&
+                           parse_empty(&line);
+            }
+
+            if (do_subst)
+            {
+                DEBUG_ARGV(DPRINTF("%s: subst %s " ARGV_TOKEN_fmt "\n",
+                                   codeid(), fnname==NULL? "function": fnname,
+                                   ARGV_TOKEN_arg(args)););
+
+                DEBUG_MOD(DPRINTF("%s: apply argv '%s' argument%s '%s'\n",
+                                 codeid(), fnname==NULL? "function": fnname,
+                                 token_strings? " as string": "", line););
+                *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
+
+                if (NULL == *ref_val)
+                    ok = FALSE;
+
+                /* we've used the current token, get another if there is one */
+                complete = !argv_sentence_next(args);
+
+                do_invoke = true;
+                while (ok && !complete && do_invoke)
+                {
+                    const char *line = argv_token(args);
+
+                    if (!argv_sentence_end(args, line))
+                    {
+                        if (line != NULL &&
+                            parse_argv_pling(&line) && parse_empty(&line))
+                        {
+                            DEBUG_ARGV(DPRINTF("%s: subst post auto ! "
+                                               ARGV_TOKEN_fmt "\n",
+                                               codeid(), ARGV_TOKEN_arg(args)););
+                            /* shift ! and read next token */
+                            complete = !argv_sentence_next(args);
+                        } else
+                        if (autoexec && value_type_equal(*ref_val, type_closure) &&
+                            NULL == value_closure_unbound(*ref_val))
+                            complete = TRUE;
+                        else
+                            do_invoke = false;
+                    }
+
+                    if (do_invoke)
+                    {
+                        DEBUG_MOD(DPRINTF("%s: invoke argv '%s' fn after subst\n",
+                                         codeid(),
+                                          fnname==NULL? "function": fnname););
+                        *ref_val = invoke(*ref_val, state);
+                        DEBUG_MOD(DPRINTF("%s: returns '%s' value\n",
+                                         codeid(), type_name((*ref_val)->kind)););
+                    }
+                }
+            }
+            else
+            {   parser_error(state, "can't parse %s argument - '%s'\n",
+                             fnname==NULL? "the": fnname, line);
+                ok = FALSE;
+            }
+        }
+       DEBUG_ARGV(else DPRINTF("%s: subst end at '%s'\n", codeid(), line););
     }
 
     if (ok  && value_type_equal(*ref_val, type_closure))
@@ -18700,6 +18870,8 @@ parse_substitution_argv(const char *fnname,
         if (NULL == value_closure_unbound(*ref_val))
         {   DEBUG_MOD(DPRINTF("%s: invoke argv %s function after substitute\n",
                              codeid(), fnname==NULL? "a": fnname););
+            DEBUG_ARGV(DPRINTF("%s: invoke argv '%s' final\n",
+                               codeid(), fnname==NULL? "function": fnname););
             *ref_val = invoke(*ref_val, state);
         }
         else
@@ -19372,8 +19544,7 @@ mod_exec(const char **ref_line, parser_state_t *state);
 
 /* forward reference */
 static bool
-mod_execv(const value_t **out_val,
-          const char ***ref_argv, int *ref_argn, const char *delim,
+mod_execv(const value_t **out_val, argv_token_t *args,
           const char *execpath, dir_t *dir, parser_state_t *state);
 
 
@@ -19477,43 +19648,30 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
 
 
 
-static size_t
-argv_to_string(const char ***ref_argv, int *ref_argn, const char *delim,
-               char *buf, size_t len)
+static size_t argv_to_string(argv_token_t *args, char *buf, size_t len)
 {   char *bufstart = buf;
-    bool complete = *ref_argn <= 0;
+    const char *next;
+        
+    while ((next = argv_token(args)), !argv_sentence_end(args, next))
+    {   size_t n;
 
-    while (!complete)
-    {   const char *next = (*ref_argv)[0];
-        size_t n;
-
-        if (delim == NULL && next[0] == '-')
-            complete = TRUE;
+        if (NULL != strchr(next, ' ') || NULL != strchr(next, '\n')  ||
+            NULL != strchr(next, '\t'))
+            n = snprintf(buf, len, "\"%s\" ", next);
         else
-        {
-            if (delim != NULL && 0 == strcmp(delim, next))
-                complete = TRUE;
-            else {
-                if (NULL != strchr(next, ' ') || NULL != strchr(next, '\n')  ||
-                    NULL != strchr(next, '\t'))
-                    n = snprintf(buf, len, "\"%s\" ", next);
-                else
-                    n = snprintf(buf, len, "%s ", next);
+            n = snprintf(buf, len, "%s ", next);
 
-                if (n < len)
-                {   len -= n;
-                    buf += n;
-                } else
-                {   buf += len;
-                    len = 0;
-                }
-                DEBUG_ARGV(printf("%s: shift argv string %d '%s'\n",
-                                  codeid(), *ref_argn, (*ref_argv)[0]););
-                (*ref_argv)++;
-                (*ref_argn)--;
-                complete = *ref_argn <= 0;
-            }
+        if (n < len)
+        {   len -= n;
+            buf += n;
+        } else
+        {   buf += len;
+            len = 0;
         }
+        DEBUG_ARGV(printf("%s: string+=shift " ARGV_TOKEN_fmt "\n",
+                          codeid(), ARGV_TOKEN_arg(args)););
+
+        argv_next(args);
     }
 
     if (buf != bufstart)
@@ -19537,12 +19695,13 @@ argv_to_string(const char ***ref_argv, int *ref_argn, const char *delim,
 
 
 /*! Parse the prefix symbols from argv as arguments for the invocation of a
- *  FTL value.
+ *  FTL value (typically a closure).
  *
  *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
  *    @param ref_argn  - updatable reference number of syms in array
  *    @param execpath  - directory path from which to take FTL sources
- *    @param delim     - NULL or a marker for end of sequence to execute
+ *    @param delim     - NULL or a token for end of tokens in sentence 
+ *    @param term      - NULL or a token for end of sentences
  *    @param value     - the value to execute
  *    @param state     - current parser state
  *
@@ -19558,14 +19717,14 @@ argv_to_string(const char ***ref_argv, int *ref_argn, const char *delim,
  */
 /* This function may cause a garbage collection */
 static const value_t *
-mod_invoke_argv(const char *fnname,
-                const char ***ref_argv, int *ref_argn, const char *execpath,
-                const value_t *value, const char *delim, parser_state_t *state)
+mod_invoke_argv(const char *fnname, argv_token_t *args, const char *execpath,
+                const value_t *value, parser_state_t *state)
 {   DEBUG_TRACE(DPRINTF("mod argv exec: %s [%d]\n",
                        value_type_name(value), *ref_argn););
     DEBUG_ENV(VALUE_SHOW("mod argv exec env: ", dir_value(parser_env(state))););
-    DEBUG_ARGV(DPRINTF("%s: mod argv %d '%s' delim '%s'\n",
-                       codeid(), *ref_argn, (*ref_argv)[0], delim););
+    DEBUG_ARGV(DPRINTF("%s: mod invoke '%s' " ARGV_TOKEN_fmt "\n",
+                       codeid(), fnname == NULL? "function": fnname,
+                       ARGV_TOKEN_arg(args)););
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code = NULL;
@@ -19583,14 +19742,13 @@ mod_invoke_argv(const char *fnname,
         if (value_type_equal(code, type_cmd))
         {   /* special case - commands do their own parsing */
             DEBUG_MOD(DPRINTF("%s: invoke argv closure code\n", codeid()););
-            retval = mod_invoke_argv(fnname, ref_argv, ref_argn, execpath,
-                                     code, delim, state);
+            retval = mod_invoke_argv(fnname, args, execpath, code, state);
             /* i.e. use code below to process cmd */
         } else
-        {   DEBUG_MOD(DPRINTF("%s: invoke argv closure argument\n",
+        {   DEBUG_MOD(DPRINTF("%s: invoke argv closure code body\n",
                              codeid()););
-            if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
-                                        delim, /*token_strings*/delim==NULL,
+            if (parse_substitution_argv(fnname, args, state,
+                                        /*token_strings*/!argv_delimited(args),
                                         &value))
             {   retval = value;
                 DEBUG_MOD(DPRINTF("%s: applied argv substitution OK\n",
@@ -19606,8 +19764,8 @@ mod_invoke_argv(const char *fnname,
     {   value_cmd_t *cmd = (value_cmd_t *)value;
         char linebuf[FTL_STRING_MAX];
         const char *line = &linebuf[0];
-        /*size_t len = */(void)argv_to_string(ref_argv, ref_argn, delim,
-                                              &linebuf[0], sizeof(linebuf));
+        /*size_t len = */
+        (void)argv_to_string(args, &linebuf[0], sizeof(linebuf));
 
         DEBUG_MOD(DPRINTF("%s: invoke argv direct cmd - arg \"%s\"\n",
                          codeid(), line););
@@ -19632,8 +19790,8 @@ mod_invoke_argv(const char *fnname,
     if (value_type_equal(value, type_func))
     {
         DEBUG_MOD(DPRINTF("%s: invoke argv direct fn\n", codeid()););
-        if (parse_substitution_argv(fnname, ref_argv, ref_argn, state,
-                                    delim, /*token_strings*/delim==NULL,
+        if (parse_substitution_argv(fnname, args, state,
+                                    /*token_strings*/!argv_delimited(args),
                                     &value))
         {   DEBUG_MOD(DPRINTF("%s: invoked argv direct function\n", codeid()););
             return value;
@@ -19647,8 +19805,7 @@ mod_invoke_argv(const char *fnname,
                                               /*outer_visible*/FALSE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
         DEBUG_MOD(DPRINTF("%s: push enclosing argv directory\n", codeid()););
-        if (!mod_execv(&value, ref_argv, ref_argn, delim, execpath,
-                       parser_env(state), state))
+        if (!mod_execv(&value, args, execpath, parser_env(state), state))
             value = &value_null;
         /* return to external environment */
         (void)parser_env_return(state, pos);
@@ -19701,12 +19858,9 @@ mod_exec(const char **ref_line, parser_state_t *state)
 
 
 
-static bool mod_parse_script(const value_t **out_val,
-                             const char ***ref_argv, int *ref_argn,
-                             const char *delim,
-                             const char *execpath, 
-                             parser_state_t *state)
-{   const char *cmd_file = (*ref_argv)[0];
+static bool mod_parse_script(const value_t **out_val, argv_token_t *args,
+                             const char *execpath, parser_state_t *state)
+{   const char *cmd_file = argv_token(args);
     charsource_t *fin =
         charsource_file_path_new(execpath, cmd_file, strlen(cmd_file));
     bool parsed_ok = FALSE;
@@ -19715,25 +19869,23 @@ static bool mod_parse_script(const value_t **out_val,
     DEBUG_EXECV(printf("open '%s' on path '%s' - %s\n", cmd_file, execpath,
                       NULL == fin? "failed": "OK"););
     if (NULL != fin)
-    {   const char **script_argv = *ref_argv;
-        int script_argn = *ref_argn;
+    {   const char **script_argv = argv_tokens(args);
+        int script_argn = argv_argcount(args);
         const value_t *orig_argvec = NULL;
         const value_t *pcmdsval =
             dir_stringl_get(dir_stack_dir(state->env), FTLDIR_PARSE,
                             strlen(FTLDIR_PARSE));
         dir_t *pcmds = NULL;
+        const char *token;
 
         parsed_ok = TRUE;
 
-        (*ref_argv)++;
-        (*ref_argn)--;
+        argv_next(args);
 
         /* give the rest of the line's arguments to the script */
-        if (delim != NULL)
-        {   while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
-                   0 != strcmp((*ref_argv)[0], delim))
-            {   (*ref_argv)++;
-                (*ref_argn)--;
+        if (argv_delimited(args))
+        {   while ((token = argv_token(args)), !argv_sentence_end(args, token))
+            {   argv_next(args);
             }
         }
         else
@@ -19741,18 +19893,16 @@ static bool mod_parse_script(const value_t **out_val,
                if the --optfile is the last option before normal arguments
                the normal arguments will be included unless the user makes
                use of the -- option
+               '-*' is an option, '-' on its own is a value, '--' terminates
             */
-            while (*ref_argn > 0 && NULL != (*ref_argv)[0] &&
-                   (*ref_argv)[0][0] != '-')
-            {   (*ref_argv)++;
-                (*ref_argn)--;
+            while ((token = argv_token(args)), !argv_sentence_end(args, token))
+            {   argv_next(args);
             }
-            if (0 != strcmp((*ref_argv)[0], "--"))
-            {   (*ref_argv)++;
-                (*ref_argn)--;
+            if (!argv_at_end(args, token))
+            {   argv_next(args);
             }
         }
-        script_argn = script_argn - *ref_argn;
+        script_argn = script_argn - argv_argcount(args);
 
         if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir)) {
             /* overwrite parse.argv with scripts arguments */
@@ -19802,6 +19952,8 @@ static bool mod_parse_script(const value_t **out_val,
  *            command was not found)
  *
  *  If delim is NULL we expect an --opt arg arg style of prefix to the symbols.
+ *  When delim is NULL argument parsing will halt either on a '--' token or on
+ *  the token defined as 'term' if it is not NULL.
  *
  *  After execution the locations referred to by ref_argv and ref_argn are
  *  updated to point to the remainder of the symbol list.
@@ -19809,49 +19961,51 @@ static bool mod_parse_script(const value_t **out_val,
  *  This function may cause a garbage collection
  */
 static bool
-mod_execv(const value_t **out_val,
-          const char ***ref_argv, int *ref_argn, const char *delim,
+mod_execv(const value_t **out_val, argv_token_t *args,
           const char *execpath, dir_t *dir, parser_state_t *state)
 {   const value_t *value = NULL;
     bool parsed_ok = FALSE;
-    const char *symbol = (*ref_argv)[0]; 
+    const char *symbol = argv_token(args);
 
-    DEBUG_ARGV(DPRINTF("%s: mod execv argv %d '%s' delim %s\n",
-                       codeid(), *ref_argn, (*ref_argv)[0],
-                       delim==NULL? "<none>": delim););
-    DEBUG_EXECV(DPRINTF("%s; mod execv start: %s ...[%d] "
-                        "(path %s delim '%s')\n",
-                        codeid(), symbol, *ref_argn,
-                        execpath == NULL? "<NONE>": execpath,
-                        delim==NULL? "<unset>": delim););
-    /* Parse the command first */
-    if (delim != NULL? mod_parse_argv(dir, ref_argv, ref_argn, &value):
-                       mod_parse_optargv(dir, ref_argv, ref_argn, &value))
+    DEBUG_ARGV(DPRINTF("%s: mod execv " ARGV_TOKEN_fmt "\n",
+                       codeid(), ARGV_TOKEN_arg(args)););
+    DEBUG_EXECV(DPRINTF("%s; mod execv start: %s ...(" ARGV_TOKEN_fmt ", "
+                        "path %s)\n",
+                        codeid(), symbol, ARGV_TOKEN_arg(args),
+                        execpath == NULL? "<NONE>": execpath););
+
+    /* Skip over any delimiters */
+    while ((symbol = argv_token(args)), argv_is_delim(args, symbol))
+        argv_next(args);
+
+    /* Parse the command */
+
+    if (argv_delimited(args)?
+          mod_parse_argv(dir, args, &value):
+          mod_parse_optargv(dir, args, &value))
     {   DEBUG_EXECV(DPRINTF("mod execv parsed %s '%s'\n",
                            value_type_name(value), symbol););
         if (value == NULL || value == &value_null)
         {   value = NULL; /* signal an error */
             parser_error(state, "%s ignored '%s'\n",
-                         delim==NULL? "option": "function", symbol);
+                         argv_delimited(args)? "option": "function", symbol);
         }
         else
         {   /* delim unlikely to be NULL ... --<opt> won't usually match a file
              * name */
             parsed_ok = TRUE;
             /* execute the command with the next tokens in argv */
-            value = mod_invoke_argv(symbol, ref_argv, ref_argn,
-                                    execpath, value, delim, state);
+            value = mod_invoke_argv(symbol, args, execpath, value, state);
         }
     }
     else
     /* try to execute the option on execpath if it exists */
-    if (execpath != NULL && *ref_argn > 0)
+    if (execpath != NULL && argv_argcount(args) > 0)
     {
-        parsed_ok = mod_parse_script(&value, ref_argv, ref_argn,
-                                     delim, execpath, state);
+        parsed_ok = mod_parse_script(&value, args, execpath, state);
     }
     
-    if (!parsed_ok && delim != NULL)
+    if (!parsed_ok && argv_delimited(args))
     {
         /* try to execute command (but not option) with FN_UNDEF_HOOK */
         const value_t *pcmdsval =
@@ -19866,8 +20020,8 @@ mod_execv(const value_t **out_val,
                 DEBUG_MODEXEC(fprintf(stderr, "%s: exec - found undef handler\n",
                                      codeid()););
                 parsed_ok = TRUE;
-                value = mod_invoke_argv(symbol, ref_argv, ref_argn, execpath,
-                                        on_undef, delim, state);
+                value = mod_invoke_argv(symbol, args, execpath,
+                                        on_undef, state);
                
             } else {
                 DEBUG_MODEXEC(fprintf(stderr, "%s: exec - not found\n",
@@ -20071,14 +20225,17 @@ static bool default_register_result(parser_state_t *state, const char *cmd,
  */
 extern bool
 parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
-                 const char *delim, const char *execpath, dir_t *fndir,
-                 bool expect_no_locals,
+                 const char *delim, const char *term,
+                 const char *execpath, dir_t *fndir, bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
                  const value_t **out_value, bool *out_ends_with_delim)
 {   const value_t *val = NULL;
     linesource_t saved;
     bool executing_prefix = TRUE;
     bool syntax_ok = TRUE;
+    argv_token_t args;
+
+    argv_init(&args, ref_argv, ref_argn, delim, term);
 
     OMIT(DIR_SHOW_ST("Current dir in exec: ", state, parser_env(state)););
     OMIT(DIR_SHOW_ST("Execution dir in exec: ", state, fndir););
@@ -20105,8 +20262,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
             DEBUG_EXECV(DPRINTF("MOD EXECV (%s) --- %s ...[%d]\n",
                                delim == NULL? "opt": delim,
                                (*ref_argv)[0], *ref_argn););
-            executing_prefix = mod_execv(&val, ref_argv, ref_argn, delim,
-                                         execpath, fndir, state);
+            executing_prefix = mod_execv(&val, &args, execpath, fndir, state);
             DEBUG_EXECV(DPRINTF("MOD EXECV --- %s\n",
                                executing_prefix? "OK": "FAILED"););
             if (executing_prefix && val == NULL)
@@ -20400,8 +20556,8 @@ argv_cli_ending(parser_state_t *state, const char *code_name,
 {   const value_t *value = NULL;
     bool ok;
     codeid_set(code_name);
-    ok = parser_argv_exec(state, &argv, &argc, /*delim*/",", execpath,
-                          parser_env(state),
+    ok = parser_argv_exec(state, &argv, &argc, /*delim*/",", /*term*/NULL,
+                          execpath, parser_env(state),
                           /* expect_no_locals */TRUE,
                           /* function dealing with results from command
                            * evaluations */&default_register_result,
@@ -20429,6 +20585,7 @@ argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
     codeid_set(code_name);
     return parser_argv_exec(state, ref_argv, ref_argc,
                             /*delimiter*/NULL/*use --opt style parsing*/,
+                            /*term*/","/*stop parsing options when , seen*/,
                             execpath, fndir, /*expect_no_locals*/TRUE,
                             with_results, with_results_arg,
                             &value, &ends_with_delim);
@@ -24941,7 +25098,7 @@ fn_split(const value_t *this_fn, parser_state_t *state)
 
 
 
-
+#if 0 // not yet in use
 /* cast binary string argument to provided datatype */
 static const value_t *
 bincast(parser_state_t *state, datatype_t *dtype,
@@ -24966,7 +25123,7 @@ bincast(parser_state_t *state, datatype_t *dtype,
 
     return val;
 }
-
+#endif
 
 
 

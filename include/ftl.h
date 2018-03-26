@@ -1650,10 +1650,30 @@ typedef bool register_opt_result_fn(parser_state_t *state, const char *cmd,
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
+/*! Execute argv as delimiter or option separated ftl commands
+ *
+ *  The argv provided is updated and provides the remaining tokens.
+ *    @param state     - current parser state
+ *    @param execpath  - file directory path from which to take FTL sources
+ *    @param ref_argv  - updatable reference to 1st sym in an array of symbols
+ *    @param ref_argn  - updatable reference number of syms in array
+ *    @param delim     - NULL for --opt processing otherwise a delimiter token
+ *    @param fndir     - directory to take parsing function definitions from
+ *    @param with_results - function for dealing with command results
+ *    @param with_results_arg - argument to provide with \c with_results
+ *    @param out_value - last value created by the commands
+ *    @param out_ends_with_delim - TRUE when last parsed item is the delimiter
+ *
+ *  If delim is NULL only the initial commands that consist of --opt style
+ *  tokens are parsed (until the following --opt style entry or until --).
+ *  Otherwise command sequences between delim options are parsed.
+ *
+ *  This function may cause a garbage collection
+ */
 extern bool
 parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
-                 const char *delim, const char *execpath, dir_t *fndir,
-                 bool expect_no_locals,
+                 const char *delim, const char *term,
+                 const char *execpath, dir_t *fndir, bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
                  const value_t **out_value, bool *out_ends_with_delim);
 
