@@ -285,7 +285,7 @@
 #define ENV_FTL_RCFILE_POST "_RC"
 #ifdef _WIN32
 #define ENV_FTL_HOMEDIR        "USERPROFILE"
-#define ENV_FTL_HOMEDIR_HOME   OS_FILE_SEP "My Documents"
+#define ENV_FTL_HOMEDIR_HOME   OS_FILE_SEP "Documents"
 #define ENV_FTL_RCFILE_DEFAULT(code_name) \
                   "%s%s", code_name, ".rc"
 #define ENV_FTL_PATH(code_name) \
@@ -453,12 +453,13 @@
 // #define DEBUG_MOD DO
 // #define DEBUG_SOCK DO 
 // #define DEBUG_OP DO 
-// #define DEBUG_RCFILE DO 
+// #define DEBUG_RCFILE DO
 // #define DEBUG_EXECV DO
 // #define DEBUG_MODEXEC DO 
 // #define DEBUG_CMP DO 
 // #define DEBUG_MEMDIFF DO 
 // #define DEBUG_ARGV DO
+// #define DEBUG_FILEPATH DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_GC
@@ -482,6 +483,7 @@
 #undef DEBUG_CMP
 #undef DEBUG_MEMDIFF
 #undef DEBUG_ARGV
+#undef DEBUG_FILEPATH
 #endif
 
 
@@ -548,6 +550,9 @@
 #endif
 #ifndef DEBUG_ARGV
 #define DEBUG_ARGV OMIT
+#endif
+#ifndef DEBUG_FILEPATH
+#define DEBUG_FILEPATH OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -1994,8 +1999,9 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
                 memcpy(namebuf, name, namelen);
                 namebuf[namelen] = '\0';
             }
-            OMIT(fprintf(stderr, "%s: open absolute '%s' %s\n",
-                           codeid(), name, stream!=NULL?"OK":"FAILED"););
+            DEBUG_FILEPATH(
+                DPRINTF("%s: open absolute '%s' %s\n",
+                        codeid(), name, stream!=NULL?"OK":"FAILED"););
         } /* else buffer not big enough for this path prefix */
     } else {
         const char *pathpos;
@@ -2029,8 +2035,9 @@ fopen_onpath(const char *path, const char *name, size_t namelen,
                     namebuf[prefixlen+1+namelen] = '\0';
                 }
                 stream = fopen(namebuf, mode);
-                OMIT(fprintf(stderr, "%s: open '%s' %s\n",
-                               codeid(), namebuf, stream!=NULL?"OK":"FAILED"););
+                DEBUG_FILEPATH(
+                    DPRINTF("%s: open '%s' %s\n",
+                            codeid(), namebuf, stream!=NULL?"OK":"FAILED"););
             } /* else buffer not big enough for this path prefix */
 
             if (OS_PATH_SEP == *pend)
@@ -2056,11 +2063,20 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
     FILE *stream = NULL;
     charsource_file_t *source = NULL;
 
-    if (NULL != name)
+    if (NULL != name) {
         /*expand file name into fullname[] */
         stream = fopen_onpath(path, name, namelen, "r",
                               &fullname[0], sizeof(fullname));
-
+        DEBUG_FILEPATH(
+            DPRINTF("%s: Attempting to read '%s' on path '%s' -",
+                    codeid(), name, path);
+            if (stream == NULL) {
+                DPRINTF("FAILS\n");
+            } else {
+                DPRINTF("gives '%s'\n", &fullname[0]);
+            }
+        );
+    }
     if (NULL != stream)
     {   source = (charsource_file_t *)
                  FTL_MALLOC(sizeof(charsource_file_t));
@@ -14266,7 +14282,7 @@ parser_throw(parser_state_t *parser_state, const value_t *exception)
 
 extern const value_t *
 parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
-                  void *call_arg, bool *out_ok)
+                  void *call_arg, wbool *out_ok)
 {
     parser_state_t saved_state;
     dir_t *saved_stack = NULL;
@@ -14309,7 +14325,7 @@ static const value_t *parser_call_invoke(parser_state_t *state, void *call_arg)
 
 
 extern const value_t *
-parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok)
+parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok)
 {
     return parser_catch_call(state, &parser_call_invoke, (void *)code, out_ok);
 }
@@ -16536,10 +16552,32 @@ static void argv_init(argv_token_t *args, const char ***ref_argv,
 
 
 
-static const char *argv_token(argv_token_t *args)
+STATIC_INLINE const char *argv_token(argv_token_t *args)
 {
-    return (*args->ref_argc) > 0? (*(args->ref_argv))[0]: NULL;
+    return *(args->ref_argc) > 0? (*(args->ref_argv))[0]: NULL;
 }
+
+
+
+STATIC_INLINE const char **argv_tokens(argv_token_t *args)
+{
+    return *(args->ref_argv);
+}
+
+
+
+STATIC_INLINE int argv_tokencount(argv_token_t *args)
+{
+    return *(args->ref_argc);
+}
+
+
+
+STATIC_INLINE bool argv_delimited(argv_token_t *args)
+{
+    return args->delim != NULL;
+}
+
 
 
 
@@ -16560,7 +16598,7 @@ static bool argv_next(argv_token_t *args)
 
 
 
-static bool is_option(const char *token)
+STATIC_INLINE bool is_option(const char *token)
 {
     return token[0] == '-' && token[1] != '\0';
 }
@@ -16575,27 +16613,6 @@ static bool argv_is_delim(argv_token_t *args, const char *token)
                        is_delim? "": " not"););
     return is_delim;
 }
-
-
-static bool argv_delimited(argv_token_t *args)
-{
-    return args->delim != NULL;
-}
-
-
-
-static bool argv_argcount(argv_token_t *args)
-{
-    return *(args->ref_argc);
-}
-
-
-
-static const char **argv_tokens(argv_token_t *args)
-{
-    return *(args->ref_argv);
-}
-
 
 
 static bool argv_sentence_end(argv_token_t *args, const char *token)
@@ -19870,7 +19887,7 @@ static bool mod_parse_script(const value_t **out_val, argv_token_t *args,
                       NULL == fin? "failed": "OK"););
     if (NULL != fin)
     {   const char **script_argv = argv_tokens(args);
-        int script_argn = argv_argcount(args);
+        int script_argn = argv_tokencount(args);
         const value_t *orig_argvec = NULL;
         const value_t *pcmdsval =
             dir_stringl_get(dir_stack_dir(state->env), FTLDIR_PARSE,
@@ -19902,7 +19919,7 @@ static bool mod_parse_script(const value_t **out_val, argv_token_t *args,
             {   argv_next(args);
             }
         }
-        script_argn = script_argn - argv_argcount(args);
+        script_argn = script_argn - argv_tokencount(args);
 
         if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir)) {
             /* overwrite parse.argv with scripts arguments */
@@ -20000,7 +20017,7 @@ mod_execv(const value_t **out_val, argv_token_t *args,
     }
     else
     /* try to execute the option on execpath if it exists */
-    if (execpath != NULL && argv_argcount(args) > 0)
+    if (execpath != NULL && argv_tokencount(args) > 0)
     {
         parsed_ok = mod_parse_script(&value, args, execpath, state);
     }
@@ -20113,26 +20130,27 @@ strnuccpy(char *dest, const char *src, size_t n)
 
 
 
-static FILE *
-rcfile_run(parser_state_t *state, const char *code_name)
-{   char code_name_uc[64];
+extern charsource_t *
+charsource_rcfile(parser_state_t *state, const char *rccode_name,
+                  FILE **out_rcfile)
+{   char rccode_name_uc[64];
     char rcfile_env[64];
     char rcfile_name_buf[256];
     const char *rcfile_name;
     FILE *rcfile = NULL;
     bool using_default = FALSE;
 
-    strnuccpy(&code_name_uc[0], code_name, sizeof(code_name_uc));
+    strnuccpy(&rccode_name_uc[0], rccode_name, sizeof(rccode_name_uc));
     snprintf(&rcfile_env[0], sizeof(rcfile_env), "%s%s",
-             &code_name_uc[0], ENV_FTL_RCFILE_POST);
+             &rccode_name_uc[0], ENV_FTL_RCFILE_POST);
     rcfile_name = getenv(rcfile_env);
 
     if (rcfile_name == NULL)
     {    rcfile_name = &rcfile_name_buf[0];
          snprintf(&rcfile_name_buf[0], sizeof(rcfile_name_buf),
-                  ENV_FTL_RCFILE_DEFAULT(code_name));
+                  ENV_FTL_RCFILE_DEFAULT(rccode_name));
          using_default = TRUE;
-         DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", code_name, rcfile_name););
+         DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", rccode_name, rcfile_name););
     }
 
     if (rcfile_name != NULL)
@@ -20148,30 +20166,48 @@ rcfile_run(parser_state_t *state, const char *code_name)
                 {   sprintf(rc_home, "%s%s"OS_FILE_SEP"%s",
                             homedir, ENV_FTL_HOMEDIR_HOME, rcfile_name);
                     DEBUG_RCFILE(DPRINTF("%s: full rc file name '%s'\n",
-                                        code_name, rc_home););
+                                         codeid(), rc_home););
                     rcfile = fopen(rc_home, "r");
                     if (NULL == rcfile && !using_default)
                         DPRINTF("%s: can't open RC file '%s'\n",
-                                code_name, rc_home);
+                                codeid(), rc_home);
                     FTL_FREE(rc_home);
                 }
             }
             DEBUG_RCFILE(else DPRINTF("%s: no %s directory\n",
-                                     code_name, ENV_FTL_HOMEDIR);)
+                                      codeid(), ENV_FTL_HOMEDIR);)
         }
     }
+   
+    if (out_rcfile != NULL)
+        *out_rcfile = rcfile;
+    
+    if (rcfile != NULL) {
+        return charsource_stream_new(rcfile, rcfile_name, /*autoclose*/TRUE);
+    } else
+    {
+        DEBUG_RCFILE(
+           printf("%s: didn't open rcfile %s: %s (rc %d)\n",
+                  rccode_name, rcfile_name==NULL?"<>": rcfile_name,
+                  strerror(errno), errno);)
+        return NULL;
+    }
+}
+    
 
-    if (rcfile != NULL)
-    {   charsource_t *rcstream = charsource_stream_new(rcfile, rcfile_name,
-                                                       TRUE);
+
+
+
+
+
+static FILE *
+rcfile_run(parser_state_t *state, const char *rccode_name)
+{   FILE *rcfile = NULL;
+    charsource_t *rcstream = charsource_rcfile(state, rccode_name, &rcfile);
+
+    if (rcstream != NULL) {
         linesource_push(parser_linesource(state), rcstream);
     }
-
-    DEBUG_RCFILE(
-        else
-           printf("%s: didn't open rcfile %s: %s (rc %d)\n",
-                  code_name, rcfile_name==NULL?"<>": rcfile_name,
-                  strerror(errno), errno);)
 
     return rcfile;
 }
@@ -20228,7 +20264,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *term,
                  const char *execpath, dir_t *fndir, bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
-                 const value_t **out_value, bool *out_ends_with_delim)
+                 const value_t **out_value, wbool *out_ends_with_delim)
 {   const value_t *val = NULL;
     linesource_t saved;
     bool executing_prefix = TRUE;
@@ -20242,36 +20278,35 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
     linesource_save(parser_linesource(state), &saved);
     linesource_init(parser_linesource(state));
 
-    while (executing_prefix && *ref_argn > 0)
+    while (executing_prefix && argv_tokencount(&args) > 0)
     {   const char *cmd;
         DEBUG_ENV(dir_t *startdir = parser_env_stack(state)->stack;);
 
-        cmd = (*ref_argv)[0];
-        DEBUG_ARGV(printf("%s: %d args left - current args '%s'\n",
-                          codeid(), *ref_argn, cmd););
+        cmd = argv_token(&args);
+        DEBUG_ARGV(DPRINTF("%s: %d args left - current args '%s'\n",
+                           codeid(), argv_tokencount(&args), cmd););
 
         if (NULL != val)
             value_unlocal(val);
 
         if (0 == strcmp(cmd, "--"))
-        {   (*ref_argn)--;
-            (*ref_argv)++;
+        {   argv_next(&args);
+            DEBUG_EXECV(DPRINTF("MOD EXECV (%s) --- skip '--'\n",
+                                delim == NULL? "opt": delim););
             executing_prefix = FALSE;
         } else
         {
             DEBUG_EXECV(DPRINTF("MOD EXECV (%s) --- %s ...[%d]\n",
-                               delim == NULL? "opt": delim,
-                               (*ref_argv)[0], *ref_argn););
+                                delim == NULL? "opt": delim,
+                                argv_token(&args), argv_tokencount(&args)););
             executing_prefix = mod_execv(&val, &args, execpath, fndir, state);
             DEBUG_EXECV(DPRINTF("MOD EXECV --- %s\n",
                                executing_prefix? "OK": "FAILED"););
             if (executing_prefix && val == NULL)
                 syntax_ok = FALSE;
         }
-
         if (out_ends_with_delim != NULL)
             *out_ends_with_delim = FALSE;
-
         if (executing_prefix)
         {   DEBUG_EXECV(VALUE_SHOW("MOD EXECV report val: ", val););
             if (val!= NULL)
@@ -20285,9 +20320,10 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
 
             if (delim != NULL)
             {   /* skip intervening delim (e.g. ",") arguments */
-                if (*ref_argn > 0 && 0 == strcmp((*ref_argv)[0], delim)) {
-                    (*ref_argn)--;
-                    (*ref_argv)++;
+                if (argv_tokencount(&args) > 0 &&
+                    0 == strcmp(argv_token(&args), delim))
+                {
+                    argv_next(&args);
                     if (out_ends_with_delim != NULL)
                         *out_ends_with_delim = TRUE;
                 }
@@ -20378,8 +20414,14 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
     if (NULL != cmd_str)
         linesource_pushline(parser_linesource(state), "<INIT>", cmd_str);
 
-    if (NULL != rcfile_id)
+    if (NULL != rcfile_id) {
+        DEBUG_RCFILE(DPRINTF("%s: finding RC file '%s'\n",
+                             codeid(), rcfile_id););
         (void)rcfile_run(state, rcfile_id);
+    }
+    DEBUG_RCFILE(else DPRINTF("%s: no RC file needed in expansion\n",
+                              codeid()););
+
 
     if (interactive)
         (void)interrupt_handler_init(&old_int_state, state);
@@ -20529,14 +20571,13 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 
 /* This function may cause a garbage collection */
 extern void
-cli(parser_state_t *state, const char *init_cmds, const char *code_name)
+cli(parser_state_t *state, const char *init_cmds, const char *rcfile)
 {   charsource_t *console;
 
-    codeid_set(code_name);
     console = charsource_console_new("> ");
 
-    (void)parser_expand_exec_int(state, console, init_cmds,
-                                 /*rc_file*/code_name, /*expect_no_locals*/TRUE,
+    (void)parser_expand_exec_int(state, console, init_cmds, rcfile,
+                                 /*expect_no_locals*/TRUE,
                                  /*interactive*/TRUE);
 }
 
@@ -20552,7 +20593,7 @@ cli(parser_state_t *state, const char *init_cmds, const char *code_name)
 extern bool
 argv_cli_ending(parser_state_t *state, const char *code_name,
                 const char *execpath, const char **argv, int argc,
-                bool *out_ends_with_comma)
+                wbool *out_ends_with_comma)
 {   const value_t *value = NULL;
     bool ok;
     codeid_set(code_name);

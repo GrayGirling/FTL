@@ -67,6 +67,15 @@ extern "C" {
 #define FALSE false
 #endif
 
+typedef int wbool; /* Wide BOOLEAN - for boolean pointers */
+/* It is possible in some scenarios for calling code and called code not to
+ * agree on the type used for 'bool' and for the compiler not to be able to see
+ * this.  This is rarely a problem - except when one of the functions here
+ * returns a pointer to a bool when an unexpectedly large area of memory might
+ * be updated. */
+    
+    
+
 /*          O/S Independence                                     */
 
 #ifdef _WIN32
@@ -1375,7 +1384,7 @@ typedef const value_t *parser_call_fn_t(parser_state_t *state, void *call_arg);
 
 extern const value_t *
 parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
-                  void *call_arg, bool *out_ok);
+                  void *call_arg, wbool *out_ok);
 
 /* invoke code, catching any 'throw'
  * set *out_ok TRUE iff there was no throw
@@ -1383,7 +1392,7 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
  * return the thrown value if there was a throw
  */
 extern const value_t *
-parser_catch_invoke(parser_state_t *state, const value_t *code, bool *out_ok);
+parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok);
 
 extern void
 parser_collect(parser_state_t *state);
@@ -1675,7 +1684,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *term,
                  const char *execpath, dir_t *fndir, bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
-                 const value_t **out_value, bool *out_ends_with_delim);
+                 const value_t **out_value, wbool *out_ends_with_delim);
 
 /*! Execute the commands provided from three sources in order
  *  This is an internal function implementing a range of others (that follow
@@ -1728,12 +1737,25 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
                            NULL, NULL, no_locals)
 
 
+/*! Find charsource for an initialization file based on code name.
+ *  The charsource is opened in 'autoclose' mode.
+ *  If out_rcfile is NULL nothing is written to it otherwise the FILE *
+ *  corresponding to the init file is returned.
+ */
+extern charsource_t *
+charsource_rcfile(parser_state_t *state, const char *rccode_name,
+                  FILE **out_rcfile);
+
+
 /*! Start an interactive ftl interpreter reading rcfile initially
- * initially commands are read from the terminal and output is written there
+ *  Commands are read from the terminal and output is written to it.
+ *  If the rcfile is NULL no commands are read from it.  If the init_cmds is
+ *  NULL no commands are read from the RC file.
  */
 extern void
-cli(parser_state_t *state, const char *rcfile, const char *code_name);
+cli(parser_state_t *state, const char *init_cmds, const char *rcfile);
 
+    
 /*! Run an ftl interpreter taking commands from argv
  *  Comma (,) tokens are used to separate runs of tokens that are interpreted
  *  as separate FTL commands
@@ -1747,7 +1769,7 @@ cli(parser_state_t *state, const char *rcfile, const char *code_name);
 extern bool
 argv_cli_ending(parser_state_t *state, const char *code_name,
                 const char *execpath, const char **argv, int argc,
-                bool *out_ends_with_comma);
+                wbool *out_ends_with_comma);
 
 #define argv_cli(state, code_name, execpath, argv, argc) \
         argv_cli_ending(state, code_name, execpath, argv, argc, NULL)
