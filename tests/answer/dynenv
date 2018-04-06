@@ -1,6 +1,6 @@
 > set data [ads=3,b=9]
 > set dgetall []:{echo "(getall)"!;data}
-> set dget   [n]:{echo "(get)"!;data.(n)}
+> set dget   [n]:{echo "(get)"!;if (inenv data n!) {data.(n)}{}!}
 > set dset [n,v]:{echo "(set)"!;data.(n)=v;TRUE}
 > set dcount  []:{echo "(count)"!;len data!}
 > set dyn         dynenv dgetall dcount dset dget!
@@ -17,6 +17,12 @@
 (set)
 > set dyn.b 88
 (set)
+> inenv dyn "ads"
+(get)
+TRUE
+> inenv dyn "rubbish"
+(get)
+TRUE
 > eval dyn.ads
 (get)
 77
@@ -36,6 +42,12 @@
 (set)
 > set dyn_nocount.b 100
 (set)
+> inenv dyn_nocount "ads"
+(get)
+TRUE
+> inenv dyn_nocount "rubbish"
+(get)
+TRUE
 > eval dyn_nocount.ads
 (get)
 8
@@ -53,12 +65,18 @@
 2
 > set dyn_noset.ads 10
 ftl: name "ads" has a constant value
-ftl $*console*:+31 in
-ftl $*console*:32: can't set a value for "ads" here
+ftl $*console*:+35 in
+ftl $*console*:36: can't set a value for "ads" here
 > set dyn_noset.b 120
 ftl: name "b" has a constant value
-ftl $*console*:+32 in
-ftl $*console*:33: can't set a value for "b" here
+ftl $*console*:+36 in
+ftl $*console*:37: can't set a value for "b" here
+> inenv dyn_noset "ads"
+(get)
+TRUE
+> inenv dyn_noset "rubbish"
+(get)
+TRUE
 > eval dyn_noset.ads
 (get)
 8
@@ -78,6 +96,12 @@ ftl $*console*:33: can't set a value for "b" here
 (set)
 > set dyn_noget.b 44
 (set)
+> inenv dyn_noget "ads"
+(getall)
+TRUE
+> inenv dyn_noget "rubbish"
+(getall)
+FALSE
 > eval dyn_noget.ads
 (getall)
 33
