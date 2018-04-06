@@ -19088,7 +19088,7 @@ fn_catch(const value_t *this_fn, parser_state_t *state)
 
     if (value_istype_invokable(exception_code) &&
         value_istype_invokable(execute_code))
-    {   bool ok = TRUE;
+    {   wbool ok = TRUE;
 
         parser_env_return(state, parser_env_calling_pos(state));
         val = parser_catch_invoke(state, execute_code, &ok);
@@ -20104,7 +20104,7 @@ static const value_t *mod_exec_cmd_call(parser_state_t *state, void *call_arg)
 
 /* execute a command with an enclosing 'try' block */
 static const value_t *
-mod_exec_cmd_caught(const char **ref_line, parser_state_t *state, bool *ref_ok)
+mod_exec_cmd_caught(const char **ref_line, parser_state_t *state, wbool *ref_ok)
 {   return parser_catch_call(state, &mod_exec_cmd_call,
                              (void *)ref_line, ref_ok);
 }
@@ -20504,7 +20504,7 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 
                 /* parse and execute the line */
                 if (interactive)
-                {   bool ran_ok = TRUE;
+                {   wbool ran_ok = TRUE;
                     val = mod_exec_cmd_caught(&phrase, state, &ran_ok);
                     if (!ran_ok)
                     {    fprintf(stderr, "%s: exception - ", codeid());
@@ -20622,7 +20622,7 @@ argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
              const char ***ref_argv, int *ref_argc, dir_t *fndir,
              register_opt_result_fn *with_results, void *with_results_arg)
 {   const value_t *value = NULL;
-    bool ends_with_delim = FALSE;
+    wbool ends_with_delim = FALSE;
     codeid_set(code_name);
     return parser_argv_exec(state, ref_argv, ref_argc,
                             /*delimiter*/NULL/*use --opt style parsing*/,
