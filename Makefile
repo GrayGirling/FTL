@@ -1,4 +1,4 @@
-CC=gcc
+CC:=gcc
 
 
 # CONFIGURATION (these can be specified on the 'make' command line)
@@ -6,10 +6,13 @@ CC=gcc
 add_elf=yes
 add_xml=no
 elf_lib_type=ELF
+force_native=yes
+
+# Hint: if you are using windows 10 under WSL and you want to buld a Windows
+#       (non-WSL) executable try
+#       make add_elf=no force_native=yes
 
 # OS CUSTOMIZATION
-
-$(info Building for OSARCH $(OSARCH))
 
 ARCH=$(OSARCH)
 ifeq ($(OSARCH),Darwin)
@@ -20,6 +23,34 @@ ifeq ($(OSARCH),osx64)
 endif
 ifeq ($(OSARCH),linux64)
     ARCH=linux
+    KERNEL=$(shell uname -r)
+    KERNEL_NONMS=$(KERNEL:-Microsoft=)
+    #$(info KERNEL=$(KERNEL) KERNEL_NONMS=$(KERNEL_NONMS))
+    ifneq ($(KERNEL),$(KERNEL_NONMS))
+        #$(info Windows WSL Kernel detected)
+        ARCH=winlinux
+    endif
+endif
+ifeq ($(ARCH),cygwin64)
+    ARCH=cygwin
+endif
+
+NATIVE:=yes
+NATIVEARCH:=$(ARCH)
+ifeq ($(ARCH),cygwin)
+    NATIVE:=no
+    NATIVEARCH:=windows
+endif
+ifeq ($(ARCH),winlinux)
+    # may need e.g. ubuntu package mingw-w64
+    NATIVE:=no
+    NATIVEARCH:=windows
+endif
+
+ifeq ($(force_native),yes)
+    BUILDARCH=$(NATIVEARCH)
+else
+    BUILDARCH=$(ARCH)
 endif
 
 # LIBRARY SELECTION
@@ -39,11 +70,14 @@ DEFS_LIBELF=
 INCS_LIBELF=
 OBJS_LIBELF=
 
-ifeq ($(ARCH),osx)
+EXE :=
+OBJ := .o
+
+ifeq ($(BUILDARCH),osx)
     LIBS_READLINE=
     DEFS_READLINE=-DUSE_LINENOISE
     INCS_READLINE=
-    OBJS_READLINE=linenoise.o
+    OBJS_READLINE=linenoise$(OBJ)
     #LIBS_READLINE=-lreadline -lhistory
     #DEFS_READLINE=-DUSE_READLINE
     #INCS_READLINE=-I /opt/local/include/readline -I /opt/local/include
@@ -54,16 +88,22 @@ ifeq ($(ARCH),osx)
     CC_OPT_DEBUGSYMS=-O0 -g3 
     CFLAGS_CC=-Wno-tautological-compare
 else
-ifeq ($(ARCH),cygwin64)
-    # CC=mingw32-gcc
-    LIBS_READLINE=
-    #DEFS_READLINE=-DUSE_LINENOISE
-    INCS_READLINE=
-    #OBJS_READLINE=linenoise.o
-    CC=x86_64-w64-mingw32-gcc
-    LIB_DYNLIB=
-    LIB_SOCKET=-lws2_32
+ifeq ($(BUILDARCH),windows)
+    ifeq ($(NATIVE),no)
+        EXE:=.exe
+        OBJ:=.obj
+        # CC:=mingw32-gcc
+	LIBS_READLINE=
+        #DEFS_READLINE=-DUSE_LINENOISE
+	INCS_READLINE=
+        #OBJS_READLINE=linenoise$(OBJ)
+	LIB_DYNLIB=
+	LIB_SOCKET=-lws2_32
+        #CC:=i686-w64-mingw32-gcc# for 32-bit executable
+	CC:=x86_64-w64-mingw32-gcc# for 64-bit executable
+    endif
 else
+    # assume posix-like native environmnent
     LIBS_READLINE=-lreadline -lhistory
     DEFS_READLINE=-DUSE_READLINE
     INCS_READLINE=-I /usr/include/readline
@@ -72,6 +112,8 @@ else
     #CFLAGS_CC=-Wint-conversion
 endif
 endif
+
+$(info Building for OSARCH $(OSARCH) using $(CC) (building for $(BUILDARCH)))
 
 DEFINES  := 
 LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF)
@@ -84,18 +126,18 @@ LIBFTL_DEFS = $(DEFINES) $(DEFS_READLINE)
 
 # TOOL CONSTRUCTION
 
-FTLLIB_OBJS := libftl.o filenames.o libdyn.o $(OBJS_READLINE)
+FTLLIB_OBJS := libftl$(OBJ) filenames$(OBJ) libdyn$(OBJ) $(OBJS_READLINE)
 
 FTL_DEFS := 
-FTL_OBJS := ftl.o $(FTLLIB_OBJS)
+FTL_OBJS := ftl$(OBJ) $(FTLLIB_OBJS)
 FTL_LIBS := $(LIBS)
 
 PENV_DEFS := 
-PENV_OBJS := penv.o $(FTLLIB_OBJS)
+PENV_OBJS := penv$(OBJ) $(FTLLIB_OBJS)
 PENV_LIBS := $(LIBS)
 
 ifeq ($(add_elf),yes)
-FTL_OBJS += libftl_elf.o
+FTL_OBJS += libftl_elf$(OBJ)
 LIBELF_DEFS = -DUSE_LIB_$(elf_lib_type)
 LIBELF_INCS = $(INCS_LIBELF)
 FTL_DEFS += -DUSE_FTLLIB_ELF 
@@ -103,7 +145,7 @@ FTL_LIBS += $(LIBS_LIBELF)
 endif
 
 ifeq ($(add_xml),yes)
-FTL_OBJS += libftl_xml.o
+FTL_OBJS += libftl_xml$(OBJ)
 FTL_DEFS += -DUSE_FTLLIB_XML
 endif
 
@@ -111,24 +153,30 @@ vpath %.c tools:lib
 vpath %.h include
 
 #all:	ftl libs cscope
-all:	ftl cscope
+all:	ftl$(EXE) cscope
 
-install: ftl
-	cp ftl ~/cmd/$(OSARCH)/
+install: ftl$(EXE)
+	cp ftl$(EXE) ~/cmd/$(OSARCH)/
 
 %.so: %.c
 	$(CC) $(CFLAGS) -o $@ -shared $<
 
-libftl.o: libftl.c
+libftl$(OBJ): libftl.c
 	$(CC) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
 
-libftl_elf.o: libftl_elf.c
+libftl_elf$(OBJ): libftl_elf.c
 	$(CC) $(CFLAGS) $(LIBELF_DEFS) $(LIBELF_INCS) -c -o $@ $<
 
-penv.o: penv.c
+libdyn$(OBJ): libdyn.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+filenames$(OBJ): filenames.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+penv$(OBJ): penv.c
 	$(CC) $(CFLAGS) $(PENV_DEFS) $(PENV_INCS) -c -o $@ $<
 
-ftl.o: ftl.c
+ftl$(OBJ): ftl.c
 	$(CC) $(CFLAGS) $(FTL_DEFS) $(FTL_INCS) -c -o $@ $<
 
 ftlext-test.c: ftl.h ftl_internal.h ftlext.h 
@@ -145,7 +193,7 @@ libdyn.c: libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
 
-ftl: $(FTL_OBJS) ftl.h ftl_internal.h Makefile
+ftl$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
 	$(CC) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
 
 penv: $(PENV_OBJS) ftl.h ftl_internal.h Makefile
