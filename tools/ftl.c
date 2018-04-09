@@ -68,6 +68,10 @@
 #include "ftl_xml.h"
 #endif
 
+#ifdef USE_FTLLIB_JSON
+#include "ftl_json.h"
+#endif
+
 
 
 
@@ -92,10 +96,12 @@
 /* #define USE_READLINE */
 /* #define USE_FTLLIB_ELF */
 /* #define USE_FTLLIB_XML */
+/* #define USE_FTLLIB_JSON */
 
-#define FTL_DIR_OPTIONS  "opt"
-#define FTL_DIR_CMDS_XML "xml"   // used if USE_FTLLIB_XML is set
-#define FTL_DIR_CMDS_ELF "elf"   // used if USE_FTLLIB_ELF is set
+#define FTL_DIR_OPTIONS   "opt"
+#define FTL_DIR_CMDS_XML  "xml"   // used if USE_FTLLIB_XML is set
+#define FTL_DIR_CMDS_JSON "json"  // used if USE_FTLLIB_JSON is set
+#define FTL_DIR_CMDS_ELF  "elf"   // used if USE_FTLLIB_ELF is set
 
 #define APP_ARGC_MAX 128
 
@@ -534,10 +540,24 @@ static bool ftl_libs_init(parser_state_t *state)
     {   dir_t *cmds = parser_root(state);
         dir_t *xml_cmds = dir_id_new();
         DEBUG_CLI(fprintf(stderr, "%s: adding XML commands\n", CODEID););
-        if (cmds_xml(state, elf_cmds))
+        if (cmds_xml(state, xml_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_XML, xml_cmds);
         else
         {   fprintf(stderr, "%s: failed to load XML commands\n", CODEID);
+            ok = FALSE;
+        }
+    }
+#endif
+
+#ifdef USE_FTLLIB_JSON
+    if (ok)
+    {   dir_t *cmds = parser_root(state);
+        dir_t *json_cmds = dir_id_new();
+        DEBUG_CLI(fprintf(stderr, "%s: adding JSON commands\n", CODEID););
+        if (cmds_json(state, json_cmds))
+            mod_add_dir(cmds, FTL_DIR_CMDS_JSON, json_cmds);
+        else
+        {   fprintf(stderr, "%s: failed to load SJON commands\n", CODEID);
             ok = FALSE;
         }
     }
@@ -552,6 +572,10 @@ static void ftl_libs_end(parser_state_t *state)
 {
 #ifdef USE_FTLLIB_ELF
     cmds_elf_end(state);
+#endif
+
+#ifdef USE_FTLLIB_JSON
+    cmds_json_end(state);
 #endif
 
 #ifdef USE_FTLLIB_XML

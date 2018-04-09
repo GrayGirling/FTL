@@ -5,6 +5,7 @@ CC:=gcc
 
 add_elf=yes
 add_xml=no
+add_json=yes
 elf_lib_type=ELF
 force_native=yes
 
@@ -149,6 +150,11 @@ FTL_OBJS += libftl_xml$(OBJ)
 FTL_DEFS += -DUSE_FTLLIB_XML
 endif
 
+ifeq ($(add_json),yes)
+FTL_OBJS += libftl_json$(OBJ)
+FTL_DEFS += -DUSE_FTLLIB_JSON
+endif
+
 vpath %.c tools:lib
 vpath %.h include
 
@@ -184,6 +190,8 @@ ftlext-test.c: ftl.h ftl_internal.h ftlext.h
 libftl_elf.c: ftl.h ftl_internal.h ftl_elf.h
 
 libftl_xml.c: ftl.h ftl_internal.h ftl_xml.h
+
+libftl_json.c: ftl.h ftl_internal.h ftl_json.h
 
 libftl.c: ftl.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
 

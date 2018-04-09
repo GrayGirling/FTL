@@ -21544,10 +21544,16 @@ fn_scanned(const value_t *this_fn, parser_state_t *state)
 
 
 
-/* This function may cause a garbage collection */
-static const value_t *
+/*! Generic ftl function that just updates the parse state provided at argument
+ *  'argstart'.
+ *  The parsing itself is handled by the function 'fnparse' which removes a
+ *  prefix from the string at <arg>.0.
+ *
+ *  This function may cause a garbage collection
+ */
+extern const value_t *
 genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
-                 int argstart, bool (*fnparse)(const char **ref_line))
+                 int argstart, ftl_scan_prefix_fn *fnparse)
 {   const value_t *strvec = parser_builtin_arg(state, argstart);
     const value_t *val = &value_null;
 
@@ -21610,16 +21616,18 @@ fn_scan_space(const value_t *this_fn, parser_state_t *state)
 
 
 
-
-
-
-/* This function may cause a garbage collection */
-static const value_t *
+/*! Generic ftl function that updates the parse state provided at argument
+ *  'argstart'+1 and generates an FTL value from the prefix which
+ *  is returned via a callback closure provided at argument 'argstart'+0.
+ *  Normally 'argstart'+1 will be the last argument to patch other parse.<fn>s
+ *  The parsing itself is handled by the function 'fnparse' which delivers the
+ *  value parsed.
+ *
+ * This function may cause a garbage collection
+ */
+extern const value_t *
 genfn_scan(const value_t *this_fn, parser_state_t *state,
-           int argstart,
-           const value_t *(*fnparse)(const char **ref_line,
-                                     parser_state_t *state,
-                                     const value_t *arg),
+           int argstart, ftl_scan_value_fn *fnparse,
            const value_t *arg)
 {   const value_t *setres = parser_builtin_arg(state, argstart+0);
     const value_t *strvec = parser_builtin_arg(state, argstart+1);

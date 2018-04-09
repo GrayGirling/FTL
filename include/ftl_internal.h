@@ -354,6 +354,38 @@ value_mem_init(value_mem_t *mem, type_t mem_subtype,
                bool on_heap);
 
 
+/*          Scanning					                     */
+
+typedef bool ftl_scan_prefix_fn(const char **ref_line);
+
+/*! Generic ftl function that just updates the parse state provided at argument
+ *  'argstart'.
+ *  The parsing itself is handled by the function 'fnparse' which removes a
+ *  prefix from the string at <arg>.0.
+ */
+extern const value_t *
+genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
+                 int argstart, ftl_scan_prefix_fn *fnparse);
+
+
+typedef const value_t *
+ftl_scan_value_fn(const char **ref_line, parser_state_t *state,
+                  const value_t *arg);
+
+/*! Generic ftl function that updates the parse state provided at argument
+ *  'argstart'+1 and generates an FTL value from the prefix which
+ *  is returned via a callback closure provided at argument 'argstart'+0.
+ *  Normally 'argstart'+1 will be the last argument to patch other parse.<fn>s
+ *  The parsing itself is handled by the function 'fnparse' which delivers the
+ *  value parsed.
+ */
+extern const value_t *
+genfn_scan(const value_t *this_fn, parser_state_t *state,
+           int argstart, ftl_scan_value_fn *fnparse,
+           const value_t *arg);
+
+    
+
 #ifdef __cplusplus
 }
 #endif
