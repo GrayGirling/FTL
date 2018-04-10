@@ -763,57 +763,6 @@ parse_xml_tag_body(const char **ref_line, char *buf, size_t len,
 
 
 
-/* This function may cause a garbage collection */
-static const value_t *
-genfn_scan(const value_t *this_fn, parser_state_t *state,
-           int argstart,
-           const value_t *(*fnparse)(const char **ref_line,
-                                     parser_state_t *state,
-                                     const value_t *arg),
-           const value_t *arg)
-{   const value_t *setres = parser_builtin_arg(state, argstart+0);
-    const value_t *strvec = parser_builtin_arg(state, argstart+1);
-    const value_t *val = &value_null;
-
-    if (value_istype(strvec, type_dir) &&
-        (setres == &value_null || value_istype(setres, type_closure)))
-    {   dir_t *vec = (dir_t *)strvec;
-        const value_t *str = dir_get(vec, value_zero);
-        const char *strbase;
-        size_t len;
-        const value_t *dstr = value_string_get_terminated(str, &strbase, &len);
-
-        if (NULL != dstr)
-        {   const char *line = strbase;
-            const value_t *newval = (*fnparse)(&line, state, arg);
-            if (&value_null != newval)
-            {   val = value_true;
-
-                dir_set(vec, value_zero,
-                        value_string_new(line, len - (line-strbase)));
-                /* old value will be garbage collected */
-
-                if (setres != &value_null) {
-                    setres = substitute(setres,
-                                        newval == NULL? &value_null: newval,
-                                        state, /*unstrict*/TRUE);
-                    if (NULL != setres)
-                        (void)invoke(setres, state);
-                }
-            } else
-                val = value_false;
-
-            /* dstr will be garbage collected if it is not str */
-        } else
-            parser_error(state, "parse object must have a string (not a %s) "
-                         "named 0\n",
-                         value_type_name(str));
-    }
-    return val;
-}
-
-
-
 
 /*! Parse the next XML item and construct a binding from the xmlobj functions
  *  and the arguments from the parse

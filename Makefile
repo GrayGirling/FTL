@@ -4,7 +4,7 @@ CC:=gcc
 # CONFIGURATION (these can be specified on the 'make' command line)
 
 add_elf=yes
-add_xml=no
+add_xml=yes
 add_json=yes
 elf_lib_type=ELF
 force_native=yes
@@ -165,25 +165,28 @@ install: ftl$(EXE)
 	cp ftl$(EXE) ~/cmd/$(OSARCH)/
 
 %.so: %.c
-	$(CC) $(CFLAGS) -o $@ -shared $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -shared $<
+
+%$(OBJ): %.c
+	$(CC) -c $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 libftl$(OBJ): libftl.c
-	$(CC) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
 
 libftl_elf$(OBJ): libftl_elf.c
-	$(CC) $(CFLAGS) $(LIBELF_DEFS) $(LIBELF_INCS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBELF_DEFS) $(LIBELF_INCS) -c -o $@ $<
 
 libdyn$(OBJ): libdyn.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 filenames$(OBJ): filenames.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 penv$(OBJ): penv.c
-	$(CC) $(CFLAGS) $(PENV_DEFS) $(PENV_INCS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(PENV_DEFS) $(PENV_INCS) -c -o $@ $<
 
 ftl$(OBJ): ftl.c
-	$(CC) $(CFLAGS) $(FTL_DEFS) $(FTL_INCS) -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(FTL_DEFS) $(FTL_INCS) -c -o $@ $<
 
 ftlext-test.c: ftl.h ftl_internal.h ftlext.h 
 
@@ -202,10 +205,10 @@ libdyn.c: libdyn.h filenames.h Makefile
 libs: $(FTLEXTS)
 
 ftl$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
-	$(CC) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
 
 penv: $(PENV_OBJS) ftl.h ftl_internal.h Makefile
-	$(CC) $(CFLAGS) -o $@ $(PENV_OBJS) $(PENV_LIBS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PENV_OBJS) $(PENV_LIBS)
 
 ifeq ($(HAS_CSCOPE),1)
 cscope:
