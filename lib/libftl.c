@@ -568,24 +568,6 @@
 
 
 
-/* checking pointers */
-#define PTRVALID(_var) (NULL != (_var))
-#define HEAPVALID(_var) (true)
-
-#if 0 /* defined(__APPLE__) */
-#undef PTRVALID
-#define PTRVALID(_var) \
-    (assert((((ptrdiff_t)(_var)) & 0xFFFF000000000000) == 0),NULL != (_var))
-#if 0
-#undef HEAPVALID
-#define HEAPVALID(_var) \
-    (assert((((ptrdiff_t)(_var)) & 0xFFFFF00000000000) == 0x700000000000),\
-     true)
-#endif
-#endif
-
-
-
 
 /*****************************************************************************
  *                                                                           *
@@ -20654,23 +20636,7 @@ argv_opt_cli(parser_state_t *state, const char *code_name, const char *execpath,
 
 
 
-
-enum
-{   ff_left = 1,    /* left justify in width - otherwise right */
-    ff_zero,        /* pad with leading zeros */
-    ff_sign,        /* always precede with place for a sign */
-    ff_posv,        /* use positive sign as well as a negative one only */
-    ff_alt          /* "alternative" format */
-};
-
-
-typedef int fprint_flags_t; /* bit set of enum values */
-
-
-
 static dir_t *print_formats = NULL;
-
-
 
 
 
@@ -24346,12 +24312,7 @@ fn_str(const value_t *this_fn, parser_state_t *state)
 
 
 
-typedef const value_t *
-fn_fmt_fn_t(char *buf, size_t buflen, fprint_flags_t flags,
-            int precision, const value_t *argval, parser_state_t *state);
-
-
-static const value_t *
+extern const value_t *
 fn_fmt_generic(const value_t *this_fn, parser_state_t *state,
                fn_fmt_fn_t genformat)
 {   const value_t *flagsval = parser_builtin_arg(state, 1);

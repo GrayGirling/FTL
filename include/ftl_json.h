@@ -48,6 +48,10 @@ cmds_json(parser_state_t *state, dir_t *cmds);
 extern void
 cmds_json_end(parser_state_t *state);
 
+extern int
+json_print(outchar_t *out, const value_t *root, const value_t *val,
+           bool pretty);
+
 #ifdef __cplusplus
 }
 #endif

@@ -369,6 +369,251 @@ fn_json(const value_t *this_fn, parser_state_t *state)
 
 /*****************************************************************************
  *                                                                           *
+ *          FTL JSON output commands                                         *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+typedef struct
+{   outchar_t *out;
+    const value_t *root;
+    bool pretty;
+    const char *delim;
+    const char *fielddelim;
+    const char *indent;
+    int depth;
+} json_format_t;
+
+
+
+typedef struct
+{   json_format_t *fmt;
+    int len;
+    bool first;
+    bool is_obj;
+    bool bracketed;
+} dir_json_bind_print_arg_t;
+
+
+
+
+static int json_fmt_printnl(json_format_t *fmt)
+{   int i;
+    int len = outchar_printf(fmt->out, "\n");
+    for (i=0; i<fmt->depth; i++)
+        len += outchar_printf(fmt->out, fmt->indent);
+    return len;
+}
+
+
+
+/* forward reference */
+static int
+json_fmt_print(outchar_t *out, const value_t *root, const value_t *value,
+               json_format_t *fmt);
+
+
+
+static void *
+value_json_dir_bind_print(dir_t *dir, const value_t *name,
+                          const value_t *value, void *arg)
+{   dir_json_bind_print_arg_t *pr = (dir_json_bind_print_arg_t *)arg;
+    outchar_t *out = pr->fmt->out;
+    const value_t *root = pr->fmt->root;
+    
+    if (pr->first)
+        pr->is_obj = value_type_equal(name, type_string);
+
+    if (!pr->bracketed)
+    {   pr->len += outchar_printf(out, pr->is_obj? "{": "[");
+        pr->bracketed = TRUE;
+        if (pr->is_obj && pr->fmt->pretty)
+        {   pr->fmt->depth++;
+            pr->len += json_fmt_printnl(pr->fmt);
+        }
+    }
+    
+    if (pr->first)
+        pr->first = FALSE;
+    else
+    {   pr->len += outchar_printf(out, pr->fmt->delim);
+        if (pr->is_obj && pr->fmt->pretty)
+            pr->len += json_fmt_printnl(pr->fmt);
+    }
+
+    if (pr->is_obj)
+    {
+        if (value_type_equal(name, type_string))
+            pr->len += json_fmt_print(out, root, name, pr->fmt);
+        else
+            /* shouldn't really be here! */
+            pr->len += json_fmt_print(out, root, name, pr->fmt);
+
+        pr->len += outchar_printf(out, pr->fmt->fielddelim);
+    }
+    OMIT(pr->len += outchar_printf(out, "(%s)#%p ",
+                                   value_type_name(value), value););
+    pr->len += json_fmt_print(out, root, value, pr->fmt);
+
+    return NULL;
+}
+
+
+
+
+
+
+
+
+static int
+json_fmt_dir_print(outchar_t *out, const value_t *root, const value_t *value,
+                   json_format_t *fmt)
+{   dir_json_bind_print_arg_t pr;
+
+    pr.len = 0;
+
+    if (value_istype(value, type_dir))
+    {   dir_t *dir = (dir_t *)value;
+
+        pr.fmt = fmt;
+        pr.first  = TRUE;
+        pr.bracketed = FALSE;
+
+        (void)dir_forall(dir, &value_json_dir_bind_print, &pr);
+
+        if (pr.first)
+        {   pr.is_obj = FALSE; /* this is arbitrary - we can't tell */
+            pr.len += outchar_printf(out, pr.is_obj? "{}": "[]");
+            pr.bracketed = TRUE;
+            pr.first = FALSE;
+        } else
+        if (pr.bracketed)
+        {
+            if (pr.is_obj && pr.fmt->pretty)
+            {   pr.fmt->depth--;
+                pr.len += json_fmt_printnl(pr.fmt);
+            }
+            pr.len += outchar_printf(out, pr.is_obj? "}": "]");
+        }
+    }
+
+    return pr.len;
+}
+
+
+
+
+static int
+json_fmt_print(outchar_t *out, const value_t *root, const value_t *val,
+               json_format_t *fmt)
+{   int len;
+ 
+    if (val == &value_null)
+        len = outchar_printf(out, "null");
+    else if (val == value_true)
+        len = outchar_printf(out, "true");
+    else if (val == value_false)
+        len = outchar_printf(out, "false");
+    else if (value_type_equal(val, type_int) ||
+             value_type_equal(val, type_string))
+        len = value_print(out, root, val);
+    else if (value_type_equal(val, type_dir))
+        len = json_fmt_dir_print(out, root, val, fmt);
+    else
+    {
+        /* this type is not supported in JSON */
+        len = 0;
+    }
+        
+    return len;
+}
+
+
+
+
+extern int
+json_print(outchar_t *out, const value_t *root, const value_t *val, bool pretty)
+{   json_format_t fmt;
+
+    fmt.out = out;
+    fmt.root = root;
+    fmt.pretty = pretty;
+    fmt.delim  = pretty? ", ": ",";
+    fmt.fielddelim = pretty? " : ": ":";
+    fmt.indent = "    ";
+    fmt.depth  = 0;
+
+    return json_fmt_print(out, root, val, &fmt);
+}
+
+
+
+
+static const value_t *
+gengenfn_fmt_json(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+                  const value_t *argval, parser_state_t *state, bool pretty)
+{   const value_t *val = &value_null;
+    charsink_string_t stream;
+    charsink_t *sink = charsink_string_init(&stream);
+    const char *strbuf;
+    size_t strsize;
+
+    (void)buf;
+    (void)buflen;
+
+    json_print(sink, dir_value(parser_root(state)), argval, pretty);
+    charsink_string_buf(sink, &strbuf, &strsize);
+    if (precision > 0 && precision < (int)strsize)
+        strsize = precision;
+    val = value_string_new(strbuf, strsize);
+    charsink_string_close(sink);
+
+    return val;
+}
+
+
+
+static const value_t *
+genfn_fmt_j(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return gengenfn_fmt_json(buf, buflen, flags, precision, argval, state,
+                             /*pretty*/FALSE);
+}
+
+
+
+static const value_t *
+fn_fmt_j(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_j);
+}
+
+
+
+static const value_t *
+genfn_fmt_J(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return gengenfn_fmt_json(buf, buflen, flags, precision, argval, state,
+                             /*pretty*/TRUE);
+}
+
+
+
+static const value_t *
+fn_fmt_J(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_J);
+}
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          FTL JSON commands                                                 *
  *                                                                           *
  *****************************************************************************/
@@ -379,6 +624,10 @@ fn_json(const value_t *this_fn, parser_state_t *state)
 extern bool
 cmds_json(parser_state_t *state, dir_t *cmds)
 {
+    printf_addformat(type_int, "j", "<f> <p> <val> - %j (JSON) value format",
+                     &fn_fmt_j);
+    printf_addformat(type_int, "J", "<f> <p> <val> - %J (pretty JSON) value format",
+                     &fn_fmt_J);
     mod_addfn(cmds, "obj",
               "<code> - return FTL value from JSON object",
               &fn_json, 1);
