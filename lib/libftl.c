@@ -340,9 +340,9 @@
 #define FTL_LINESOURCE_NAME_MAX 64
 #define FTL_ID_MAX              64
 #define FTL_CMDNAME_MAX         FTL_ID_MAX
-#define FTL_PRINTF_MAX          256
-#define FTL_SYSENV_VAL_MAX      256
-#define FTL_STRING_MAX          256
+#define FTL_PRINTF_MAX          4096
+#define FTL_SYSENV_VAL_MAX      4096
+#define FTL_STRING_MAX          4096
 #define FTL_ARGNAMES_CACHED     8
 
 #define HAS_VSNPRINTF
@@ -14795,8 +14795,14 @@ parse_string_base(const char **ref_line, parser_state_t *state,
              parse_space(&line) &&
              parse_key(&line, ")");
 
-        if (ok && value_string_get(strval, &valbuf, &vallen) && vallen <= size)
-        {   memcpy(buf, valbuf, vallen);
+        if (ok && value_string_get(strval, &valbuf, &vallen))
+        {   if (vallen > size)
+            {   parser_error(state, "sorry - string value truncated from "
+                             "%d to %d characters - use 'joinchr NULL'?\n",
+                             (int)vallen, (int)size);
+                vallen = size;
+            }
+            memcpy(buf, valbuf, vallen);
             *out_len = vallen;
         } else
             *out_len = 0;
@@ -22235,10 +22241,9 @@ cmd_system(const char **ref_line, const value_t *this_cmd,
 
 
 
-
 static const value_t *
 fn_system_rc(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: file <name> <access> */
+{   /* syntax: <commandstring> */
     const char *str;
     size_t len;
     const value_t *strval =
