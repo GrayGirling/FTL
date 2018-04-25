@@ -610,6 +610,65 @@ fn_fmt_J(const value_t *this_fn, parser_state_t *state)
 
 
 
+static const value_t *
+genfn_json_make(const value_t *this_fn, parser_state_t *state,
+                FILE *out, bool pretty)
+{   const value_t *inval = parser_builtin_arg(state, 1);
+    const value_t *val = gengenfn_fmt_json(/*buf*/NULL, /*buflen*/0, /*flags*/0,
+                                           /*precision*/0, inval, state,
+                                           pretty);
+    if (out != NULL)
+    {   /* print the string to stream directly */
+        const char *str = NULL;
+        size_t strlen = 0;
+        if (value_string_get(val, &str, &strlen))
+            fprintf(out, "%s\n", str);
+        else
+            parser_error(state, "failed to find a JSON equivalent for value\n");
+
+        val = &value_null;
+    }
+    return val;
+}
+
+
+
+static const value_t *
+fn_json_out(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = parser_builtin_arg(state, 1);
+    return genfn_json_make(this_fn, state, stdout, /*pretty*/FALSE);
+}
+
+
+
+static const value_t *
+fn_json_outpty(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = parser_builtin_arg(state, 1);
+    return genfn_json_make(this_fn, state, stdout, /*pretty*/TRUE);
+}
+
+
+
+
+static const value_t *
+fn_json_str(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = parser_builtin_arg(state, 1);
+    return genfn_json_make(this_fn, state, NULL, /*pretty*/FALSE);
+}
+
+
+
+static const value_t *
+fn_json_strpty(const value_t *this_fn, parser_state_t *state)
+{   const value_t *val = parser_builtin_arg(state, 1);
+    return genfn_json_make(this_fn, state, NULL, /*pretty*/TRUE);
+}
+
+
+
+
+
+
 
 
 /*****************************************************************************
@@ -628,6 +687,18 @@ cmds_json(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_j);
     printf_addformat(type_int, "J", "<f> <p> <val> - %J (pretty JSON) value format",
                      &fn_fmt_J);
+    mod_addfn(cmds, "print",
+              "<val> - print value as JSON (as %j format)",
+              &fn_json_out, 1);
+    mod_addfn(cmds, "printp",
+              "<val> - pretty print value as JSON (as %J format)",
+              &fn_json_outpty, 1);
+    mod_addfn(cmds, "str",
+              "<val> - return value as JSON string (as %j format)",
+              &fn_json_str, 1);
+    mod_addfn(cmds, "strp",
+              "<val> - return value as pretty JSON string (as %J format)",
+              &fn_json_strpty, 1);
     mod_addfn(cmds, "obj",
               "<code> - return FTL value from JSON object",
               &fn_json, 1);
