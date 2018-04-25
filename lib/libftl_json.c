@@ -635,16 +635,14 @@ genfn_json_make(const value_t *this_fn, parser_state_t *state,
 
 static const value_t *
 fn_json_out(const value_t *this_fn, parser_state_t *state)
-{   const value_t *val = parser_builtin_arg(state, 1);
-    return genfn_json_make(this_fn, state, stdout, /*pretty*/FALSE);
+{   return genfn_json_make(this_fn, state, stdout, /*pretty*/FALSE);
 }
 
 
 
 static const value_t *
 fn_json_outpty(const value_t *this_fn, parser_state_t *state)
-{   const value_t *val = parser_builtin_arg(state, 1);
-    return genfn_json_make(this_fn, state, stdout, /*pretty*/TRUE);
+{   return genfn_json_make(this_fn, state, stdout, /*pretty*/TRUE);
 }
 
 
@@ -652,16 +650,14 @@ fn_json_outpty(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_json_str(const value_t *this_fn, parser_state_t *state)
-{   const value_t *val = parser_builtin_arg(state, 1);
-    return genfn_json_make(this_fn, state, NULL, /*pretty*/FALSE);
+{   return genfn_json_make(this_fn, state, NULL, /*pretty*/FALSE);
 }
 
 
 
 static const value_t *
 fn_json_strpty(const value_t *this_fn, parser_state_t *state)
-{   const value_t *val = parser_builtin_arg(state, 1);
-    return genfn_json_make(this_fn, state, NULL, /*pretty*/TRUE);
+{   return genfn_json_make(this_fn, state, NULL, /*pretty*/TRUE);
 }
 
 
