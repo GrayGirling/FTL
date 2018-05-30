@@ -68,9 +68,11 @@ extern "C" {
 
 
 typedef bool /*full*/ putc_fn_t(charsink_t *sink, int ch);
+typedef bool /*full*/ flush_fn_t(charsink_t *sink);
 
 struct charsink_s
 {   putc_fn_t *putc;
+    flush_fn_t *flush;
 } /* charsink_t */;
 
 

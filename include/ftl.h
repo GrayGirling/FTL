@@ -273,6 +273,9 @@ charsink_putwc(charsink_t *sink, wchar_t ch);
 extern int
 charsink_write(charsink_t *sink, const char *buf, size_t len);
 
+extern bool /*ok*/
+charsink_flush(charsink_t *sink);
+
 extern int
 charsink_vsprintf(charsink_t *sink, const char *format, va_list args);
 

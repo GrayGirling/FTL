@@ -1008,14 +1008,30 @@ charsink_putc(charsink_t *sink, int ch)
 extern int
 charsink_write(charsink_t *sink, const char *buf, size_t len)
 {   int n = 0;
-    bool ok;
 
     if (NULL != sink)
-        while (len-->0 && (ok = ((*sink->putc)(sink, *buf++))))
+        while (len-->0 && ((*sink->putc)(sink, *buf++)))
             n++;
     DO(else DPRINTF("%s: writing to unopened sink\n", codeid());)
 
     return n;
+}
+
+
+
+extern bool
+charsink_flush(charsink_t *sink)
+{   bool ok = FALSE;
+
+    if (NULL != sink)
+    {   if (sink->flush != NULL)
+            ok = (*sink->flush)(sink);
+        else
+            ok = TRUE; /* no flush function => not needed */
+    }
+    DO(else DPRINTF("%s: flushing unopened sink\n", codeid());)
+
+    return ok;
 }
 
 
@@ -1089,8 +1105,9 @@ charsink_sprintf(charsink_t *sink, const char *format, ...)
 
 
 static charsink_t *
-charsink_init(charsink_t *sink, putc_fn_t *putc)
+charsink_init(charsink_t *sink, putc_fn_t *putc, flush_fn_t *flush)
 {   sink->putc = putc;
+    sink->flush = flush;
     return sink;
 }
 
@@ -1142,11 +1159,27 @@ charsink_stream_putc(charsink_t *sink, int ch)
 
 
 
+static bool
+charsink_stream_flush(charsink_t *sink)
+{   charsink_stream_t *stream = (charsink_stream_t *)sink;
+    if (NULL != stream->out)
+        return EOF != fflush(stream->out);
+    else
+        return FALSE;
+}
+
+
+
+
+
+
+
 
 static charsink_t *
 charsink_stream_init(charsink_stream_t *stream, FILE *out)
 {   stream->out = out;
-    return charsink_init(&stream->sink, &charsink_stream_putc);
+    return charsink_init(&stream->sink, &charsink_stream_putc,
+                         &charsink_stream_flush);
 }
 
 
@@ -1239,6 +1272,24 @@ charsink_socket_putc(charsink_t *sink, int intch)
 
 
 
+#if 0
+static charsink_t *
+charsink_socket_tcp_flush(charsink_socket_t *socket)
+{
+    int flag = 1;
+    int len;
+    /* turn NODELAY on */
+    setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY,
+               (char *)&flag, sizeof(int));
+    /* send nothing */
+    len = (int)send(socket->fd, &ch, 0, socket->send_flags);
+    /* turn NODELAY off */
+    flag = 0; 
+    setsockopt(socket->fd, IPPROTO_TCP, TCP_NODELAY,
+               (char *)&flag, sizeof(int));
+    return len == 0;
+}
+#endif
 
 
 
@@ -1247,7 +1298,7 @@ static charsink_t *
 charsink_socket_init(charsink_socket_t *socket, int fd, int send_flags)
 {   socket->fd = fd;
     socket->send_flags = send_flags;
-    return charsink_init(&socket->sink, &charsink_socket_putc);
+    return charsink_init(&socket->sink, &charsink_socket_putc, /*flush*/NULL);
 }
 
 
@@ -1374,7 +1425,7 @@ charsink_string_init(charsink_string_t *charbuf)
 {   charbuf->charvec = NULL;
     charbuf->n = 0;
     charbuf->maxn = 0;
-    return charsink_init(&charbuf->sink, &charsink_string_putc);
+    return charsink_init(&charbuf->sink, &charsink_string_putc, /*flush*/NULL);
 }
 
 
@@ -1466,7 +1517,8 @@ charsink_fixstring_init(charsink_string_t *charbuf, char *str, size_t len)
 {   charbuf->charvec = str;
     charbuf->n = 0;
     charbuf->maxn = len;
-    return charsink_init(&charbuf->sink, &charsink_fixstring_putc);
+    return charsink_init(&charbuf->sink, &charsink_fixstring_putc,
+                         /*flush*/NULL);
 }
 
 
@@ -23005,7 +23057,7 @@ fn_read(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_write(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: write <name> <string> */
+{   /* syntax: write <stream> <string> */
     const value_t *stream = parser_builtin_arg(state, 1);
     const value_t *obj = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
@@ -23021,6 +23073,30 @@ fn_write(const value_t *this_fn, parser_state_t *state)
             if (value_string_get(obj, &buf, &len))
                 val = value_int_new(charsink_write(sink, (char *)buf, len));
         }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
+fn_flush(const value_t *this_fn, parser_state_t *state)
+{   /* syntax: flush <stream> */
+    const value_t *stream = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(stream, type_stream))
+    {   charsink_t *sink;
+        if (!value_stream_sink(stream, &sink))
+        {   val = value_false;
+            parser_error(state, "stream not open for output\n");
+        } else
+            val = value_bool(charsink_flush(sink));
     } else
         parser_report_help(state, this_fn);
 
@@ -23381,6 +23457,9 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
     mod_addfn(icmds, "write",
               "<stream> <string> - write string to stream",
               &fn_write, 2);
+    mod_addfn(icmds, "flush",
+              "<stream> - ensure unbuffered output is written",
+              &fn_flush, 1);
     mod_addfn(icmds, "fprintf",
               "<stream> <format> <env> - write formatted string to stream",
               &fn_fprintf, 3);
