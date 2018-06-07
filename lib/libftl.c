@@ -228,7 +228,7 @@
 /* #define EXIT_ON_CTRL_C */
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 20
+#define VERSION_MIN 21
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -349,7 +349,7 @@
 #define HAS_TOWUPPER    /* C99 function */
 #define HAS_TOWLOWER    /* C99 function */
 #define HAS_GETHOSTBYNAME
-/* #define HAS_SOCKETS */
+#define HAS_SOCKETS 
 
 
 
@@ -460,6 +460,7 @@
 // #define DEBUG_MEMDIFF DO 
 // #define DEBUG_ARGV DO
 // #define DEBUG_FILEPATH DO
+// #define DEBUG_SOCKET DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_GC
@@ -484,6 +485,7 @@
 #undef DEBUG_MEMDIFF
 #undef DEBUG_ARGV
 #undef DEBUG_FILEPATH
+#undef DEBUG_SOCKET
 #endif
 
 
@@ -553,6 +555,9 @@
 #endif
 #ifndef DEBUG_FILEPATH
 #define DEBUG_FILEPATH OMIT
+#endif
+#ifndef DEBUG_SOCKET
+#define DEBUG_SOCKET OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -920,6 +925,114 @@ thread_active(thread_os_t thread)
 
 /*****************************************************************************
  *                                                                           *
+ *          Sockets                                                          *
+ *          =======                                                          *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+/* for sockets */
+#ifdef _WIN32
+/* Windows */
+# include <io.h>                /* read/write and the like */
+# include <winsock2.h>          /* socket operations */
+# include <ws2tcpip.h>
+#else
+/* Assume POSIX */
+# include <sys/socket.h>
+# include <netinet/in.h>
+# include <netdb.h>
+# include <arpa/inet.h>
+# include <resolv.h>
+# include <netdb.h>
+#endif
+
+
+
+/*! get sockaddr, IPv4 or IPv6
+ */
+static void *get_in_addr(struct sockaddr *sa)
+{
+    if (sa->sa_family == AF_INET)
+        return &(((struct sockaddr_in *)sa)->sin_addr);
+    else
+        return &(((struct sockaddr_in6 *)sa)->sin6_addr);
+}
+
+
+
+
+#ifdef _WIN32
+/* Windows */
+
+#define OS_ADDR_FAMILY_IPV4 AF_INET
+
+#define os_skt_close(_skt) closesocket(_skt)
+
+static char *skt_sockaddr_to_str(struct sockaddr_storage *addr)
+{
+    void *in_addr = get_in_addr((struct sockaddr *)addr);
+    return inet_ntoa(*(struct in_addr *)in_addr);
+}
+
+
+extern bool os_socketlib_start(char *err_buff)
+{
+    static WSADATA ws_info;
+    int rc = WSAStartup(MAKEWORD(2,2), &ws_info);
+
+    if (rc != 0 && err_buff != NULL)
+        sprintf(err_buff, "cannot start Windows Sockets - rc %d", rc);
+
+    return rc == 0;
+}
+
+extern void os_socketlib_end(void)
+{
+    WSACleanup();
+}
+
+
+
+#else
+/* Assume POSIX style operating system */
+
+#define OS_ADDR_FAMILY_IPV4 AF_UNSPEC
+
+#define os_skt_close(_skt) close(_skt)
+
+
+static char *skt_sockaddr_to_str(struct sockaddr_storage *addr)
+{
+    static char ip_addrstr[INET6_ADDRSTRLEN]; 
+    inet_ntop(addr->ss_family, get_in_addr((struct sockaddr *) addr), 
+              ip_addrstr, sizeof(ip_addrstr)); 
+    return &ip_addrstr[0];
+}
+
+extern bool os_socketlib_start(char *err_buff)
+{
+    return true;
+}
+
+extern void os_socketlib_end(void)
+{
+    return;
+}
+
+#endif
+
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Code ID                                                          *
  *          =======                                                          *
  *                                                                           *
@@ -1250,7 +1363,7 @@ charsink_stream_delete(charsink_t **ref_sink)
 typedef struct
 {   charsink_t sink;
     int fd;
-    int send_flags;
+    int send_flags; /* e.g. MSG_OOB, MSG_DONTROUTE */
 } charsink_socket_t;
 
 
@@ -2164,7 +2277,7 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
 typedef struct
 {   charsource_t base;
     int fd;
-    int recv_flags;
+    int recv_flags; /* e.g. MSG_OOB, MSG_PEEK, MSG_WAITALL */
     int lineno;
 } charsource_socket_t;
 
@@ -2205,8 +2318,8 @@ charsource_socket_read(charsource_t *base_source, void *buf, size_t len)
 
 
 static int
-charsource_skt_linecount(charsource_t *base_source)
-{   charsource_socket_t *source = (charsource_file_t *)base_source;
+charsource_socket_linecount(charsource_t *base_source)
+{   charsource_socket_t *source = (charsource_socket_t *)base_source;
     return source->lineno;
 }
 
@@ -2236,11 +2349,13 @@ static void charsource_socket_delete(charsource_t *source)
 static charsource_t *
 charsource_socket_init(charsource_socket_t *source,
                        charsource_delete_fn_t *delete_fn,
-                       const char *name, int fd, int recv_flags)
+                       const char *name, int fd, int recv_flags,
+                       bool with_close)
 {    charsource_init(&source->base,
                      &charsource_socket_rdch, &charsource_socket_read,
                      &charsource_socket_linecount,
-                     delete_fn, &charsource_socket_close, "inet:%s", name);
+                     delete_fn, with_close? &charsource_socket_close: NULL,
+                     "inet:%s", name);
      source->fd = fd;
      source->recv_flags = recv_flags;
      source->lineno = 1; /* start at line 1 */
@@ -2252,19 +2367,13 @@ charsource_socket_init(charsource_socket_t *source,
 
 
 extern charsource_t *
-charsource_stream_skt_new(int fd, int recv_flags,,
-                          const char *name, bool autoclose)
+charsource_socket_new(int fd, int recv_flags,
+                      const char *name, bool autoclose)
 {   charsource_socket_t *source = (charsource_socket_t *)
                                   FTL_MALLOC(sizeof(charsource_socket_t));
     if (NULL != source)
-    {   if (autoclose)
-            return charsource_socket_init(source, &charsource_socket_delete,
-                                          name, fd, recv_flags);
-        else
-            return charsource_stream_init(source, &charsource_socket_delete,
-                                          &charsource_socket_rdch,
-                                          &charsource_socket_read, name,
-                                          fd, recv_flags);
+    {   return charsource_socket_init(source, &charsource_socket_delete,
+                                      name, fd, recv_flags, autoclose);
     } else
         return NULL;
 }
@@ -2272,7 +2381,9 @@ charsource_stream_skt_new(int fd, int recv_flags,,
 
 
 
-
+#if 0
+/*! Connect to a named socket and return a charsource
+ */
 extern charsource_t *
 charsource_socket_connect_new(const char *name)
 {   int fd = -1;
@@ -2291,7 +2402,34 @@ charsource_socket_connect_new(const char *name)
 
     return (charsource_t *)source;
 }
+#endif
 
+
+
+static bool cmds_socket_init(void)
+{
+    char errmsg[256];
+    
+    if (os_socketlib_start(&errmsg[0]))
+        return TRUE;
+    else
+    {
+        fprintf(stderr, "%s: couldn't bind to socket library - %s (rc %d)\n",
+                codeid(), strerror(errno), errno);
+        return FALSE;
+    }
+}
+
+static void cmds_socket_end(void)
+{
+    os_socketlib_end();
+}
+
+
+#else
+
+#define cmds_socket_init() (TRUE)
+#define cmds_socket_end() 
 
 
 #endif
@@ -7236,12 +7374,20 @@ value_stream_opensocket_close(value_t *stream)
 
 
 
+static bool
+parse_port(const char **ref_line, number_t *out_port)
+{
+    /* syntax: [:]<port>
+     */
+    (void)parse_key(ref_line, ":"); /* optional */
+    return parse_int_val(ref_line, out_port);
+}
+
 
 
 
 static bool
-parse_hostport(const char **ref_line, parser_state_t *state,
-               addr_ip_t *out_ip, number_t *out_port)
+parse_hostport(const char **ref_line, addr_ip_t *out_ip, number_t *out_port)
 {   /* syntax: <host> | [:]<port> | <host>:<port>
                (host is <dotted quad>|<ip addr name>)
      */
@@ -7251,11 +7397,10 @@ parse_hostport(const char **ref_line, parser_state_t *state,
 
     if (hashost)
         hasport = parse_key(ref_line, ":") &&
-                  (ok = parse_int_base(ref_line, state, out_port));
+                  (ok = parse_int_val(ref_line, out_port));
     else
-    {   (void)parse_key(ref_line, ":");
-        hasport = parse_int_base(ref_line, state, out_port);
-    }
+        hasport = parse_port(ref_line, out_port);
+
     if (!hashost && !hasport)
         ok = FALSE;
 
@@ -7276,13 +7421,102 @@ parse_hostport(const char **ref_line, parser_state_t *state,
 
 
 static bool
-parse_sockaddr(const char **ref_line, parser_state_t *state,
-               struct sockaddr_in *addr)
-{   addr_ip_t host;
+parse_protocol(const char **ref_line, 
+               int *out_prot_domain, int *out_prot_type, int *out_protocol)
+{
+    int prot_domain = -1;
+    int prot_type = -1;
+    int protocol = -1;
+    
+    if (parse_key(ref_line, "tcp4")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET;
+        prot_type = SOCK_STREAM;
+    }
+    else if (parse_key(ref_line, "tcp6")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET6;
+        prot_type = SOCK_STREAM;
+    }
+    else if (parse_key(ref_line, "tcp")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET;
+        prot_type = SOCK_STREAM;
+    }
+    else if (parse_key(ref_line, "udp4")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET;
+        prot_type = SOCK_DGRAM;
+    }
+    else if (parse_key(ref_line, "udp6")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET6;
+        prot_type = SOCK_DGRAM;
+    }
+    else if (parse_key(ref_line, "udp")) {
+        struct protoent *prot_entry = getprotobyname("tcp");
+        if (prot_entry != NULL)
+            protocol = prot_entry->p_proto;
+        prot_domain = PF_INET;
+        prot_type = SOCK_DGRAM;
+    }
+
+    if (protocol >= 0)
+    {
+        *out_prot_domain = prot_domain;
+        *out_prot_type   = prot_type;
+        *out_protocol    = protocol;
+        return TRUE;
+    }
+    else
+        return FALSE;
+}
+
+
+
+static bool
+parse_inet4addr_remote(const char **ref_line, struct sockaddr_storage *addr)
+{   /*! TODO: parse _in6 (IPv6) addresses too? */
+    struct sockaddr_in *inet4_addr = (struct sockaddr_in *)addr;
+    addr_ip_t host;
     number_t port;
-    bool ok = parse_hostport(ref_line, state, &host, &port);
+    bool ok = parse_hostport(ref_line, &host, &port);
     if (ok)
-    {   addr->sin_addr.s_addr = ipaddr_net32(&host);
+    {   inet4_addr->sin_addr.s_addr = ipaddr_net32(&host);
+        /*printf("%s: host %X becomes %X\n",
+                 codeid(), *(unsigned *)&host,
+                 (unsigned)addr->sin_addr.s_addr);
+        */
+        inet4_addr->sin_port = htons((unsigned short)port);
+    }
+
+    if (ok)
+        inet4_addr->sin_family = AF_INET;
+
+    return ok;
+}
+
+
+
+
+
+#if 0
+static bool
+parse_inet4addr_local(const char **ref_line, struct sockaddr_in *addr)
+{   number_t port;
+    bool ok = parse_port(ref_line, &port);
+    if (ok)
+    {   addr->sin_addr.s_addr = local;
         /*printf("%s: host %X becomes %X\n",
                  codeid(), *(unsigned *)&host,
                  (unsigned)addr->sin_addr.s_addr);
@@ -7295,6 +7529,7 @@ parse_sockaddr(const char **ref_line, parser_state_t *state,
 
     return ok;
 }
+#endif
 
 
 
@@ -7313,9 +7548,11 @@ value_stream_opensocket_new(int fd, bool autoclose,
         stream_sink_close_fn_t *sink_close = NULL;
         stream_sink_delete_fn_t *sink_delete = NULL;
         stream_close_fn_t *close = NULL;
+        int send_flags = 0; 
+        int recv_flags = 0; 
 
         if (write)
-        {   sink = charsink_socket_new(name, fd);
+        {   sink = charsink_socket_new(fd, send_flags);
             sink_close = &charsink_stream_close;
             sink_delete = &charsink_stream_delete;
         }
@@ -7327,7 +7564,7 @@ value_stream_opensocket_new(int fd, bool autoclose,
         if (autoclose)
             close = &value_stream_opensocket_close;
 
-        fstream->socket = socket;
+        fstream->fd = fd;  /* socket */
         return value_stream_init(&fstream->stream, &type_stream_socket_val,
                                  source, sink, close,
                                  sink_close, sink_delete, /*on_heap*/TRUE);
@@ -7339,19 +7576,340 @@ value_stream_opensocket_new(int fd, bool autoclose,
 
 
 
+typedef enum {
+    SOCKET_CONN_OK = 0,         // connection is OK
+    SOCKET_CONN_BAD_RETRY,      // connection failed - can retry
+    SOCKET_CONN_BAD_PERM        // connection failed - can't retry
+} socket_conn_rc_t;
+
+
+
+
+
+/* Create a master socket for listening to incomming connections on
+ *
+ *    - creates a socket
+ *    - binds a local port to it
+ *    - listens for an incomming connection
+ *
+ * If successful this should result in a master socket.
+ */
+static socket_conn_rc_t
+socket_listen_connection(const char *socket_service, int prot_family,
+                         int prot_type, int protocol_id, int listen_backlog,
+                         int *out_master_fd)
+{
+    int rv;
+    socket_conn_rc_t rc = SOCKET_CONN_OK;
+    int master_fd = -1;
+    struct addrinfo hints;
+    struct addrinfo *servinfo;
+    struct addrinfo *found_myaddr = NULL;
+
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = prot_family;
+    hints.ai_socktype = prot_type;
+    /* ai_protocol defaults to IPPROTO_IP */
+    /*! TODO: set ai_protocol to protocol_id */
+    hints.ai_flags = AI_PASSIVE; // use my local IP address
+
+    if ((rv = getaddrinfo(NULL, socket_service, &hints, &servinfo)) != 0)
+    {
+        fprintf(stderr, "%s: socket listen - getaddrinfo \"%s\" failed - %s\n",
+                codeid(), socket_service, gai_strerror(rv));
+        rc = SOCKET_CONN_BAD_RETRY;
+        /* master_fd remains -1 */
+    }
+    else
+    {
+        // loop through all the results and bind to the first we can
+        struct addrinfo *myaddr = servinfo;
+
+        while (myaddr != NULL && master_fd == -1 && rc == SOCKET_CONN_OK)
+        {
+            DEBUG_SOCKET(
+                DPRINTF("%s: socket listen - socket for family %d type %d"
+                        " protocol %d\n", codeid(),
+                        myaddr->ai_family, myaddr->ai_socktype,
+                        myaddr->ai_protocol););
+            master_fd = socket(myaddr->ai_family, myaddr->ai_socktype,
+                               myaddr->ai_protocol);
+            if (master_fd == -1)
+                fprintf(stderr, "%s: failed to create a socket - "
+                        "%s (rc %d)\n", codeid(), strerror(errno), errno);
+            else
+            {
+                const char yes = 1;
+
+                OMIT(DPRINTF("%s: socket listen - set socket to reuse addr\n",
+                             codeid()););
+                // allow this socket to be reused shortly after having been
+                // used previously
+                if (setsockopt(master_fd, SOL_SOCKET, SO_REUSEADDR, &yes,
+                               sizeof(int)) == -1)
+                {
+                    fprintf(stderr, "%s: socket listen - failed to make "
+                            "socket %d reusable - %s (rc %d)\n",
+                            codeid(), master_fd, strerror(errno), errno);
+                    os_skt_close(master_fd);
+                    master_fd = -1;
+                    rc = SOCKET_CONN_BAD_PERM;
+                }
+                else
+                {
+                    if (bind(master_fd, myaddr->ai_addr, myaddr->ai_addrlen) ==
+                        -1)
+                    {
+                        fprintf(stderr, "%s: socket listen - failed to bind "
+                                "to port '%s' - %s (rc %d)\n", codeid(),
+                                socket_service, strerror(errno), errno);
+                        os_skt_close(master_fd);
+                        master_fd = -1;
+                        rc = SOCKET_CONN_BAD_PERM;
+                    }
+                    else
+                    {
+                        found_myaddr = myaddr;
+                        DEBUG_SOCKET(DPRINTF("%s: socket listen - connected to "
+                                             "port %s socket %d (addrinfo %p) "
+                                             "rc %d\n", codeid(),
+                                             socket_service, master_fd,
+                                             myaddr, rc););
+                    }
+                }
+                /* else master_fd will be set properly and there will be no
+                 * error condition */
+            }
+            if (master_fd == -1)
+                myaddr = myaddr->ai_next;
+        }
+    }
+
+    if (rc == SOCKET_CONN_OK && found_myaddr == NULL)
+    {
+        fprintf(stderr, "%s: socket listen - failed to find my "
+                "own address to bind\n", codeid());
+        rc = SOCKET_CONN_BAD_PERM;
+    }
+
+    freeaddrinfo(servinfo); // we have finished with this structure
+
+    if (rc == SOCKET_CONN_OK &&
+        listen(master_fd, listen_backlog) == -1)
+    {
+        fprintf(stderr, "%s: socket listen - failed - %s (rc %d)\n",
+                codeid(), strerror(errno), errno);
+        rc = SOCKET_CONN_BAD_PERM;
+    }
+
+    *out_master_fd = master_fd;
+
+    return rc;
+}
+
+
+
+
+
+/* Poll the master socket to see if a connection is available to accept
+ */
+static bool
+socket_master_connection_poll(int master_fd)
+{
+    int max_fd = master_fd;
+    fd_set fds_acceptable;
+    int activity;
+    struct timeval timeout;
+    bool pending = false;
+
+    /* don't wait - just poll */
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+
+    FD_ZERO(&fds_acceptable);
+    FD_SET(master_fd, &fds_acceptable);
+
+    DEBUG_SOCKET(DPRINTF("%s: socket listen - testing for connections...\n",
+                         codeid()););
+    activity = select(max_fd+1, &fds_acceptable,
+                      /*write fd_set*/NULL, /*error fd_set*/NULL, &timeout);
+
+    if ((activity < 0) && (errno != EINTR))
+    {
+        DEBUG_SOCKET(DPRINTF("%s: socket listen - select error %s (rc %d)\n",
+                             codeid(), strerror(errno), errno););
+    }
+    else
+    {
+        pending = FD_ISSET(master_fd, &fds_acceptable);
+        DEBUG_SOCKET(DPRINTF("%s: socket listen - %sconnection pending\n",
+                             codeid(), pending? "":"no "););
+    }
+
+    return pending;
+}
+
+
+
+
+/* Accept the next socket connection on a master socket
+ *
+ *    - accepts the connection
+ *
+ * If successful the new connection will be made available on a socket whose
+ * file descriptor is returned as well as their address information.
+ */
+static socket_conn_rc_t
+socket_master_connection_accept(int master_fd,
+                                struct sockaddr_storage *their_addr,
+                                int *out_socket_fd)
+{
+    socklen_t sin_size;
+    socket_conn_rc_t rc = SOCKET_CONN_OK;
+
+    sin_size = sizeof(*their_addr);
+    *out_socket_fd = accept(master_fd, (struct sockaddr *)their_addr,
+                            &sin_size);
+    if (*out_socket_fd == -1) {
+        fprintf(stderr, "%s: socket accept - failed - %s (rc %d)\n",
+                codeid(), strerror(errno), errno);
+        rc = SOCKET_CONN_BAD_RETRY;
+    }
+
+    return rc;
+}
+
+
+
+
+/* Accept the next incomming connection
+ *
+ *    - creates a socket
+ *    - binds a local port to it
+ *    - listens for an incomming connection
+ *    - accepts the connection
+ *
+ * optionally forcing socket connections to complete (if force is not true a
+ * server listen port might be established without waiting for a connection to
+ * be accepted).
+ */
+static socket_conn_rc_t
+socket_accept_connection(const char *protocol,
+                         const char *master_port_name,
+                         struct sockaddr_storage *their_addr,
+                         int *out_socket_fd,
+                         int listen_backlog, bool force_accept,
+                         const char *waitmsg)
+{
+    socket_conn_rc_t rc = SOCKET_CONN_BAD_PERM;
+    int master_fd = -1;
+    const char *prot_line = protocol;
+    int prot_family = -1;
+    int prot_type   = -1;
+    int protocol_id = -1;
+
+    if (parse_protocol(&prot_line, &prot_family, &prot_type, &protocol_id) &&
+        parse_empty(&prot_line))
+    {
+        rc = socket_listen_connection(master_port_name,
+                                      OS_ADDR_FAMILY_IPV4, SOCK_STREAM,
+                                      IPPROTO_IP,
+                                      listen_backlog, &master_fd);
+
+        if (rc == SOCKET_CONN_OK && master_fd >= 0)
+        {
+            if (force_accept || socket_master_connection_poll(master_fd))
+            {
+
+                if (waitmsg != NULL)
+                    printf(waitmsg, codeid(), master_port_name);
+                rc = socket_master_connection_accept(master_fd, their_addr,
+                                                     out_socket_fd);
+                if (rc == SOCKET_CONN_OK)
+                {
+                    // now we have the new FD for the accepted connection, we
+                    // can close the original listening socket
+                    os_skt_close(master_fd);
+
+                    DEBUG_SOCKET(
+                        char *their_ipname = skt_sockaddr_to_str(&their_addr);
+                        DPRINTF("%s: socket accept - got connection from %s\n",
+                                codeid(), their_ipname);
+                    );
+                }
+            }
+        }
+    }
+    return rc;
+}
+
+
 
 
 
 
 extern value_t *
-value_stream_socket_new(const char *name, bool read, bool write)
-{   const char *mode = (read? (write? "rw": "r"): (write? "w": ""));
-    struct sockaddr_in str = fopen(name, mode);
+value_stream_socket_listen_new(const char *protocol, const char *name,
+                               bool read, bool write)
+{   int skt_fd = -1;
+    struct sockaddr_storage their_addr;
+    socket_conn_rc_t rc =
+        socket_accept_connection(protocol, name, &their_addr, &skt_fd,
+                                 /*listen_backlog*/1, /*force_accept*/TRUE,
+                                 "%s: waiting for connection on %s\n");
 
-    if (NULL == str)
+    if (rc != SOCKET_CONN_OK || skt_fd < 0)
         return NULL;
     else
-        return value_stream_opensocket_new(str, /* autoclose */TRUE, name,
+    {
+        char *their_ip_name = skt_sockaddr_to_str(&their_addr);
+        return value_stream_opensocket_new(skt_fd, /* autoclose */TRUE,
+                                           their_ip_name == NULL? name:
+                                               their_ip_name,
+                                           read, write);
+    }
+}
+
+
+
+
+
+extern value_t *
+value_stream_socket_connect_new(const char *protocol, const char *address,
+                                bool read, bool write)
+{   int skt_fd = -1;
+    const char *addr_line = address;
+    const char *prot_line = protocol;
+    int prot_family = -1;
+    int prot_type   = -1;
+    int protocol_id = -1;
+    struct sockaddr_storage skt_addr; 
+    /*! TODO: try to support at least IPv6 (sockaddr_in6) too */
+
+    if (parse_protocol(&prot_line, &prot_family, &prot_type, &protocol_id) &&
+        parse_empty(&prot_line) && 
+        parse_inet4addr_remote(&addr_line, &skt_addr) &&
+        parse_empty(&addr_line))
+    {
+        // socket should be use a protocol (PF_x) family value, but these are
+        // effectively identical to address (AF_x) values
+        skt_fd = socket(prot_family, prot_type, protocol_id);
+        if (skt_fd >= 0) {
+            int rc = connect(skt_fd, (struct sockaddr *)&skt_addr,
+                             sizeof(skt_addr));
+            if (rc < 0) {
+                
+                os_skt_close(skt_fd);
+                skt_fd = -1;
+            }
+        }
+    }
+
+    if (skt_fd < 0)
+        return NULL;
+    else
+        /* TODO: make stream name more complex - use protocol too */
+        return value_stream_opensocket_new(skt_fd, /* autoclose */TRUE, address,
                                            read, write);
 }
 
@@ -14364,14 +14922,6 @@ parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok)
     return parser_catch_call(state, &parser_call_invoke, (void *)code, out_ok);
 }
 
-
-
-
-
-/* forward definitions */
-
-extern bool parse_empty(const char **ref_line);
-extern bool parse_space(const char **ref_line);
 
 
 
@@ -22990,6 +23540,83 @@ fn_outstring(const value_t *this_fn, parser_state_t *state)
 
 
 
+#ifdef HAS_SOCKETS
+    
+static const value_t *
+fn_connect(const value_t *this_fn, parser_state_t *state)
+{   /* syntax: connect <protname> <address> <access> */
+    const value_t *protval = parser_builtin_arg(state, 1);
+    const value_t *addressval = parser_builtin_arg(state, 2);
+    const value_t *accessval = parser_builtin_arg(state, 3);
+    const value_t *val = &value_null;
+
+    const char *prot;
+    size_t protlen;
+    const char *address;
+    size_t addresslen;
+    const char *access;
+    size_t accesslen;
+
+    if (value_string_get(protval, &prot, &protlen) &&
+        value_string_get(addressval, &address, &addresslen) &&
+        value_string_get(accessval, &access, &accesslen))
+    {   bool read = FALSE;
+        bool write = FALSE;
+
+        if (parse_stream_access(&access, &read, &write))
+        {   val = value_stream_socket_connect_new(prot, address,
+                                                  read, write);
+        } else
+            parser_report(state, "stream access string must contain "
+                          "'r' and 'w' only\n");
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_listen(const value_t *this_fn, parser_state_t *state)
+{   /* syntax: listen <protocol> <masterport> <access> */
+    const value_t *protval = parser_builtin_arg(state, 1);
+    const value_t *portval = parser_builtin_arg(state, 2);
+    const value_t *accessval = parser_builtin_arg(state, 3);
+    const value_t *val = &value_null;
+    const char *prot;
+    size_t protlen;
+    const char *port;
+    size_t portlen;
+    const char *access;
+    size_t accesslen;
+
+    if (value_string_get(protval, &prot, &protlen) &&
+        value_string_get(portval, &port, &portlen) &&
+        value_string_get(accessval, &access, &accesslen))
+    {   bool read = FALSE;
+        bool write = FALSE;
+
+        if (parse_stream_access(&access, &read, &write))
+        {   val = value_stream_socket_listen_new(prot, port, read, write);
+        } else
+            parser_report(state, "stream access string must contain "
+                          "'r' and 'w' only\n");
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+#endif /* HAS_SOCKETS */
+
+
+
+
+
+
 
 static const value_t *
 fn_getc(const value_t *this_fn, parser_state_t *state)
@@ -23448,6 +24075,19 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
               "<closure> - apply string output stream to closure, "
               "return string written",
               &fn_outstring, 1);
+#ifdef HAS_SOCKETS
+    if (cmds_socket_init())
+    {
+        mod_addfn(icmds, "connect",
+                  "<protocol> <netaddress> <rw> - return stream for remote "
+                  "connection",
+                  &fn_connect, 3);
+        mod_addfn(icmds, "listen",
+                  "<protocol> <netport> <rw> - return stream for local port",
+                  &fn_listen, 3);
+    }
+    
+#endif /* HAS_SOCKETS */
     mod_addfn(icmds, "getc",
               "<stream> - read the next character from the stream",
               &fn_getc, 1);
@@ -23484,6 +24124,11 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
 
 
 
+
+static void cmds_generic_stream_end(void)
+{
+    cmds_socket_end();
+}
 
 
 
@@ -27753,6 +28398,7 @@ cmds_generic_end(parser_state_t *state)
 #ifdef USE_FTL_XML
     cmds_xml_end(state);
 #endif
+    cmds_generic_stream_end();
 }
 
 

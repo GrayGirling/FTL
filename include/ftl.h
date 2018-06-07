@@ -715,10 +715,15 @@ value_stream_file_path_new(const char *path, const char *name, size_t namelen,
 
 extern value_t *
 value_stream_opensocket_new(int fd, bool autoclose,
-                const char *name, bool read, bool write);
+                           const char *name, bool read, bool write);
 
 extern value_t *
-value_stream_socket_new(const char *name, bool read, bool write);
+value_stream_socket_connect_new(const char *protocol, const char *address,
+                                bool read, bool write);
+
+extern value_t *
+value_stream_socket_listen_new(const char *protocol, const char *name,
+                               bool read, bool write);
 
 
 /*          Socket Stream Values                                             */
