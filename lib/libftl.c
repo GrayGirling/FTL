@@ -7496,10 +7496,10 @@ parse_inet4addr_remote(const char **ref_line, struct sockaddr_storage *addr)
     bool ok = parse_hostport(ref_line, &host, &port);
     if (ok)
     {   inet4_addr->sin_addr.s_addr = ipaddr_net32(&host);
-        /*printf("%s: host %X becomes %X\n",
-                 codeid(), *(unsigned *)&host,
-                 (unsigned)addr->sin_addr.s_addr);
-        */
+        DEBUG_SOCKET(
+            printf("%s: host %X becomes %X\n",
+                    codeid(), *(unsigned *)&host,
+                   (unsigned)((struct sockaddr_in *)addr)->sin_addr.s_addr););
         inet4_addr->sin_port = htons((unsigned short)port);
     }
 
@@ -7886,27 +7886,48 @@ value_stream_socket_connect_new(const char *protocol, const char *address,
     int prot_family = -1;
     int prot_type   = -1;
     int protocol_id = -1;
-    struct sockaddr_storage skt_addr; 
     /*! TODO: try to support at least IPv6 (sockaddr_in6) too */
 
     if (parse_protocol(&prot_line, &prot_family, &prot_type, &protocol_id) &&
-        parse_empty(&prot_line) && 
-        parse_inet4addr_remote(&addr_line, &skt_addr) &&
-        parse_empty(&addr_line))
+        parse_empty(&prot_line))
     {
-        // socket should be use a protocol (PF_x) family value, but these are
-        // effectively identical to address (AF_x) values
-        skt_fd = socket(prot_family, prot_type, protocol_id);
-        if (skt_fd >= 0) {
-            int rc = connect(skt_fd, (struct sockaddr *)&skt_addr,
-                             sizeof(skt_addr));
-            if (rc < 0) {
+        struct sockaddr_storage skt_addr;
+        size_t skt_size = sizeof(struct sockaddr_in);
+
+        memset(&skt_addr, 0, sizeof(skt_addr));
+        
+        if (parse_inet4addr_remote(&addr_line, &skt_addr) &&
+            parse_empty(&addr_line))
+        {
+            // socket should be use a protocol (PF_x) family value, but these
+            // are effectively identical to address (AF_x) values
+            skt_fd = socket(prot_family, prot_type, protocol_id);
+            if (skt_fd >= 0) {
+                int rc = connect(skt_fd, (struct sockaddr *)&skt_addr,
+                                 skt_size);
                 
-                os_skt_close(skt_fd);
-                skt_fd = -1;
+                if (rc < 0) {
+                    fprintf(stderr,
+                            "%s: socket connect - failed - %s (rc %d)\n",
+                            codeid(), strerror(errno), errno);
+                    
+                    os_skt_close(skt_fd);
+                    skt_fd = -1;
+                }
             }
+            else
+                fprintf(stderr, "%s: socket connect - "
+                        "couldn't create outgoing socket - %s (rc %d)\n",
+                        codeid(), strerror(errno), errno);
         }
+        else
+            fprintf(stderr, "%s: socket connect - bad destination - '%s'\n",
+                    codeid(), address);
+        
     }
+    else
+        fprintf(stderr, "%s: socket connect - bad protocol - '%s'\n",
+                codeid(), protocol);
 
     if (skt_fd < 0)
         return NULL;
