@@ -364,6 +364,23 @@
  *****************************************************************************/
 
 
+#ifdef _WIN32
+
+#include <winsock2.h>
+/*< must be done before windows.h to prevent winsock.h being included */
+/*< must be done before the standard headers since they may include windows.h */
+#include <windows.h>
+#include <winerror.h>
+#include <errno.h>
+#ifndef EINVAL
+#define EINVAL WSAEINVAL
+#endif
+#ifndef EBADF
+#define EBADF WSAEBADF
+#endif
+
+#endif /* _WIN32 */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -378,20 +395,6 @@
 #include <setjmp.h>
 #include <errno.h>
 
-#ifdef _WIN32
-
-#include <windows.h>
-#include <winerror.h>
-#ifndef EINVAL
-#define EINVAL WSAEINVAL
-#endif
-#ifndef EBADF
-#define EBADF WSAEBADF
-#endif
-
-#else
-#include <errno.h>
-#endif
 
 
 #include "libdyn.h"
@@ -407,7 +410,7 @@
 
 #ifdef HAS_GETHOSTBYNAME
 #if defined(_WIN32) || defined(__MINGW32__) || defined(__MINGW64__)
-#include <winsock.h>
+#include <winsock2.h>
 #else
 #include <netdb.h>
 #include <sys/socket.h>        /* for AF_INET */
@@ -935,17 +938,17 @@ thread_active(thread_os_t thread)
 /* for sockets */
 #ifdef _WIN32
 /* Windows */
-# include <io.h>                /* read/write and the like */
-# include <winsock2.h>          /* socket operations */
+#include <io.h>                /* read/write and the like */
+//# include <winsock2.h>          /* socket operations */
 # include <ws2tcpip.h>
 #else
 /* Assume POSIX */
-# include <sys/socket.h>
-# include <netinet/in.h>
-# include <netdb.h>
-# include <arpa/inet.h>
-# include <resolv.h>
-# include <netdb.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <resolv.h>
+#include <netdb.h>
 #endif
 
 
@@ -2268,8 +2271,8 @@ charsource_file_path_new(const char *path, const char *name, size_t namelen)
 #endif
 
 #ifdef _WIN32
-#include <mstcpip.h>  /* Undoc'd SIO_* */
-#include <ipexport.h>
+//#include <mstcpip.h>  /* Undoc'd SIO_* */
+//#include <ipexport.h>
 #endif
 
 
@@ -2329,7 +2332,7 @@ charsource_socket_linecount(charsource_t *base_source)
 static void charsource_socket_close(charsource_t *base_source)
 {   charsource_socket_t *source = (charsource_socket_t *)base_source;
     if (source->fd >= 0)
-        close(source->fd);
+        os_skt_close(source->fd);
     source->fd = -1;
 }
 
@@ -7364,7 +7367,7 @@ static void
 value_stream_opensocket_close(value_t *stream)
 {   value_stream_socket_t *fstream = (value_stream_socket_t *)stream;
     if (fstream->fd >= 0)
-    {   close(fstream->fd);
+    {   os_skt_close(fstream->fd);
         fstream->fd = -1;
     }
 }
@@ -12085,7 +12088,7 @@ dir_lib_new(const value_t *libfilename, dir_t *syms, bool fix)
 
 
 
-#include <windows.h>
+//#include <windows.h>
 
 
 
