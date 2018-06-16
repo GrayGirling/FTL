@@ -99,7 +99,7 @@
 #include "ftl_internal.h"
 #include "ftl_elf.h"       /* our library */
 
-#if __GNUC__
+#if defined(__GNUC__) && !defined(_WIN32)
 #include <err.h>
 #endif
 

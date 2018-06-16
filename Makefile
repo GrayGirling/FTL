@@ -3,15 +3,18 @@ CC:=gcc
 
 # CONFIGURATION (these can be specified on the 'make' command line)
 
-add_elf=yes
-add_xml=yes
-add_json=yes
+use_elf=yes
+use_xml=yes
+use_json=yes
 elf_lib_type=ELF
 force_native=yes
 
 # Hint: if you are using windows 10 under WSL and you want to buld a Windows
 #       (non-WSL) executable try
-#       make add_elf=no force_native=yes
+#          make use_elf=no force_native=yes
+#       To test the compiler system try
+#          make force_native=yes hi.exe
+#          ./hi.exe
 
 # OS CUSTOMIZATION
 
@@ -137,7 +140,9 @@ PENV_DEFS :=
 PENV_OBJS := penv$(OBJ) $(FTLLIB_OBJS)
 PENV_LIBS := $(LIBS)
 
-ifeq ($(add_elf),yes)
+HI_OBJS := hi$(OBJ)
+
+ifeq ($(use_elf),yes)
 FTL_OBJS += libftl_elf$(OBJ)
 LIBELF_DEFS = -DUSE_LIB_$(elf_lib_type)
 LIBELF_INCS = $(INCS_LIBELF)
@@ -145,12 +150,12 @@ FTL_DEFS += -DUSE_FTLLIB_ELF
 FTL_LIBS += $(LIBS_LIBELF)
 endif
 
-ifeq ($(add_xml),yes)
+ifeq ($(use_xml),yes)
 FTL_OBJS += libftl_xml$(OBJ)
 FTL_DEFS += -DUSE_FTLLIB_XML
 endif
 
-ifeq ($(add_json),yes)
+ifeq ($(use_json),yes)
 FTL_OBJS += libftl_json$(OBJ)
 FTL_DEFS += -DUSE_FTLLIB_JSON
 endif
@@ -159,7 +164,7 @@ vpath %.c tools:lib
 vpath %.h include
 
 #all:	ftl libs cscope
-all:	ftl$(EXE) cscope
+all:	hi$(EXE) ftl$(EXE) cscope
 
 install: ftl$(EXE)
 	cp ftl$(EXE) ~/cmd/$(OSARCH)/
@@ -188,6 +193,9 @@ penv$(OBJ): penv.c
 ftl$(OBJ): ftl.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(FTL_DEFS) $(FTL_INCS) -c -o $@ $<
 
+hi$(OBJ): hi.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
 ftlext-test.c: ftl.h ftl_internal.h ftlext.h 
 
 libftl_elf.c: ftl.h ftl_internal.h ftl_elf.h
@@ -207,8 +215,11 @@ libs: $(FTLEXTS)
 ftl$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
 
-penv: $(PENV_OBJS) ftl.h ftl_internal.h Makefile
+penv$(EXE): $(PENV_OBJS) ftl.h ftl_internal.h Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PENV_OBJS) $(PENV_LIBS)
+
+hi$(EXE): $(HI_OBJS) Makefile
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(HI_OBJS)
 
 ifeq ($(HAS_CSCOPE),1)
 cscope:
@@ -222,4 +233,4 @@ test:
 	tests/check -a
 
 clean:
-	rm -f ftl penv $(FTL_OBJS) $(PENV_OBJS) $(FTLEXTS)
+	rm -f ftl penv hi $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)

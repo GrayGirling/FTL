@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
+ * Copyright (c) 2013-2018, Gray Girling
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -145,10 +146,10 @@
 #endif
 
 #define DO(x) x
-#define IGNORE(x) 
+#define OMIT(x) 
 
-/* #define DEBUGGC   DO */
-/* #define DEBUG_CLI DO */
+#define DEBUGGC   OMIT
+#define DEBUG_CLI OMIT
 
 #ifdef NDEBUG
 #undef DEBUGGC
@@ -156,11 +157,11 @@
 #endif
 
 #ifndef DEBUGGC
-#define DEBUGGC      IGNORE
+#define DEBUGGC      OMIT
 #endif
 
 #ifndef DEBUG_CLI
-#define DEBUG_CLI    IGNORE
+#define DEBUG_CLI    OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -441,7 +442,7 @@ cmds_ftl(parser_state_t *state)
     data_init();
 
     memset(&test_val, 0xff, sizeof(test_val));
-    IGNORE(printf("%s: test val at %p\n", codeid(), &test_val););
+    OMIT(printf("%s: test val at %p\n", codeid(), &test_val););
     
     /* create read-only variable for test_t test_val */
     mod_add_dir(cmds, "t1", dir_cstruct_new(&FTL_TSPEC(test_t),
@@ -697,6 +698,7 @@ main(int argc, char **argv)
     bool quiet = FALSE;
     int exit_rc = EXIT_OK;
     
+    DEBUG_CLI(printf(CODEID ": entered\n"););
     ftl_init();
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
