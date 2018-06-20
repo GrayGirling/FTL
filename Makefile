@@ -7,14 +7,23 @@ use_elf=yes
 use_xml=yes
 use_json=yes
 elf_lib_type=ELF
-force_native=yes
+force_native=no
+ndebug=no
 
 # Hint: if you are using windows 10 under WSL and you want to buld a Windows
 #       (non-WSL) executable try
 #          make use_elf=no force_native=yes
 #       To test the compiler system try
-#          make force_native=yes hi.exe
-#          ./hi.exe
+#          make force_native=yes hi
+#          cp hi.exe /mnt/c/TEMP
+#          /mnt/c/TEMP/hi.exe
+#       (Native binaries have to execute from a Windows file system)
+#       Warning running windows binaries from the bash command line separates
+#          output sent to stdout and to stderr - so errors are reported very late
+#          Advice: Run native programs in a native shell, not a *nix one
+
+# To make commands that run under WSL (but not natively) use
+#          make use_elf=no force_native=no
 
 # OS CUSTOMIZATION
 
@@ -39,20 +48,25 @@ ifeq ($(ARCH),cygwin64)
     ARCH=cygwin
 endif
 
+INSTALL_DIR=$(HOME)/cmd/$(OSARCH)
+
 NATIVE:=yes
 NATIVEARCH:=$(ARCH)
 ifeq ($(ARCH),cygwin)
     NATIVE:=no
     NATIVEARCH:=windows
+    NATIVE_INSTALL_DIR:=/cygdrive/c/TEMP
 endif
 ifeq ($(ARCH),winlinux)
     # may need e.g. ubuntu package mingw-w64
     NATIVE:=no
     NATIVEARCH:=windows
+    NATIVE_INSTALL_DIR:=/mnt/c/TEMP
 endif
 
 ifeq ($(force_native),yes)
     BUILDARCH=$(NATIVEARCH)
+    INSTALL_DIR=$(NATIVE_INSTALL_DIR)
 else
     BUILDARCH=$(ARCH)
 endif
@@ -122,6 +136,9 @@ $(info Building for OSARCH $(OSARCH) using $(CC) (building for $(BUILDARCH)))
 DEFINES  := 
 LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF)
 INCLUDES := -I include
+ifeq ($(ndebug),yes)
+    CC_OPT_DEBUGSYMS :=
+endif
 CFLAGS   := $(CFLAGS_CC) -Wall $(CC_OPT_DEBUGSYMS) $(INCLUDES)
 LIBFTL_DEFS = $(DEFINES) $(DEFS_READLINE)
 # DYNAMIC FTL ENVIRONMENTS
@@ -166,8 +183,11 @@ vpath %.h include
 #all:	ftl libs cscope
 all:	hi$(EXE) ftl$(EXE) cscope
 
-install: ftl$(EXE)
-	cp ftl$(EXE) ~/cmd/$(OSARCH)/
+install: ftl$(EXE) 
+	cp ftl$(EXE) "$(INSTALL_DIR)"
+
+install-hi: hi$(EXE) 
+	cp ftl$(EXE) "$(INSTALL_DIR)"
 
 %.so: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -shared $<
@@ -197,17 +217,11 @@ hi$(OBJ): hi.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 ftlext-test.c: ftl.h ftl_internal.h ftlext.h 
-
 libftl_elf.c: ftl.h ftl_internal.h ftl_elf.h
-
 libftl_xml.c: ftl.h ftl_internal.h ftl_xml.h
-
 libftl_json.c: ftl.h ftl_internal.h ftl_json.h
-
 libftl.c: ftl.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
-
 filenames.c: ftl.h filenames.h Makefile
-
 libdyn.c: libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
