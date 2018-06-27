@@ -677,7 +677,8 @@ static wint_t ftl_towlower(wint_t wc)
 
 
 
-#define putenv _putenv
+#define os_fileno _fileno
+#define os_putenv _putenv
 
 
 
@@ -885,6 +886,10 @@ thread_self(void)
 #include <pwd.h>    /* for getpwnam, struct passwd */
 
 
+#define os_fileno fileno
+
+
+
 extern void sleep_ms(unsigned long milliseconds)
 {   usleep(1000*milliseconds);
 }
@@ -918,6 +923,16 @@ thread_active(thread_os_t thread)
 
 #endif
 
+
+
+
+
+/* asssume we have file descriptors if we have os_fileno */
+#ifdef os_fileno
+#define HAS_FILE_DESCRIPTORS 1
+#else
+#define HAS_FILE_DESCRIPTORS 0
+#endif
 
 
 
@@ -1752,6 +1767,13 @@ typedef size_t charsource_read_fn_t(charsource_t *source,
 typedef int charsource_lineno_fn_t(charsource_t *source);
 
 
+/*! type of the function used to return whether input is available
+ */
+typedef bool
+charsource_available_fn_t(charsource_t *source, bool *out_at_eof,
+                          bool *out_is_available);
+
+
 /*! type of the function used to end use reclaim resources allocated to the
  *  charsource
  */
@@ -1764,6 +1786,7 @@ struct charsource_s
 {   struct charsource_s *link;
     charsource_rdch_fn_t *rdch;
     charsource_read_fn_t *read;
+    charsource_available_fn_t *available;
     charsource_lineno_fn_t *linecount; /* return line number */
     charsource_delete_fn_t *del;     /* delete the charsource entirely */
     charsource_delete_fn_t *close;   /* delete any accumulated state */
@@ -1813,6 +1836,7 @@ charsource_read_from_rdch(charsource_t *source, void *buf, size_t len)
 static void
 charsource_init(charsource_t *source,
                 charsource_rdch_fn_t *rdch, charsource_read_fn_t *read,
+                charsource_available_fn_t *available_fn,
                 charsource_lineno_fn_t *linecount_fn,
                 charsource_delete_fn_t *delete_fn,
                 charsource_delete_fn_t *close, const char *name_format, ...)
@@ -1830,6 +1854,7 @@ charsource_init(charsource_t *source,
         source->read = read;
     else
         source->read = &charsource_read_from_rdch;
+    source->available = available_fn;
     source->linecount = linecount_fn;
     source->del = delete_fn;
     source->close = close;
@@ -1917,6 +1942,24 @@ charsource_lineno(charsource_t *source)
     return lineno;
 }
 
+
+
+
+extern bool /*ok*/
+charsource_getavail(charsource_t *source, bool *out_at_eof,
+                    bool *out_is_available)
+{   if (source == NULL)
+    {   DEBUG_CHARS(DPRINTF("%s: chars - '%s' available EOF\n",
+                           codeid(), source == NULL? "<NULL>": source->name););
+        *out_at_eof = TRUE;
+        return TRUE;
+    }
+    else if (source->available == NULL)
+        return FALSE;
+    else
+    {   return (*source->available)(source, out_at_eof, out_is_available);
+    }
+}
 
 
 
@@ -2028,13 +2071,72 @@ charsource_file_linecount(charsource_t *base_source)
 
 
 
+#if HAS_FILE_DESCRIPTORS
+static bool
+fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
+{
+    /* warning - this code can not detect whether the next read will
+       return EOF or not */
+    if (fd < 0)
+    {   OMIT(fprintf(stderr, "%s: FD for getavail is negative (%d) - "
+                     "%s (rc %d)\n", codeid(), fd, strerror(errno), errno););
+        *out_at_eof = TRUE;
+    } else 
+    {
+        fd_set readfds;
+        struct timeval timeout;
+        int fdcount;
+        int maxfd = fd;
+        FD_ZERO(&readfds);
+        FD_SET(fd, &readfds);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+        fdcount = select(maxfd+1, &readfds, NULL, NULL, &timeout);
+        OMIT(fprintf(stderr, "%s: select FD count for FD %d is %d\n",
+                   codeid(), fd, fdcount););
+
+        *out_at_eof = (fdcount < 0);
+        if (!*out_at_eof) {
+            *out_is_available = fdcount > 0;
+        }
+        else
+            OMIT(fprintf(stderr, "%s: select FD count is negative (%d) - "
+                         "%s (rc %d)\n",
+                         codeid(), fd, strerror(errno), errno););
+    }
+    return TRUE;
+}
+#endif
+
+
+
+static bool
+charsource_file_getavail(charsource_t *base_source, bool *out_at_eof,
+                         bool *out_is_available)
+{   charsource_file_t *source = (charsource_file_t *)base_source;
+    if (source->stream == NULL || feof(source->stream))
+    {   *out_at_eof = TRUE;
+        return TRUE;
+    }
+    else 
+#ifdef os_fileno
+        return fd_getavail(os_fileno(source->stream),
+                                     out_at_eof, out_is_available);
+#else
+        return FALSE;
+#endif
+}
+
+
+
 
 static charsource_t *
 charsource_stream_init(charsource_file_t *source,
                        charsource_delete_fn_t *delete_fn,
                        charsource_rdch_fn_t *rdch, charsource_read_fn_t *read,
                        const char *name, FILE *stream)
-{   charsource_init(&source->base, rdch, read, &charsource_file_linecount,
+{   charsource_init(&source->base, rdch, read, &charsource_file_getavail,
+                    &charsource_file_linecount,
                     delete_fn, /*close*/NULL,  "<%s>", name);
     source->stream = stream;
     source->lineno = 1; /* start numbering from 1 */
@@ -2074,6 +2176,7 @@ charsource_file_init(charsource_file_t *source,
 {   OMIT(printf("%s: new file '%s'\n", codeid(), name););
     charsource_init(&source->base,
                     &charsource_file_rdch, &charsource_file_read,
+                    &charsource_file_getavail,
                     &charsource_file_linecount, delete_fn,
                     &charsource_file_close, "%s", name);
     source->stream = stream;
@@ -2349,6 +2452,17 @@ static void charsource_socket_delete(charsource_t *source)
 
 
 
+
+static bool
+charsource_socket_getavail(charsource_t *base_source, bool *out_at_eof,
+                           bool *out_is_available)
+{   charsource_socket_t *source = (charsource_socket_t *)base_source;
+    return fd_getavail(source->fd, out_at_eof, out_is_available);
+}
+
+
+
+
 static charsource_t *
 charsource_socket_init(charsource_socket_t *source,
                        charsource_delete_fn_t *delete_fn,
@@ -2356,6 +2470,7 @@ charsource_socket_init(charsource_socket_t *source,
                        bool with_close)
 {    charsource_init(&source->base,
                      &charsource_socket_rdch, &charsource_socket_read,
+                     &charsource_socket_getavail,
                      &charsource_socket_linecount,
                      delete_fn, with_close? &charsource_socket_close: NULL,
                      "inet:%s", name);
@@ -2498,6 +2613,19 @@ charsource_string_read(charsource_t *base_source, void *buf, size_t len)
 
 
 
+static bool
+charsource_string_getavail(charsource_t *base_source, bool *out_at_eof,
+                           bool *out_is_available)
+{   charsource_string_t *source = (charsource_string_t *)base_source;
+    *out_at_eof = source->string == NULL || source->pos >= source->eos;
+    if (! *out_at_eof)
+        *out_is_available = source->pos < source->eos;
+    return TRUE;
+}
+
+
+
+
 static int
 charsource_string_linecount(charsource_t *base_source)
 {   charsource_string_t *source = (charsource_string_t *)base_source;
@@ -2516,6 +2644,7 @@ charsource_string_linecount(charsource_t *base_source)
 
 
 
+
 /* initialize a string that may or may not be freed */
 static charsource_t *
 charsource_string_anyinit(charsource_string_t *source,
@@ -2524,6 +2653,7 @@ charsource_string_anyinit(charsource_string_t *source,
                           const char *name, const char *string, size_t len)
 {   charsource_init(&source->base,
                     &charsource_string_rdch, &charsource_string_read,
+                    &charsource_string_getavail,
                     &charsource_string_linecount, delete_fn, close,
                     "$%s", name);
     source->string = string;
@@ -2696,6 +2826,19 @@ charsource_lineref_rdch(charsource_t *base_source)
 
 
 
+static bool
+charsource_lineref_getavail(charsource_t *base_source, bool *out_at_eof,
+                            bool *out_is_available)
+{   charsource_lineref_t *source = (charsource_lineref_t *)base_source;
+    *out_at_eof = source->ref_string == NULL || *source->ref_string == NULL ||
+                  (*source->ref_string)[0] == '\0';
+    return TRUE;
+}
+
+
+
+
+
 static void
 charsource_lineref_close(charsource_t *base_source)
 {   charsource_lineref_t *source = (charsource_lineref_t *)base_source;
@@ -2764,20 +2907,26 @@ charsource_lineref_init(charsource_lineref_t *source,
     if (rewind)
         charsource_init(&source->base,
                         &charsource_lineref_rdch, /*read*/NULL,
-                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_getavail,
+                        &charsource_lineref_linecount,
+                        delete_fn,
                         &charsource_lineref_close, "%s:+",
                         name); /* use same name as source */
     else if (lastch == '+') {
         bool endsinnum = namelen < 2? FALSE: isdigit(name[namelen-2]);
         charsource_init(&source->base,
                         &charsource_lineref_rdch, /*read*/NULL,
-                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_getavail,
+                        &charsource_lineref_linecount,
+                        delete_fn,
                         &charsource_lineref_close, "%.*s%d+",
                         endsinnum? namelen: namelen-1, name, lineno);
     } else
         charsource_init(&source->base,
                         &charsource_lineref_rdch, /*read*/NULL,
-                        &charsource_lineref_linecount, delete_fn,
+                        &charsource_lineref_getavail,
+                        &charsource_lineref_linecount,
+                        delete_fn,
                         &charsource_lineref_close, "%s:%d",
                         name, lineno);
 
@@ -2864,6 +3013,19 @@ charsource_ch_rdch(charsource_t *base_source)
 
 
 
+static bool
+charsource_ch_getavail(charsource_t *base_source, bool *out_at_eof,
+                       bool *out_is_available)
+{   charsource_ch_t *source = (charsource_ch_t *)base_source;
+    *out_at_eof = source->read;
+    if (! *out_at_eof)
+        *out_is_available = TRUE;
+    return TRUE;
+}
+
+
+
+
 static int
 charsource_ch_linecount(charsource_t *base_source)
 {   charsource_ch_t *source = (charsource_ch_t *)base_source;
@@ -2885,7 +3047,8 @@ static charsource_t *
 charsource_ch_init(charsource_ch_t *source, charsource_delete_fn_t *delete_fn,
                    int ch)
 {   charsource_init(&source->base, &charsource_ch_rdch, /*read*/NULL,
-                    charsource_ch_linecount, delete_fn, /*close*/NULL,
+                    &charsource_ch_getavail, 
+                    &charsource_ch_linecount, delete_fn, /*close*/NULL,
                     "<%s>", "UNRDCH");
     source->read = FALSE;
     source->ch = ch;
@@ -2977,6 +3140,17 @@ charsource_rewind_rdch(charsource_t *base_source)
 
 
 
+static bool
+charsource_rewind_getavail(charsource_t *base_source, bool *out_at_eof,
+                           bool *out_is_available)
+{   charsource_rewind_t *source = (charsource_rewind_t *)base_source;
+    *out_at_eof = TRUE;
+    return TRUE;
+}
+
+
+
+
 
 static int
 charsource_rewind_linecount(charsource_t *base_source)
@@ -2994,7 +3168,8 @@ charsource_rewind_init(charsource_rewind_t *source,
                        charsource_delete_fn_t *delete_fn,
                        const char *rewind_source, int rewind_lineno)
 {   charsource_init(&source->base, &charsource_rewind_rdch, /*read*/NULL,
-                    charsource_rewind_linecount, delete_fn, /*close*/NULL,
+                    &charsource_rewind_getavail, 
+                    &charsource_rewind_linecount, delete_fn, /*close*/NULL,
                     "%s", rewind_source);
     source->rewind_lineno = rewind_lineno;
     return &source->base;
@@ -3460,7 +3635,7 @@ charsource_readline_rdch(charsource_t *base_source)
                          nextline==NULL? 0: (int)strlen(nextline),
                          feof(stdin)? "EOF": "", errno);
             );
-#endif
+#endif /* USE_LINENOISE */
             source->prompt_needed = FALSE;
             if (nextline != NULL)
             {   source->lineno++;
@@ -3700,6 +3875,24 @@ instack_ungetc(instack_t *ref_stack, int ch)
 
     return ch;
 }
+
+
+
+
+extern bool
+instack_getavail(instack_t *ref_stack, bool *out_at_eof,
+                 bool *out_is_available)
+{   bool known;
+
+    while ((known = charsource_getavail(*ref_stack, out_at_eof,
+                                        out_is_available)) &&
+           *out_at_eof && instack_popdel(ref_stack))
+        continue;
+
+    return known;
+}
+
+
 
 
 
@@ -4158,11 +4351,49 @@ linesource_start_set(linesource_t *source, code_place_t *start_line)
 
 
 
-/* Reads in the whole of the next line but stores only the first maxlen-1
-   bytes of it in the line buffer provided.
-   The buffer is always written with a final zero (if there is a byte spare)
-   The address of the start line should be set using linesource_start_set
-   before invoking this: e.g. using
+/*! If possible determine whether at least one byte of input is currently
+ *  available (so that a \c linesource_read would block if it is not
+ *  available).
+ *
+ *    @param source     - state of character sink
+ *    @param out_at_eof - location to update if this source is exhausted
+ *                        written to only if return is TRUE
+ *    @param out_is_available
+ *                      - location to update if input availability known
+ *                        written to only if return is TRUE and
+ *                        *out_at_eof is FALSE
+ *
+ *    @return TRUE iff out_at_eof can be/has been set
+ *
+ *  Reads the charsources on the input stack as long as they are exhausted
+ *  and know it.
+ */
+extern bool
+linesource_getavail(linesource_t *source, bool *out_at_eof,
+                    bool *out_is_available)
+{   if (source->eof)
+    {   *out_at_eof = TRUE;
+        return TRUE;
+    }
+    else
+    {   bool known = instack_getavail(&source->in, out_at_eof,
+                                      out_is_available);
+        if (known && *out_at_eof)
+            source->eof = TRUE;
+        
+        return known;
+    }
+}
+
+
+
+
+
+/*! Reads in the whole of the next line but stores only the first maxlen-1
+    bytes of it in the line buffer provided.
+    The buffer is always written with a final zero (if there is a byte spare)
+    The address of the start line should be set using linesource_start_set
+    before invoking this: e.g. using
         code_place_t start;
         code_place_set(&start, instack_source(source->in),
                        instack_lineno(source->in);
@@ -11664,7 +11895,7 @@ dir_sysenv_add(dir_t *dir, const value_t *name, const value_t *value)
             {   memcpy(&envbuf[0], namestr, namestrl);
                 envbuf[namestrl] = '=';
                 envbuf[namestrl+1] = '\0';
-                ok = (0 == putenv(&envbuf[0]));
+                ok = (0 == os_putenv(&envbuf[0]));
             } else
                 ok = FALSE;
         }
@@ -11682,7 +11913,7 @@ dir_sysenv_add(dir_t *dir, const value_t *name, const value_t *value)
                 envbuf[namestrl] = '=';
                 memcpy(&envbuf[namestrl+1], valstr, valstrl);
                 envbuf[namestrl+valstrl+1] = '\0';
-                ok = (0 == putenv(&envbuf[0]));
+                ok = (0 == os_putenv(&envbuf[0]));
             } else
                 ok = FALSE;
 #endif
@@ -11806,7 +12037,7 @@ dir_fs_add(dir_t *dir, const value_t *name, const value_t *value)
             {   memcpy(&envbuf[0], namestr, namestrl);
                 envbuf[namestrl] = '=';
                 envbuf[namestrl+1] = '\0';
-                ok = (0 == putenv(&envbuf[0]));
+                ok = (0 == os_putenv(&envbuf[0]));
             } else
                 ok = FALSE;
         }
@@ -11824,7 +12055,7 @@ dir_fs_add(dir_t *dir, const value_t *name, const value_t *value)
                 envbuf[namestrl] = '=';
                 memcpy(&envbuf[namestrl+1], valstr, valstrl);
                 envbuf[namestrl+valstrl+1] = '\0';
-                ok = (0 == putenv(&envbuf[0]));
+                ok = (0 == os_putenv(&envbuf[0]));
             } else
                 ok = FALSE;
 #endif
@@ -23643,8 +23874,36 @@ fn_listen(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
+fn_inblocked(const value_t *this_fn, parser_state_t *state)
+{   /* syntax: inblocked <stream> */
+    const value_t *stream = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(stream, type_stream))
+    {   charsource_t *source;
+        if (!value_stream_source(stream, &source))
+            parser_error(state, "stream not open for input\n");
+        else
+        {   bool at_eof = FALSE;
+            bool available = FALSE;
+            bool known = charsource_getavail(source, &at_eof, &available);
+            if (known)
+                val = at_eof? value_true: available? value_false: value_true;
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
 fn_getc(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: write <name> <string> */
+{   /* syntax: getc <stream> */
     const value_t *stream = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
 
@@ -23673,7 +23932,7 @@ fn_getc(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_read(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: read <name> <string> */
+{   /* syntax: read <stream> */
     const value_t *stream = parser_builtin_arg(state, 1);
     const value_t *size = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
@@ -24112,6 +24371,9 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
     }
     
 #endif /* HAS_SOCKETS */
+    mod_addfn(icmds, "inblocked",
+              "<stream> - TRUE if reading would block",
+              &fn_inblocked, 1);
     mod_addfn(icmds, "getc",
               "<stream> - read the next character from the stream",
               &fn_getc, 1);

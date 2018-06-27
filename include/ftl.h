@@ -327,6 +327,26 @@ charsink_string_buf(charsink_t *sink, const char **out_buf, size_t *out_len);
 
 typedef struct charsource_s charsource_t;
 
+/*! If possible determine whether at least one byte of input is currently
+ *  available (so that a \c charsource_getc would block if it is not
+ *  available).
+ *
+ *    @param source     - state of character source
+ *    @param out_at_eof - location to update if this source is exhausted
+ *                        written to only if return is TRUE
+ *    @param out_is_available
+ *                      - location to update if input availability known
+ *                        written to only if return is TRUE and
+ *                        *out_at_eof is FALSE
+ *
+ *    @return TRUE iff out_at_eof can be/has been set
+ *
+ */
+extern bool /*ok*/
+charsource_getavail(charsource_t *source, bool *out_at_eof,
+                    bool *out_is_available);
+
+    
 /*! read the next character from source and returns it as an unsigned char cast
  *  to an int, or EOF on end of file or error
  */    
@@ -405,6 +425,10 @@ instack_pop(instack_t *ref_stack);
 extern bool /* not empty */
 instack_popdel(instack_t *ref_stack);
 
+extern bool
+instack_getavail(instack_t *ref_stack, bool *out_at_eof,
+                 bool *out_is_available);
+
 extern int
 instack_getc(instack_t *ref_stack);
 
@@ -436,6 +460,26 @@ linesource_source(linesource_t *lines);
 extern int
 linesource_lineno(linesource_t *lines);
 
+/*! If possible determine whether at least one byte of input is currently
+ *  available (so that a \c charsource_getc would block if it is not
+ *  available).
+ *
+ *    @param source     - state of line source
+ *    @param out_at_eof - location to update if this source is exhausted
+ *                        written to only if return is TRUE
+ *    @param out_is_available
+ *                      - location to update if input availability known
+ *                        written to only if return is TRUE and
+ *                        *out_at_eof is FALSE
+ *
+ *    @return TRUE iff out_at_eof can be/has been set
+ *
+ *  Reads the charsources on the input stack as long as they are exhausted
+ *  and know it.
+ */
+extern bool
+linesource_getavail(linesource_t *source, bool *out_at_eof,
+                     bool *out_is_available);
 extern bool
 linesource_eof(linesource_t *source);
 
