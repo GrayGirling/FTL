@@ -1711,6 +1711,9 @@ typedef bool register_opt_result_fn(parser_state_t *state, const char *cmd,
 extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
+
+typedef void parser_state_poll_fn(parser_state_t *state, void *poll_arg);
+
 /*! Execute argv as delimiter or option separated ftl commands
  *
  *  The argv provided is updated and provides the remaining tokens.
@@ -1738,6 +1741,8 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  register_opt_result_fn *with_results, void *with_results_arg,
                  const value_t **out_value, wbool *out_ends_with_delim);
 
+
+    
 /*! Execute the commands provided from three sources in order
  *  This is an internal function implementing a range of others (that follow
  *  as macro definitions)
@@ -1763,12 +1768,20 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
  *
  *  Unless /c expect_no_locals is TRUE the routine returns a value - the one
  *  resulting from the last \c mod_exec_cmd() run
+ *
+ *  If pre_line_wait is a pointer to a function it will be called prior to
+ *  each line read 
  */
 extern const value_t *
-parser_expand_exec_int(parser_state_t *state, charsource_t *source,
+parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
                const char *cmd_str, const char *rcfile_id,
-               bool expect_no_locals, bool interactive);
-
+               bool expect_no_locals, bool interactive,
+               parser_state_poll_fn *pre_line_wait, void *wait_arg);
+    
+#define parser_expand_exec_int(state, source, cmd_str, rcfile_id, no_locals, interactive) \
+        parser_expand_exec_int_poll(state, source, cmd_str, rcfile_id, \
+                                    no_locals, interactive, NULL, NULL)
+    
 #define parser_expand_exec(state, source, cmd_str, rc_file_id, no_locals)     \
         parser_expand_exec_int(state, source, cmd_str, rc_file_id, no_locals, \
                                FALSE)

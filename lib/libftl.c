@@ -21240,9 +21240,10 @@ parser_report_trailing(parser_state_t *state, const char *msg,
  *  This function may cause a garbage collection
  */
 extern const value_t *
-parser_expand_exec_int(parser_state_t *state, charsource_t *source,
-                       const char *cmd_str, const char *rcfile_id,
-                       bool expect_no_locals, bool interactive)
+parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
+                            const char *cmd_str, const char *rcfile_id,
+                            bool expect_no_locals, bool interactive,
+                            parser_state_poll_fn *pre_line_wait, void *wait_arg)
 {   const value_t *val = NULL;
     linesource_t saved;
     interrupt_state_t old_int_state;
@@ -21274,6 +21275,9 @@ parser_expand_exec_int(parser_state_t *state, charsource_t *source,
 
     while (!linesource_eof(parser_linesource(state)))
     {
+        if (pre_line_wait != NULL)
+            (*pre_line_wait)(state, wait_arg);
+
         if (interactive && interrupt()) {
             OMIT(fprintf(stderr, "-- exiting\n"););
             if (source == parser_charsource(state)) {
