@@ -980,7 +980,7 @@ static char *skt_sockaddr_to_str(struct sockaddr_storage *addr)
 }
 
 
-extern bool os_socketlib_start(char *err_buff)
+extern bool os_skt_lib_start(char *err_buff)
 {
     static WSADATA ws_info;
     int rc = WSAStartup(MAKEWORD(2,2), &ws_info);
@@ -991,7 +991,7 @@ extern bool os_socketlib_start(char *err_buff)
     return rc == 0;
 }
 
-extern void os_socketlib_end(void)
+extern void os_skt_lib_end(void)
 {
     WSACleanup();
 }
@@ -1014,12 +1014,12 @@ static char *skt_sockaddr_to_str(struct sockaddr_storage *addr)
     return &ip_addrstr[0];
 }
 
-extern bool os_socketlib_start(char *err_buff)
+extern bool os_skt_lib_start(char *err_buff)
 {
     return true;
 }
 
-extern void os_socketlib_end(void)
+extern void os_skt_lib_end(void)
 {
     return;
 }
@@ -2413,7 +2413,7 @@ static bool cmds_socket_init(void)
 {
     char errmsg[256];
     
-    if (os_socketlib_start(&errmsg[0]))
+    if (os_skt_lib_start(&errmsg[0]))
         return TRUE;
     else
     {
@@ -2425,7 +2425,7 @@ static bool cmds_socket_init(void)
 
 static void cmds_socket_end(void)
 {
-    os_socketlib_end();
+    os_skt_lib_end();
 }
 
 
