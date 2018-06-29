@@ -1712,7 +1712,8 @@ extern const value_t *
 mod_exec_cmd(const char **ref_line, parser_state_t *state);
 
 
-typedef void parser_state_poll_fn(parser_state_t *state, void *poll_arg);
+typedef void parser_state_poll_fn(parser_state_t *state, bool interactive,
+                                  void *poll_arg);
 
 /*! Execute argv as delimiter or option separated ftl commands
  *

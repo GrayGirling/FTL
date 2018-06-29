@@ -93,6 +93,7 @@
 #define ENV_PATH "FTL_PATH"
 #define ENV_PROLOG "FTL_PROLOG"
 
+#define USE_FTL_OPTION_PARSER 1
 /* #define TEST_FTLSTRUCT */
 /* #define USE_READLINE */
 /* #define USE_FTLLIB_ELF */
@@ -694,6 +695,7 @@ main(int argc, char **argv)
     int app_argc;
     bool echo_lines = FALSE;
     bool do_prolog = TRUE;
+    bool do_rcfile = TRUE;
     FILE *echo_log = stdout;
     bool quiet = FALSE;
     int exit_rc = EXIT_OK;
@@ -715,13 +717,14 @@ main(int argc, char **argv)
             exit_rc = EXIT_BAD_INIT;
         else
 	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
+
 	    cmds_generic(state, app_argc, &app_argv[0]);
             DEBUG_CLI(printf("%s: opened internal commands\n", codeid()););
+
 	    if (!ftl_libs_init(state))
-            {
                 exit_rc = EXIT_BAD_FTLINIT;
-            }
-            else
+
+            if (exit_rc == EXIT_OK)
 	    {	const char **opt_argv = &app_argv[1];
                 int opt_argc = app_argc-1;
                 bool do_args = opt_argc > 0;
@@ -731,7 +734,8 @@ main(int argc, char **argv)
                                           &prolog_text[0]);
                 }
 
-                if (exit_rc == EXIT_OK && do_args)
+#if USE_FTL_OPTION_PARSER
+                if (exit_rc == EXIT_OK && do_args && do_prolog)
                 {   // parse --<option> ..
                     const value_t *opt_parse_dirval =
                         dir_string_get(parser_env(state), FTL_DIR_OPTIONS);
@@ -746,6 +750,8 @@ main(int argc, char **argv)
                         optresult_t arg;
                         arg.badopt = FALSE;
 
+                        DEBUG_CLI(printf("%s: processing command line --option "
+                                         "commands\n", codeid()););
                         if (!argv_opt_cli(state, CODEID, /*execpath*/NULL,
                                           &opt_argv, &opt_argc,
                                           (dir_t *)opt_parse_dirval,
@@ -757,6 +763,26 @@ main(int argc, char **argv)
                                 
                     }
                     do_args = opt_argc > 0;
+                }
+#endif
+
+                if (exit_rc == 0 && do_rcfile)
+                {
+                    charsource_t *rcstream =
+                        charsource_rcfile(state, codeid(), /*&rcfile*/NULL);
+
+                    if (rcstream != NULL) {
+                        if (NULL == parser_expand_exec(state, rcstream, NULL,
+                                                       NULL, /*no_locals*/TRUE))
+                        {   fprintf(stderr, "%s: attempted execution of "
+                                    "init file for \"%s\" failed\n",
+                                    codeid(), codeid());
+                        }
+                    }
+                    DEBUG_CLI(
+                        else
+                           printf("%s: didn't open rcfile for %s: %s (rc %d)\n",
+                                  codeid(), codeid(), strerror(errno), errno);)
                 }
 
                 if (exit_rc == EXIT_OK)
@@ -813,7 +839,7 @@ main(int argc, char **argv)
                         }
 
 #ifdef FTL_CMDNAME_NOCLI
-                        if (exit_rc == EXIT_OK)
+                        if (exit_rc == EXIT_OK && do_prolog)
                         {
                             bool allow_console = true;
                             const value_t *code =

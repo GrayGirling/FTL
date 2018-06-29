@@ -21276,7 +21276,7 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
     while (!linesource_eof(parser_linesource(state)))
     {
         if (pre_line_wait != NULL)
-            (*pre_line_wait)(state, wait_arg);
+            (*pre_line_wait)(state, interactive, wait_arg);
 
         if (interactive && interrupt()) {
             OMIT(fprintf(stderr, "-- exiting\n"););
