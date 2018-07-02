@@ -8090,7 +8090,12 @@ value_stream_socket_listen_new(const char *protocol, const char *name,
     socket_conn_rc_t rc =
         socket_accept_connection(protocol, name, &their_addr, &skt_fd,
                                  /*listen_backlog*/1, /*force_accept*/TRUE,
-                                 "%s: waiting for connection on %s\n");
+#if DEBUG_SOCKET(1+)0 != 0
+                                 "%s: waiting for connection on %s\n"
+#else
+                                 NULL
+#endif
+        );
 
     if (rc != SOCKET_CONN_OK || skt_fd < 0)
         return NULL;
