@@ -445,7 +445,7 @@
 // #define DEBUG_GCU DO
 // #define DEBUG_VALINIT DO 
 // #define DEBUG_VALLINK DO
-// #define DEBUG_CHARS DO 
+// #define DEBUG_CHARS DO
 // #define DEBUG_LNO DO 
 // #define DEBUG_CONSOLE DO 
 // #define DEBUG_EXPD DO 
@@ -1809,12 +1809,13 @@ static size_t
 charsource_read_from_rdch(charsource_t *source, void *buf, size_t len)
 {   char *p = (char *)buf;
     char *endp = p+len;
-    char ch;
+    int ch;
     while (EOF != (ch = source->rdch(source)) && p < endp)
         *p++ = ch;
 
     return (p - endp);
 }
+
 
 
 /*! initialize a new charsource object
@@ -1955,7 +1956,11 @@ charsource_getavail(charsource_t *source, bool *out_at_eof,
         return TRUE;
     }
     else if (source->available == NULL)
+    {
+        DEBUG_CHARS(DPRINTF("%s: chars - '%s' not available - no support\n",
+                           codeid(), source == NULL? "<NULL>": source->name););
         return FALSE;
+    }
     else
     {   return (*source->available)(source, out_at_eof, out_is_available);
     }
@@ -1967,12 +1972,18 @@ charsource_getavail(charsource_t *source, bool *out_at_eof,
 STATIC_INLINE int
 charsource_getc_local(charsource_t *source)
 {   if (source == NULL)
-    {   DEBUG_CHARS(DPRINTF("%s: chars - '%s' getc EOF\n",
+    {   DEBUG_CHARS(DPRINTF("%s: chars - '%s' getc - EOF\n",
                            codeid(), source == NULL? "<NULL>": source->name););
         return EOF;
     }
     else
-    {   return (*source->rdch)(source);
+    {
+        int ch;
+        ch = (*source->rdch)(source);
+        OMIT(DPRINTF("%s: chars - '%s' getc - 0x%02X\n",
+                     codeid(), source == NULL? "<NULL>": source->name,
+                     ch););
+        return ch;
     }
 }
 
@@ -1994,7 +2005,7 @@ charsource_getc(charsource_t *source)
 
 
 
-static int
+extern int
 charsource_read(charsource_t *source, void *buf, size_t len)
 {   if (source == NULL)
         return 0;
@@ -2004,6 +2015,39 @@ charsource_read(charsource_t *source, void *buf, size_t len)
     }
 }
 
+
+
+
+
+extern int
+charsource_readline(charsource_t *cmds, char *buf, size_t buflen)
+{
+    int n;
+
+    if (cmds == NULL || buflen < 1 || buf == NULL)
+    {
+        DEBUG_CHARS(fprintf(stderr, "%s: read cmd bad args\n", codeid()););
+        n = -1;
+        errno = EINVAL;
+        if (buflen > 0)
+            buf[0] = '\0';
+    }
+    else
+    {
+        int ch = EOF;
+        bool eol;
+        n=0;
+        do {
+            ch = charsource_getc(cmds);
+            eol = (ch == '\n' || ch == '\r' || ch == EOF);
+            if (!eol && n < buflen-1)
+                buf[n++] = ch;
+        } while (!eol);
+
+        buf[n] = '\0';
+    }
+    return n;
+}
 
 
 
@@ -2078,8 +2122,9 @@ fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
     /* warning - this code can not detect whether the next read will
        return EOF or not */
     if (fd < 0)
-    {   OMIT(fprintf(stderr, "%s: FD for getavail is negative (%d) - "
-                     "%s (rc %d)\n", codeid(), fd, strerror(errno), errno););
+    {   DEBUG_CHARS(fprintf(stderr, "%s: FD for getavail is negative (%d) - "
+                            "%s (rc %d)\n", codeid(),
+                            fd, strerror(errno), errno););
         *out_at_eof = TRUE;
     } else 
     {
@@ -2093,14 +2138,15 @@ fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
         timeout.tv_usec = 0;
         fdcount = select(maxfd+1, &readfds, NULL, NULL, &timeout);
         OMIT(fprintf(stderr, "%s: select FD count for FD %d is %d\n",
-                   codeid(), fd, fdcount););
+                     codeid(), fd, fdcount););
 
         *out_at_eof = (fdcount < 0);
         if (!*out_at_eof) {
             *out_is_available = fdcount > 0;
         }
-        else
-            OMIT(fprintf(stderr, "%s: select FD count is negative (%d) - "
+        DEBUG_CHARS(
+            else
+                 fprintf(stderr, "%s: select FD count is negative (%d) - "
                          "%s (rc %d)\n",
                          codeid(), fd, strerror(errno), errno););
     }
@@ -2118,13 +2164,17 @@ charsource_file_getavail(charsource_t *base_source, bool *out_at_eof,
     {   *out_at_eof = TRUE;
         return TRUE;
     }
-    else 
+    else
+    {
 #ifdef os_fileno
         return fd_getavail(os_fileno(source->stream),
-                                     out_at_eof, out_is_available);
+                           out_at_eof, out_is_available);
 #else
+        DEBUG_CHARS(fprintf(stderr, "%s: no FD support for getavail\n",
+                            codeid()););
         return FALSE;
 #endif
+    }
 }
 
 
@@ -2394,14 +2444,24 @@ STATIC_INLINE int
 charsource_socket_rdch(charsource_t *base_source)
 {   charsource_socket_t *source = (charsource_socket_t *)base_source;
     char ch;
-    int rc = recv(source->fd, &ch, 1, source->recv_flags);
+    int rc;
+
+    OMIT(DPRINTF("%s: recv %d 1 ch (flags %X)\n", codeid(),
+               source->fd, source->recv_flags););
+    rc = recv(source->fd, &ch, 1, source->recv_flags);
     if (rc < 0)
+    {
+        DEBUG_CHARS(DPRINTF("%s: chars skt %d - EOF - %s (rc %d)'\n",
+                            codeid(), source->fd, strerror(errno), errno););
         return EOF;
+    }
     else
     {
-        if (ch == '\n')
+        OMIT(DPRINTF("%s: chars skt %d - getc - 0x%02X [read %d]\n",
+                     codeid(), source->fd, ch, rc););
+        if (rc >= 1 && ch == '\n')
             source->lineno++;
-        return rc;
+        return ch;
     }
 }
 
@@ -7344,9 +7404,14 @@ value_stream_source(const value_t *value, charsource_t **out_source)
     {   const value_stream_t *stream = (const value_stream_t *)value;
         *out_source = stream->source;
         ok = TRUE;
+        DEBUG_CHARS(if (*out_source == NULL)
+                        DPRINTF("%s: note - stream source is empty\n"););
     }
-    /* else type error */
-
+    else
+    {
+        DEBUG_CHARS(DPRINTF("%s: stream source not a stream - type is %s\n",
+                            value_type_name(value)););
+    }
     return ok;
 }
 
@@ -7389,8 +7454,14 @@ value_stream_sink(const value_t *value, charsink_t **out_sink)
     {   const value_stream_t *stream = (const value_stream_t *)value;
         *out_sink = stream->sink;
         ok = TRUE;
+        DEBUG_CHARS(if (*out_sink == NULL)
+                        DPRINTF("%s: note - stream sink is empty\n"););
     }
-    /* else type error */
+    else
+    {
+        DEBUG_CHARS(DPRINTF("%s: stream sink not a stream - type is %s\n",
+                            value_type_name(value)););
+    }
 
     return ok;
 }

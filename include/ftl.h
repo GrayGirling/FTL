@@ -353,6 +353,24 @@ charsource_getavail(charsource_t *source, bool *out_at_eof,
 extern int
 charsource_getc(charsource_t *source);
 
+/*! read from a source and return a fixed size buffer
+ *  returns the number of bytes actually read
+ */
+extern int
+charsource_read(charsource_t *source, void *buf, size_t len);
+
+/*! read a line from a source and return the data
+ *  Always reads until '\n' or '\r' (or EOF) - storing as much as possible
+ *  in buf (but not the terminating character).
+ *  Always terminates the text read with '\0' (even when buf too small for the
+ *  whole line).  (Assuming buffer is at least 1 char big.)
+ *  Returns the number of bytes actually read omitting any terminal '\r' or
+ *  '\n'.
+ */
+extern int
+charsource_readline(charsource_t *cmds, char *buf, size_t buflen);
+
+    
 /*! end use of the charsource for reading
  */
 extern void
