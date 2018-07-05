@@ -446,6 +446,7 @@
 // #define DEBUG_VALINIT DO 
 // #define DEBUG_VALLINK DO
 // #define DEBUG_CHARS DO
+// #define DEBUG_AVAIL DO
 // #define DEBUG_LNO DO 
 // #define DEBUG_CONSOLE DO 
 // #define DEBUG_EXPD DO 
@@ -471,6 +472,7 @@
 #undef DEBUG_VALINIT
 #undef DEBUG_VALLINK
 #undef DEBUG_CHARS
+#undef DEBUG_AVAIL
 #undef DEBUG_LNO
 #undef DEBUG_CONSOLE
 #undef DEBUG_EXPD
@@ -507,6 +509,9 @@
 #endif
 #ifndef DEBUG_CHARS
 #define DEBUG_CHARS OMIT
+#endif
+#ifndef DEBUG_AVAIL
+#define DEBUG_AVAIL OMIT
 #endif
 #ifndef DEBUG_LNO
 #define DEBUG_LNO OMIT
@@ -1898,7 +1903,7 @@ charsource_delete(charsource_t **ref_source)
 {   if (NULL != *ref_source)
     {   charsource_t *source = *ref_source;
 
-        DEBUG_CHARS(DPRINTF("%s: chars - delete '%s'%s\n",
+        DEBUG_CHARS(DPRINTF("%s: chars - delete '%s'\n",
                            codeid(), source == NULL? "<NULL>": source->name););
         charsource_close(source);
 
@@ -1950,19 +1955,25 @@ extern bool /*ok*/
 charsource_getavail(charsource_t *source, bool *out_at_eof,
                     bool *out_is_available)
 {   if (source == NULL)
-    {   DEBUG_CHARS(DPRINTF("%s: chars - '%s' available EOF\n",
+    {   DEBUG_AVAIL(DPRINTF("%s: avail - '%s' available EOF\n",
                            codeid(), source == NULL? "<NULL>": source->name););
         *out_at_eof = TRUE;
         return TRUE;
     }
     else if (source->available == NULL)
     {
-        DEBUG_CHARS(DPRINTF("%s: chars - '%s' not available - no support\n",
-                           codeid(), source == NULL? "<NULL>": source->name););
+        DEBUG_AVAIL(DPRINTF("%s: avail - '%s' not available - no support\n",
+                            codeid(), source == NULL? "<NULL>": source->name););
         return FALSE;
     }
     else
-    {   return (*source->available)(source, out_at_eof, out_is_available);
+    {   bool known = (*source->available)(source, out_at_eof, out_is_available);
+        OMIT(DPRINTF("%s: avail - '%s' availablility %sknown %sat EOF "
+                     "%savailable\n",
+                     codeid(), source == NULL? "<NULL>": source->name,
+                     known? "": "not ", *out_at_eof? "": "not ",
+                     *out_is_available? "": "not "););
+        return known;
     }
 }
 
@@ -2040,7 +2051,7 @@ charsource_readline(charsource_t *cmds, char *buf, size_t buflen)
         do {
             ch = charsource_getc(cmds);
             eol = (ch == '\n' || ch == '\r' || ch == EOF);
-            if (!eol && n < buflen-1)
+            if (!eol && (size_t)n < buflen-1)
                 buf[n++] = ch;
         } while (!eol);
 
@@ -2122,7 +2133,7 @@ fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
     /* warning - this code can not detect whether the next read will
        return EOF or not */
     if (fd < 0)
-    {   DEBUG_CHARS(fprintf(stderr, "%s: FD for getavail is negative (%d) - "
+    {   DEBUG_AVAIL(fprintf(stderr, "%s: FD for getavail is negative (%d) - "
                             "%s (rc %d)\n", codeid(),
                             fd, strerror(errno), errno););
         *out_at_eof = TRUE;
@@ -2137,22 +2148,138 @@ fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
         timeout.tv_sec = 0;
         timeout.tv_usec = 0;
         fdcount = select(maxfd+1, &readfds, NULL, NULL, &timeout);
-        OMIT(fprintf(stderr, "%s: select FD count for FD %d is %d\n",
-                     codeid(), fd, fdcount););
+        DEBUG_AVAIL(fprintf(stderr, "%s: select FD count for FD %d is %d\n",
+                            codeid(), fd, fdcount););
 
         *out_at_eof = (fdcount < 0);
         if (!*out_at_eof) {
             *out_is_available = fdcount > 0;
         }
-        DEBUG_CHARS(
+        DEBUG_AVAIL(
             else
-                 fprintf(stderr, "%s: select FD count is negative (%d) - "
-                         "%s (rc %d)\n",
+                 fprintf(stderr, "%s: chars - select FD count (awaiting %d) "
+                         "is negative - %s (rc %d)\n",
                          codeid(), fd, strerror(errno), errno););
     }
     return TRUE;
 }
 #endif
+
+
+
+
+
+
+#ifdef _WIN32
+
+#include <conio.h>
+#define os_kbhit() _kbhit()
+
+
+/*! deal with all the outstanding console inputs
+ */
+static void win_console_flush_events(HANDLE conhandle)
+{
+    DWORD conevents = 0;
+
+    /* note: depending on the console mode, console input events can include
+       key, mouse, window size, focus, and menu events
+    */
+    if (GetNumberOfConsoleInputEvents(conhandle, &conevents))
+    {   if (conevents > 0)
+        {   /* conevents should be the total number of unread console events
+             */
+            INPUT_RECORD *inrecs = (INPUT_RECORD *)
+                                   malloc(conevents * sizeof(INPUT_RECORD));
+            DWORD incount = 0; // number of console input events
+
+            if (inrecs != NULL)
+            {   if (!ReadConsoleInput(conhandle, inrecs, conevents, &incount))
+                    incount = 0;
+                free(inrecs);
+            }
+            /* if we haven't read  got all the inputs clear input buffer */
+            if (conevents != incount)
+                FlushConsoleInputBuffer(conhandle);
+        }
+    }
+}
+
+
+
+static bool
+win_fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
+{
+    if (fd == os_fileno(stdin))
+    {
+        bool availability_known = true;
+        bool at_eof = false;
+        bool available = true;
+
+        if (stdin->_cnt != 0)
+        {   DEBUG_AVAIL(fprintf(stderr,
+                                "%s: avail - win stdin buffer has data\n",
+                                codeid()););
+        }
+        else
+        {
+            HANDLE hand = GetStdHandle(STD_INPUT_HANDLE);
+            /* "wait" for the stdin handle to have an event */
+            DWORD rc;
+
+            rc = WaitForSingleObjectEx(hand, /*ms*/0, /*Alertable*/FALSE);
+            if (rc == WAIT_OBJECT_0)
+            {
+                DWORD avail;
+                DEBUG_AVAIL(fprintf(stderr, "%s: avail - win event found\n",
+                                    codeid()););
+                at_eof = false;   
+
+                if (!GetConsoleMode(hand, &avail))
+                {   /* not a console ... probably a PIPE? */
+                    availability_known = false;
+                    DEBUG_AVAIL(fprintf(stderr,
+                                        "%s: avail - win nonconsole event\n",
+                                        codeid()););
+                } else
+                {
+                    DEBUG_AVAIL(fprintf(stderr,
+                                        "%s: avail - win console event\n",
+                                        codeid()););
+                    if (os_kbhit() == 0)
+                    {
+                        DEBUG_AVAIL(fprintf(stderr,
+                                            "%s: avail - console events don't "
+                                            "include keyboard events\n",
+                                            codeid()););
+                        available = false;
+                        /* no key has been hit - remove these non-keyboard
+                           events */
+                        win_console_flush_events(hand);
+                    }
+                }
+            }
+            else
+            {
+                DEBUG_AVAIL(fprintf(stderr, "%s: avail - win no event found\n",
+                                    codeid()););
+                available = false;
+            }
+        }
+        
+        if (availability_known)
+        {
+            *out_at_eof = at_eof;
+            if (!at_eof)
+                *out_is_available = available;
+        }
+        return availability_known;
+    }
+    else
+        return fd_getavail(fd, out_at_eof, out_is_available);
+}
+#endif
+
 
 
 
@@ -2166,11 +2293,14 @@ charsource_file_getavail(charsource_t *base_source, bool *out_at_eof,
     }
     else
     {
-#ifdef os_fileno
+#if defined(_WIN32)
+        return win_fd_getavail(os_fileno(source->stream),
+                               out_at_eof, out_is_available);
+#elif defined(os_fileno)
         return fd_getavail(os_fileno(source->stream),
                            out_at_eof, out_is_available);
 #else
-        DEBUG_CHARS(fprintf(stderr, "%s: no FD support for getavail\n",
+        DEBUG_AVAIL(fprintf(stderr, "%s: no FD support for getavail\n",
                             codeid()););
         return FALSE;
 #endif
@@ -15284,7 +15414,8 @@ parser_expand(parser_state_t *state, outchar_t *out,
     instack_t *in = instack_init(&inpile);
     charsource_string_t instring;
     charsource_t *inmain = charsource_string_init(&instring, /*delete*/NULL,
-                                                  "<exp source>", phrase, len);
+                                                  "<expanded_line>",
+                                                  phrase, len);
     int ch;
     int lastch = EOF;
 
