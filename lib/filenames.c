@@ -113,6 +113,26 @@ extern char *file_executable(char* buf, size_t size)
        return NULL;
 }
 
+#elif defined(__APPLE__)
+
+#include <mach-o/dyld.h>
+ 
+// another option here might be to use
+//    pid = getpid();
+//    ret = proc_pidpath (pid, pathbuf, sizeof(pathbuf));
+
+extern char *file_executable(char* buf, size_t size)
+{
+    /* len must start as the size of the buffer and is updaed with the
+     * size written into the buffer
+     */
+    int rc = _NSGetExecutablePath(buf, (uint32_t*)&size);
+    if (rc == 0)
+        return &buf[0];
+    else
+        return NULL;
+}
+
 #else
 
 /* Linux - also works under Cygwin */
@@ -124,7 +144,7 @@ extern char *file_executable(char* buf, size_t size)
 {
    char linkname[64];    /* to hold /proc/<pid>/exe */
    pid_t pid = getpid(); /* our process ID */
-   long len = snprintf(linkname, sizeof(linkname), "/proc/%i/exe", pid);
+   int len = snprintf(linkname, sizeof(linkname), "/proc/%i/exe", pid);
    char *file = NULL;
 
    if (len > 0) {
