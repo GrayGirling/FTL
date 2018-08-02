@@ -117,10 +117,14 @@ extern char *file_executable(char* buf, size_t size)
 
 #include <mach-o/dyld.h>
  
-// another option here might be to use
-//    pid = getpid();
-//    ret = proc_pidpath (pid, pathbuf, sizeof(pathbuf));
+/* another option here might be to use
+ *    pid = getpid();
+ *    ret = proc_pidpath (pid, pathbuf, sizeof(pathbuf));
+ */
 
+/* Warning: will return name of executable even if it is a symbolic link
+ *          to something elsewhere
+ */
 extern char *file_executable(char* buf, size_t size)
 {
     /* len must start as the size of the buffer and is updaed with the
