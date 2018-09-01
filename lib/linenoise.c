@@ -437,6 +437,14 @@ static int getColumns(ttyio_t ifd, ttyio_t ofd) {
 
 #else
 
+#define FLUSH_INPUT_ON_RAW_CHANGE 0
+
+#if FLUSH_INPUT_ON_RAW_CHANGE
+#define LINENOISE_TCSACHANGE TCSAFLUSH
+#else
+#define LINENOISE_TCSACHANGE TCSADRAIN
+#endif
+
 /* Select console I/O if not already selected */
 int linenoiseConsoleInit(void)
 {   return 0;
@@ -469,7 +477,7 @@ static int enableRawMode(ttyio_t ifd, ttyio_t ofd) {
     raw.c_cc[VMIN] = 1; raw.c_cc[VTIME] = 0; /* 1 byte, no timer */
 
     /* put terminal in raw mode after flushing */
-    if (tcsetattr(ifd,TCSAFLUSH,&raw) < 0) goto fatal;
+    if (tcsetattr(ifd,LINENOISE_TCSACHANGE,&raw) < 0) goto fatal;
     rawmode = 1;
     return 0;
 
@@ -480,7 +488,7 @@ fatal:
 
 static void disableRawMode(ttyio_t ifd, ttyio_t ofd) {
     /* Don't even check the return value as it's too late. */
-    if (rawmode && tcsetattr(ifd,TCSAFLUSH,&orig_termios) != -1)
+    if (rawmode && tcsetattr(ifd,LINENOISE_TCSACHANGE,&orig_termios) != -1)
         rawmode = 0;
 }
 
@@ -961,6 +969,8 @@ void linenoiseEditDeletePrevWord(struct linenoiseState *l) {
 static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t buflen, const char *prompt)
 {
     struct linenoiseState l;
+    int edit_complete = 0;/*FALSE*/
+    int cb_len = -1; /*current buffer length*/
 
     /* Populate the linenoise state that we pass to functions implementing
      * specific editing functionalities. */
@@ -984,103 +994,134 @@ static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t 
      * initially is just an empty string. */
     linenoiseHistoryAdd("");
 
-    if (tty_write(l.ofd,prompt,l.plen) == -1) return -1;
-    while(1) {
+    if (tty_write(l.ofd,prompt,l.plen) == -1)
+    {   cb_len = -1;
+        edit_complete = 1; /*TRUE*/
+    } else
+    while(!edit_complete) {
         char c;
         size_t nread;
         char seq[3];
 
         nread = tty_read(l.ifd,&c,1);
-        if (nread <= 0) return (int)l.len;
-
+        if (nread <= 0)
+        {   edit_complete = 1/*TRUE*/;
+            cb_len = (int)l.len;
+        }
+        else
         /* Only autocomplete when the callback is set. It returns < 0 when
          * there was an error reading from fd. Otherwise it will return the
          * character that should be handled next. */
         if (c == 9 && completionCallback != NULL) {
             c = completeLine(&l);
             /* Return on errors */
-            if (c < 0) return (int)l.len;
+            if (c < 0)
+            {   edit_complete = 1/*TRUE*/;
+                cb_len = (int)l.len;
+            }
             /* Read next character when 0 */
-            if (c == 0) continue;
+            else if (c == 0) continue;
         }
 
-        switch(c) {
-        case KEY_ENTER:    /* enter */
-            history_len--;
-            free(history[history_len]);
-            if (mlmode) linenoiseEditMoveEnd(&l);
-            return (int)l.len;
-        case KEY_CTRL_C:     /* ctrl-c */
-            errno = EAGAIN;
-            return -1;
-        case KEY_BACKSPACE:   /* backspace */
-        case 8:     /* ctrl-h */
-            linenoiseEditBackspace(&l);
-            break;
-        case KEY_CTRL_D:     /* ctrl-d, remove char at right of cursor, or if the
-                            line is empty, act as end-of-file. */
-            if (l.len > 0) {
-                linenoiseEditDelete(&l);
-            } else {
+        if (!edit_complete)
+        {
+            switch(c) {
+            case KEY_ENTER:    /* enter */
                 history_len--;
                 free(history[history_len]);
-                return -1;
-            }
-            break;
-        case KEY_CTRL_T:    /* ctrl-t, swaps current character with previous. */
-            if (l.pos > 0 && l.pos < l.len) {
-                int aux = buf[l.pos-1];
-                buf[l.pos-1] = buf[l.pos];
-                buf[l.pos] = aux;
-                if (l.pos != l.len-1) l.pos++;
-                refreshLine(&l);
-            }
-            break;
-        case KEY_CTRL_B:     /* ctrl-b */
-            linenoiseEditMoveLeft(&l);
-            break;
-        case KEY_CTRL_F:     /* ctrl-f */
-            linenoiseEditMoveRight(&l);
-            break;
-        case KEY_CTRL_P:    /* ctrl-p */
-            linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_PREV);
-            break;
-        case KEY_CTRL_N:    /* ctrl-n */
-            linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
-            break;
-        case KEY_ESC:    /* escape sequence */
-            /* Read the next two bytes representing the escape sequence.
-             * Use two calls to handle slow terminals returning the two
-             * chars at different times. */
-            if (tty_read(l.ifd,seq,1) == -1) break;
-            if (tty_read(l.ifd,seq+1,1) == -1) break;
+                if (mlmode) linenoiseEditMoveEnd(&l);
+                edit_complete = 1/*TRUE*/;
+                cb_len = (int)l.len;
+                break;
+            case KEY_CTRL_C:     /* ctrl-c */
+                errno = EAGAIN;
+                edit_complete = 1/*TRUE*/;
+                cb_len = -1;
+                break;
+            case KEY_BACKSPACE:   /* backspace */
+            case 8:     /* ctrl-h */
+                linenoiseEditBackspace(&l);
+                break;
+            case KEY_CTRL_D:     /* ctrl-d, remove char at right of cursor, or if the
+                                line is empty, act as end-of-file. */
+                if (l.len > 0) {
+                    linenoiseEditDelete(&l);
+                } else {
+                    history_len--;
+                    free(history[history_len]);
+                    edit_complete = 1;/*TRUE*/
+                    cb_len = -1;
+                }
+                break;
+            case KEY_CTRL_T:    /* ctrl-t, swaps current character with previous. */
+                if (l.pos > 0 && l.pos < l.len) {
+                    int aux = buf[l.pos-1];
+                    buf[l.pos-1] = buf[l.pos];
+                    buf[l.pos] = aux;
+                    if (l.pos != l.len-1) l.pos++;
+                    refreshLine(&l);
+                }
+                break;
+            case KEY_CTRL_B:     /* ctrl-b */
+                linenoiseEditMoveLeft(&l);
+                break;
+            case KEY_CTRL_F:     /* ctrl-f */
+                linenoiseEditMoveRight(&l);
+                break;
+            case KEY_CTRL_P:    /* ctrl-p */
+                linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_PREV);
+                break;
+            case KEY_CTRL_N:    /* ctrl-n */
+                linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
+                break;
+            case KEY_ESC:    /* escape sequence */
+                /* Read the next two bytes representing the escape sequence.
+                 * Use two calls to handle slow terminals returning the two
+                 * chars at different times. */
+                if (tty_read(l.ifd,seq,1) == -1) break;
+                if (tty_read(l.ifd,seq+1,1) == -1) break;
 
-            /* ESC [ sequences. */
-            if (seq[0] == '[') {
-                if (seq[1] >= '0' && seq[1] <= '9') {
-                    /* Extended escape, read additional byte. */
-                    if (tty_read(l.ifd,seq+2,1) == -1) break;
-                    if (seq[2] == '~') {
+                /* ESC [ sequences. */
+                if (seq[0] == '[') {
+                    if (seq[1] >= '0' && seq[1] <= '9') {
+                        /* Extended escape, read additional byte. */
+                        if (tty_read(l.ifd,seq+2,1) == -1) break;
+                        if (seq[2] == '~') {
+                            switch(seq[1]) {
+                            case '3': /* Delete key. */
+                                linenoiseEditDelete(&l);
+                                break;
+                            }
+                        }
+                    } else {
                         switch(seq[1]) {
-                        case '3': /* Delete key. */
-                            linenoiseEditDelete(&l);
+                        case 'A': /* Up */
+                            linenoiseEditHistoryNext(&l,
+                                                     LINENOISE_HISTORY_PREV);
+                            break;
+                        case 'B': /* Down */
+                            linenoiseEditHistoryNext(&l,
+                                                     LINENOISE_HISTORY_NEXT);
+                            break;
+                        case 'C': /* Right */
+                            linenoiseEditMoveRight(&l);
+                            break;
+                        case 'D': /* Left */
+                            linenoiseEditMoveLeft(&l);
+                            break;
+                        case 'H': /* Home */
+                            linenoiseEditMoveHome(&l);
+                            break;
+                        case 'F': /* End*/
+                            linenoiseEditMoveEnd(&l);
                             break;
                         }
                     }
-                } else {
+                }
+
+                /* ESC O sequences. */
+                else if (seq[0] == 'O') {
                     switch(seq[1]) {
-                    case 'A': /* Up */
-                        linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_PREV);
-                        break;
-                    case 'B': /* Down */
-                        linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
-                        break;
-                    case 'C': /* Right */
-                        linenoiseEditMoveRight(&l);
-                        break;
-                    case 'D': /* Left */
-                        linenoiseEditMoveLeft(&l);
-                        break;
                     case 'H': /* Home */
                         linenoiseEditMoveHome(&l);
                         break;
@@ -1089,49 +1130,41 @@ static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t 
                         break;
                     }
                 }
-            }
-
-            /* ESC O sequences. */
-            else if (seq[0] == 'O') {
-                switch(seq[1]) {
-                case 'H': /* Home */
-                    linenoiseEditMoveHome(&l);
-                    break;
-                case 'F': /* End*/
-                    linenoiseEditMoveEnd(&l);
-                    break;
+                break;
+            default:
+                if (linenoiseEditInsert(&l,c))
+                {   edit_complete = 1/*TRUE*/;
+                    cb_len = -1;
                 }
+                break;
+            case KEY_CTRL_U: /* Ctrl+u, delete the whole line. */
+                buf[0] = '\0';
+                l.pos = l.len = 0;
+                refreshLine(&l);
+                break;
+            case KEY_CTRL_K: /* Ctrl+k, delete from current to end of line. */
+                buf[l.pos] = '\0';
+                l.len = l.pos;
+                refreshLine(&l);
+                break;
+            case KEY_CTRL_A: /* Ctrl+a, go to the start of the line */
+                linenoiseEditMoveHome(&l);
+                break;
+            case KEY_CTRL_E: /* ctrl+e, go to the end of the line */
+                linenoiseEditMoveEnd(&l);
+                break;
+            case KEY_CTRL_L: /* ctrl+l, clear screen */
+                linenoiseClearScreen();
+                refreshLine(&l);
+                break;
+            case KEY_CTRL_W: /* ctrl+w, delete previous word */
+                linenoiseEditDeletePrevWord(&l);
+                break;
             }
-            break;
-        default:
-            if (linenoiseEditInsert(&l,c)) return -1;
-            break;
-        case KEY_CTRL_U: /* Ctrl+u, delete the whole line. */
-            buf[0] = '\0';
-            l.pos = l.len = 0;
-            refreshLine(&l);
-            break;
-        case KEY_CTRL_K: /* Ctrl+k, delete from current to end of line. */
-            buf[l.pos] = '\0';
-            l.len = l.pos;
-            refreshLine(&l);
-            break;
-        case KEY_CTRL_A: /* Ctrl+a, go to the start of the line */
-            linenoiseEditMoveHome(&l);
-            break;
-        case KEY_CTRL_E: /* ctrl+e, go to the end of the line */
-            linenoiseEditMoveEnd(&l);
-            break;
-        case KEY_CTRL_L: /* ctrl+l, clear screen */
-            linenoiseClearScreen();
-            refreshLine(&l);
-            break;
-        case KEY_CTRL_W: /* ctrl+w, delete previous word */
-            linenoiseEditDeletePrevWord(&l);
-            break;
         }
     }
-    return l.len;
+    
+    return cb_len;
 }
 
 /* This special mode is used by linenoise in order to print scan codes
