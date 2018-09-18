@@ -195,10 +195,10 @@ usage(const char* msg)
 	fprintf(stderr, "error: %s\n", msg);
 
     fprintf(stderr, "\nusage:\n");
-    fprintf(stderr, "  "CODEID" [-e|-ne] [-c <commands> | [-f] <cmdfile>] "
+    fprintf(stderr, "  "CODEID" [-e|-ne] [-c <commands> | [-f <cmdfile>] "
 	    "[[--] <script arg>...]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "     [-f] <cmdfile>     - read commands from this file instead of the console\n");
+    fprintf(stderr, "     -f <cmdfile>       - read commands from this file instead of the console\n");
     fprintf(stderr, "     -c \"cmd;cmd;...\"   - execute initial commands\n");
     fprintf(stderr, "     -[n]e | --[no]emit - "
 		    "[don't] echo executed commands\n");
@@ -276,14 +276,6 @@ parse_args(int argc, char **argv,
                 else
                     err = "too many options";
             }
-#if 0
-            // take first non-keyed argument as --file input
-	    if (NULL == *ref_input)
-	    {   *ref_input = argv[argn];
-		localargs = FALSE; /* subsequent args are for the script */
-	    } else
-		err = "unknown option";
-#endif
 	} else
 	{   if ((size_t)out_argn < out_argv_len)
 		out_argv[out_argn++] = argv[argn];
@@ -864,21 +856,20 @@ main(int argc, char **argv)
                         }
 #endif
 
-                        if (exit_rc == EXIT_OK)
+                        if (exit_rc == EXIT_OK &&
+                            (do_console || insist_console))
                         {
-                            if (do_console || insist_console)
-                            {
-                                DEBUG_CLI(fprintf(stderr, "%s: executing from console\n",
-                                                  codeid()););
-                                cli(state, init, codeid());
-
-                                if (!quiet)
-                                    printf("%s: finished\n", CODEID);
-                            }
-                        }
+                            DEBUG_CLI(fprintf(stderr,
+                                              "%s: executing from console\n",
+                                              codeid()););
+                            cli(state, init, /*rcfile*/codeid());
+                        } else
+                            quiet = true;
                     }
                 }
 	        ftl_libs_end(state);
+                if (!quiet)
+                    printf("%s: finished\n", codeid());
 	    }
 	    parser_state_free(state);
 	}

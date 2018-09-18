@@ -23151,10 +23151,18 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
                     int argc, const char **argv)
 {   dir_t *pcmds = dir_id_new();
     dir_t *argvec = dir_argvec_new(argc, argv);
+    dir_t *version = dir_vec_new();
+    int ver_major;
+    int ver_minor;
+    int ver_debug;
+    ftl_version(&ver_major, &ver_minor, &ver_debug);
+    dir_int_set(version, 0, value_int_new(ver_major));
+    dir_int_set(version, 1, value_int_new(ver_minor));
 
     mod_add_dir(cmds, FTLDIR_PARSE, pcmds);
     mod_addfn(pcmds, "codeid",
               "- name of interpreter",  &fn_codeid, 0);
+    mod_add_val(pcmds, "version", dir_value(version));
     mod_addfn(pcmds, "rdmod",
               "<module> - return env made executing module file on path",
               &fn_rdmod, 1);
@@ -23695,6 +23703,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     dir_t *fscmds = dir_id_new();
     dir_t *libcmds = dir_id_new();
     dir_t *shcmds = dir_id_new();
+
     const char *osfamily = "unknown";
     static char sep[2];
     static char exec_buf[PATHNAME_MAX];
@@ -23715,6 +23724,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
 
     sep[0] = OS_FS_SEP;
     sep[1] = '\0';
+
     mod_add_val(fscmds, "sep", value_string_new_measured(sep));
     mod_add_val(fscmds, "nowhere", value_string_new_measured(OS_FS_NOWHERE));
     mod_add_val(fscmds, "thisdir", value_string_new_measured(OS_FS_DIR_HERE));
