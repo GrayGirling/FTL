@@ -23292,6 +23292,57 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
 
 
 
+/* Elapse time in ticks */
+number_t sys_ticks_start = -1;
+number_t sys_ticks_hz_last = -1;
+
+
+
+#if defined(_WIN32)
+
+#define SYS_TICKS_HZ -1
+
+extern number_t sys_ticks_hz(void)
+{
+    number_t freq;
+    QueryPerformanceFrequency(&freq);
+    return freq;
+}
+extern number_t sys_ticks_now(void)
+{
+    number_t ticks;
+    QueryPerformanceCounter(&tiocks);
+    return ticks;
+}
+
+#endif /* SYSOS_WINDOWS */
+
+
+#if defined(__linux__) ||  defined(__APPLE__)
+
+#include <sys/time.h>
+
+#define SYS_TICKS_HZ 1000000
+
+extern number_t sys_ticks_hz(void)
+{
+    return SYS_TICKS_HZ;
+}
+
+extern number_t sys_ticks_now(void)
+{
+    struct timeval time;
+    struct timezone tz;
+    gettimeofday(&time, &tz);
+    return ((number_t)time.tv_sec * SYS_TICKS_HZ) + ((number_t)time.tv_usec);
+}
+
+#endif    // POSIX O/S
+
+
+#ifndef SYS_TICKS_HZ
+#error unknow O/S - unknown method to find fast tick counter
+#endif
 
 
 
@@ -23475,6 +23526,15 @@ fn_path(const value_t *this_fn, parser_state_t *state)
 }
 
 
+
+
+
+
+
+static const value_t *
+fn_ticks(const value_t *this_cmd, parser_state_t *state)
+{   return value_int_new(sys_ticks_now());
+}
 
 
 
@@ -23766,6 +23826,14 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
               &fn_system_rc, 1);
     mod_add(scmds, "uid", "<user> - return the UID of the named user",
             &cmd_uid);
+
+    sys_ticks_hz_last = sys_ticks_hz();
+    sys_ticks_start = sys_ticks_now();
+    mod_addfn(scmds, "ticks", "- current elapsed time measure in ticks",
+              &fn_ticks, 0);
+    mod_add_val(scmds, "ticks_start", value_int_new(sys_ticks_start));
+    mod_add_val(scmds, "ticks_hz", value_int_new(sys_ticks_hz_last));
+    
     mod_addfn(scmds, "time", "- system calendar time in seconds",
               &fn_time, 0);
     mod_addfn(scmds, "localtime", "<time> - broken down local time",

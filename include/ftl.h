@@ -206,6 +206,33 @@ thread_self(void);
 
 /*          O/S Independence - Time                              */
 
+    
+/* 'ticks' increment monotonically at a rate of sys_ticks_hz_last and should
+ * provide enough resolution to report the passage of time in at least
+ * millisecond accuracy
+ */
+    
+/*! starting number of ticks (reading when program starts)
+ */
+extern number_t sys_ticks_start;
+/*! last return from sys_ticks_hz (normally this value does not change
+ *  dynamically)
+ */
+extern number_t sys_ticks_hz_last;
+    
+/*! read the current number of elapsed ticks
+ */
+extern number_t
+sys_ticks_now(void);
+
+/*! return (and possibly evaluate) the number of ticks per second
+ */
+extern number_t
+sys_ticks_hz(void);
+    
+/*! pause execution for a number of milliseconds
+ *  Note: should give processor an opportunity to schedule other processes
+ */
 extern void
 sleep_ms(unsigned long milliseconds);
 
