@@ -23304,15 +23304,15 @@ number_t sys_ticks_hz_last = -1;
 
 extern number_t sys_ticks_hz(void)
 {
-    number_t freq;
+    LARGE_INTEGER freq;
     QueryPerformanceFrequency(&freq);
-    return freq;
+    return freq.QuadPart;
 }
 extern number_t sys_ticks_now(void)
 {
-    number_t ticks;
-    QueryPerformanceCounter(&tiocks);
-    return ticks;
+    LARGE_INTEGER ticks;
+    QueryPerformanceCounter(&ticks);
+    return ticks.QuadPart;
 }
 
 #endif /* SYSOS_WINDOWS */
