@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2016, Gray Girling
+ * Copyright (c) 2005-2018, Gray Girling
  *
  * All rights reserved.
  *
@@ -300,8 +300,15 @@ charsink_putwc(charsink_t *sink, wchar_t ch);
 extern int
 charsink_write(charsink_t *sink, const char *buf, size_t len);
 
+/*! Force any written bytes to the end-to-end peer
+ */
 extern bool /*ok*/
 charsink_flush(charsink_t *sink);
+
+/*! Return true if next write expected to take no I/O time
+ */
+extern bool /*ok*/
+charsink_ready(charsink_t *sink);
 
 extern int
 charsink_vsprintf(charsink_t *sink, const char *format, va_list args);

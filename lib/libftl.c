@@ -447,6 +447,7 @@
 // #define DEBUG_VALLINK DO
 // #define DEBUG_CHARS DO
 // #define DEBUG_AVAIL DO
+// #define DEBUG_ISBLK DO
 // #define DEBUG_LNO DO 
 // #define DEBUG_CONSOLE DO 
 // #define DEBUG_EXPD DO 
@@ -473,6 +474,7 @@
 #undef DEBUG_VALLINK
 #undef DEBUG_CHARS
 #undef DEBUG_AVAIL
+#undef DEBUG_ISBLK
 #undef DEBUG_LNO
 #undef DEBUG_CONSOLE
 #undef DEBUG_EXPD
@@ -512,6 +514,9 @@
 #endif
 #ifndef DEBUG_AVAIL
 #define DEBUG_AVAIL OMIT
+#endif
+#ifndef DEBUG_ISBLK
+#define DEBUG_ISBLK OMIT
 #endif
 #ifndef DEBUG_LNO
 #define DEBUG_LNO OMIT
@@ -1172,6 +1177,23 @@ charsink_flush(charsink_t *sink)
 
 
 
+extern bool
+charsink_ready(charsink_t *sink)
+{   bool ready = FALSE;
+
+    if (NULL != sink)
+    {   if (sink->ready != NULL)
+            ready = (*sink->ready)(sink);
+        else
+            ready = TRUE; /* no flush function => never ready */
+    }
+    DO(else DPRINTF("%s: testing unopened sink for readiness\n", codeid());)
+
+    return ready;
+}
+
+
+
 extern int
 charsink_putwc(charsink_t *sink, wchar_t ch)
 {
@@ -1240,10 +1262,12 @@ charsink_sprintf(charsink_t *sink, const char *format, ...)
 
 
 
-static charsink_t *
-charsink_init(charsink_t *sink, putc_fn_t *putc, flush_fn_t *flush)
+extern charsink_t *
+charsink_init(charsink_t *sink, putc_fn_t *putc, flush_fn_t *flush,
+              ready_fn_t *ready)
 {   sink->putc = putc;
     sink->flush = flush;
+    sink->ready = ready;
     return sink;
 }
 
@@ -1311,11 +1335,69 @@ charsink_stream_flush(charsink_t *sink)
 
 
 
+#if HAS_FILE_DESCRIPTORS
+static bool
+fd_is_ready(int fd)
+{
+    bool ready = false;
+    /* warning - this code can not detect whether the next write will
+       write more than 0 bytes */
+    if (fd < 0)
+    {   DEBUG_ISBLK(fprintf(stderr, "%s: FD for is blocked is negative (%d) - "
+                            "%s (rc %d)\n", codeid(),
+                            fd, strerror(errno), errno););
+    } else 
+    {
+        fd_set writefds;
+        struct timeval timeout;
+        int fdcount;
+        int maxfd = fd;
+        FD_ZERO(&writefds);
+        FD_SET(fd, &writefds);
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+        fdcount = select(maxfd+1, NULL, &writefds, NULL, &timeout);
+        DEBUG_ISBLK(fprintf(stderr, "%s: select FD count for FD %d is %d\n",
+                            codeid(), fd, fdcount););
+
+        if (fdcount >= 0) {
+            ready = fdcount > 0;
+        }
+        DEBUG_ISBLK(
+            else
+                 fprintf(stderr, "%s: chars - select FD count (awaiting %d) "
+                         "is negative - %s (rc %d)\n",
+                         codeid(), fd, strerror(errno), errno););
+    }
+    return ready;
+}
+#endif
+
+
+
+
+static bool /*writeable*/ charsink_stream_ready(charsink_t *sink)
+{
+#if HAS_FILE_DESCRIPTORS
+    charsink_stream_t *stream = (charsink_stream_t *)sink;
+    int fd = os_fileno(stream->out);
+    if (fd >= 0)
+        return fd_is_ready(fd);
+    else
+#endif
+        return FALSE; /* assume always causes an I/O wait */
+}
+
+
+
+
+
 static charsink_t *
 charsink_stream_init(charsink_stream_t *stream, FILE *out)
 {   stream->out = out;
     return charsink_init(&stream->sink, &charsink_stream_putc,
-                         &charsink_stream_flush);
+                         &charsink_stream_flush,
+                         /*ready*/&charsink_stream_ready);
 }
 
 
@@ -1430,11 +1512,28 @@ charsink_socket_tcp_flush(charsink_socket_t *socket)
 
 
 
+
+
+static bool /*writeable*/ charsink_socket_ready(charsink_t *sink)
+{
+#if HAS_FILE_DESCRIPTORS
+    charsink_socket_t *socket = (charsink_socket_t *)sink;
+    return fd_is_ready(socket->fd);
+#else
+    return TRUE; /* never causes an I/O wait */
+#endif
+}
+
+
+
+
+
 static charsink_t *
 charsink_socket_init(charsink_socket_t *socket, int fd, int send_flags)
 {   socket->fd = fd;
     socket->send_flags = send_flags;
-    return charsink_init(&socket->sink, &charsink_socket_putc, /*flush*/NULL);
+    return charsink_init(&socket->sink, &charsink_socket_putc, /*flush*/NULL,
+                         &charsink_socket_ready);
 }
 
 
@@ -1555,13 +1654,22 @@ charsink_string_putc(charsink_t *sink, int ch)
 
 
 
+static bool /*writeable*/ charsink_string_ready(charsink_t *sink)
+{
+    return TRUE; /* never causes an I/O wait */
+}
+
+
+
+
 
 extern charsink_t *
 charsink_string_init(charsink_string_t *charbuf)
 {   charbuf->charvec = NULL;
     charbuf->n = 0;
     charbuf->maxn = 0;
-    return charsink_init(&charbuf->sink, &charsink_string_putc, /*flush*/NULL);
+    return charsink_init(&charbuf->sink, &charsink_string_putc, /*flush*/NULL,
+                         &charsink_string_ready);
 }
 
 
@@ -1648,13 +1756,22 @@ charsink_fixstring_putc(charsink_t *sink, int ch)
 
 
 
+static bool /*writeable*/ charsink_fixstring_ready(charsink_t *sink)
+{
+    return TRUE; /* never causes an I/O wait */
+}
+
+
+
+
+
 static charsink_t *
 charsink_fixstring_init(charsink_string_t *charbuf, char *str, size_t len)
 {   charbuf->charvec = str;
     charbuf->n = 0;
     charbuf->maxn = len;
     return charsink_init(&charbuf->sink, &charsink_fixstring_putc,
-                         /*flush*/NULL);
+                         /*flush*/NULL, &charsink_fixstring_ready);
 }
 
 
@@ -24307,6 +24424,30 @@ fn_flush(const value_t *this_fn, parser_state_t *state)
 
 
 
+static const value_t *
+fn_ready(const value_t *this_fn, parser_state_t *state)
+{   /* syntax: ready <stream> */
+    const value_t *stream = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(stream, type_stream))
+    {   charsink_t *sink;
+        if (!value_stream_sink(stream, &sink))
+        {   val = value_false;
+            parser_error(state, "stream not open for output\n");
+        } else
+            val = value_bool(charsink_ready(sink));
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
 #if 0
 static const value_t *
 fn_writexpand(const value_t *this_fn, parser_state_t *state)
@@ -24675,6 +24816,9 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
     mod_addfn(icmds, "flush",
               "<stream> - ensure unbuffered output is written",
               &fn_flush, 1);
+    mod_addfn(icmds, "ready",
+              "<stream> - return whether next write may not cause wait",
+              &fn_ready, 1);
     mod_addfn(icmds, "fprintf",
               "<stream> <format> <env> - write formatted string to stream",
               &fn_fprintf, 3);
@@ -25460,12 +25604,12 @@ dumpline(FILE *out, const void *buffer, int entries, int sz_ln2,
 {  const unsigned char *buf = (const unsigned char *)buffer;
    const unsigned char *bufend = &buf[entries<<sz_ln2];
    int consumed = 0;
-   int i;
+   const unsigned char *pos;
 
-   for (i=0; i<perline; i++) {
-      if (&buf[i<<sz_ln2] < bufend) {
+   for (pos=&buf[0]; pos<&buf[perline<<sz_ln2]; pos+=1<<sz_ln2) {
+      if (pos < bufend) {
          unsigned long val = 0;
-         memcpy(&val, &buf[i<<sz_ln2], 1<<sz_ln2);
+         memcpy(&val, pos, 1<<sz_ln2);
          fprintf(out, "%0*lx ", 2<<sz_ln2, val);
          consumed++;
       } else
@@ -25473,6 +25617,7 @@ dumpline(FILE *out, const void *buffer, int entries, int sz_ln2,
    }
    if (with_chars) {
       const unsigned char *cbuf = (const unsigned char *)buffer;
+      int i;
       fprintf(out,"   ");
       for (i=0; i<(perline<<sz_ln2); i++) {
          if (buf+i < bufend) {

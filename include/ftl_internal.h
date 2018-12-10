@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
- * Copyright (c) 2005-2016, Gray Girling
+ * Copyright (c) 2005-2018, Gray Girling
  *
  * All rights reserved.
  *
@@ -69,13 +69,20 @@ extern "C" {
 
 typedef bool /*full*/ putc_fn_t(charsink_t *sink, int ch);
 typedef bool /*full*/ flush_fn_t(charsink_t *sink);
+typedef bool /*writeable*/ ready_fn_t(charsink_t *sink);
 
 struct charsink_s
-{   putc_fn_t *putc;
-    flush_fn_t *flush;
+{   putc_fn_t *putc;    /* output a character */
+    flush_fn_t *flush;  /* force data end to end */
+    ready_fn_t *ready;  /* false if next write will cause I/O delay  */
 } /* charsink_t */;
 
 
+extern charsink_t *
+charsink_init(charsink_t *sink, putc_fn_t *putc, flush_fn_t *flush,
+              ready_fn_t *ready);
+
+    
 typedef struct charsink_string_s
 {   charsink_t sink;
     char *charvec;
