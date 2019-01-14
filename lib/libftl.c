@@ -261,13 +261,17 @@
 #ifdef _WIN32
 
 #define OS_FILE_SEP "\\"
-#define snprintf _snprintf
-#define vsnprintf _vsnprintf
+#define os_vsnprintf _vsnprintf
+#define os_snprintf  _snprintf
+#define HAS_VSNPRINTF
 #define HAS_REGISTRY
 
 #else
 
 #define OS_FILE_SEP "/"
+#define os_vsnprintf vsnprintf
+#define os_snprintf  snprintf
+#define HAS_VSNPRINTF
 #define HAS_UNSETENV
 #define HAS_SETENV
 #define HAS_OPENDIR
@@ -345,7 +349,6 @@
 #define FTL_STRING_MAX          4096
 #define FTL_ARGNAMES_CACHED     8
 
-#define HAS_VSNPRINTF
 #define HAS_TOWUPPER    /* C99 function */
 #define HAS_TOWLOWER    /* C99 function */
 #define HAS_GETHOSTBYNAME
@@ -397,9 +400,9 @@
 
 
 
+#include "ftl.h" /* also defines bool */
 #include "libdyn.h"
 #include "filenames.h"
-#include "ftl.h"
 #include "ftl_internal.h"
 #include "ftlext.h"
 #define STRING(_x) #_x
@@ -603,10 +606,10 @@
 #ifndef HAS_VSNPRINTF
 
 
-/* we don't have this on windows */
+/* we don't have this on all operating systems */
 
 
-int vsnprintf(char *str, size_t size, const char *format, va_list ap)
+int os_vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {   int len = vsprintf(str, format, ap);
     ftl_assert((size_t)len < size); /* will have done some damage */
     return len;
@@ -615,14 +618,14 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 
 
 
-/* we don't have this on Windows */
-int snprintf(char *str, size_t size, const char *format, ...)
+/* we don't have this on all operating systems */
+int os_snprintf(char *str, size_t size, const char *format, ...)
 {   /* implement it unsafely! */
     va_list args;
     int len;
 
     va_start(args, format);
-    len = vsnprintf(str, size, format, args);
+    len = os_vsnprintf(str, size, format, args);
     va_end(args);
 
     return len;
@@ -1230,7 +1233,7 @@ charsink_putwc(charsink_t *sink, wchar_t ch)
 extern int
 charsink_vsprintf(charsink_t *sink, const char *format, va_list args)
 {   char buf[FTL_PRINTF_MAX];
-    int len = vsnprintf(&buf[0], sizeof(buf), format, args);
+    int len = os_vsnprintf(&buf[0], sizeof(buf), format, args);
 
     if (len > 0)
     {   if (len >= sizeof(buf))
@@ -1968,7 +1971,7 @@ charsource_init(charsource_t *source,
     va_list args;
 
     va_start(args, name_format);
-    namelen = vsnprintf(namebuf, 0, name_format, args);
+    namelen = os_vsnprintf(namebuf, 0, name_format, args);
     va_end(args);
 
     source->link = NULL;
@@ -1988,7 +1991,7 @@ charsource_init(charsource_t *source,
 
         if (NULL != namebuf)
         {   va_start(args, name_format);
-            (void)vsnprintf(namebuf, namelen+1, name_format, args);
+            (void)os_vsnprintf(namebuf, namelen+1, name_format, args);
             va_end(args);
             DEBUG_CHARS(DPRINTF("%s: chars - name '%s' -> [%d] '%s'\n",
                                codeid(), name_format, namelen, namebuf););
@@ -2333,12 +2336,14 @@ win_fd_getavail(int fd, bool *out_at_eof, bool *out_is_available)
         bool at_eof = false;
         bool available = true;
 
+#if WIN_FILE_CNT_VISIBLE
         if (stdin->_cnt != 0)
         {   DEBUG_AVAIL(fprintf(stderr,
                                 "%s: avail - win stdin buffer has data\n",
                                 codeid()););
         }
         else
+#endif
         {
             HANDLE hand = GetStdHandle(STD_INPUT_HANDLE);
             /* "wait" for the stdin handle to have an event */
@@ -20843,9 +20848,9 @@ static size_t argv_to_string(argv_token_t *args, char *buf, size_t len)
 
         if (NULL != strchr(next, ' ') || NULL != strchr(next, '\n')  ||
             NULL != strchr(next, '\t'))
-            n = snprintf(buf, len, "\"%s\" ", next);
+            n = os_snprintf(buf, len, "\"%s\" ", next);
         else
-            n = snprintf(buf, len, "%s ", next);
+            n = os_snprintf(buf, len, "%s ", next);
 
         if (n < len)
         {   len -= n;
@@ -21310,14 +21315,14 @@ charsource_rcfile(parser_state_t *state, const char *rccode_name,
     bool using_default = FALSE;
 
     strnuccpy(&rccode_name_uc[0], rccode_name, sizeof(rccode_name_uc));
-    snprintf(&rcfile_env[0], sizeof(rcfile_env), "%s%s",
-             &rccode_name_uc[0], ENV_FTL_RCFILE_POST);
+    os_snprintf(&rcfile_env[0], sizeof(rcfile_env), "%s%s",
+                &rccode_name_uc[0], ENV_FTL_RCFILE_POST);
     rcfile_name = getenv(rcfile_env);
 
     if (rcfile_name == NULL)
     {    rcfile_name = &rcfile_name_buf[0];
-         snprintf(&rcfile_name_buf[0], sizeof(rcfile_name_buf),
-                  ENV_FTL_RCFILE_DEFAULT(rccode_name));
+         os_snprintf(&rcfile_name_buf[0], sizeof(rcfile_name_buf),
+                     ENV_FTL_RCFILE_DEFAULT(rccode_name));
          using_default = TRUE;
          DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", rccode_name, rcfile_name););
     }
@@ -25466,7 +25471,7 @@ fn_rndseed(const value_t *this_fn, parser_state_t *state)
                 *lastpartbin++ = *seedbin++;
             seed ^= lastpart;
         }
-	srand(seed);
+        srand(seed);
     } else
         parser_report_help(state, this_fn);
 
@@ -25801,7 +25806,7 @@ genfn_fmt_d(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         else
             format = "%.*"F_NUMBER_T;
 
-        len = snprintf(buf, buflen, format, precision, arg);
+        len = os_snprintf(buf, buflen, format, precision, arg);
 
         if (len >= 0)
             val = value_string_new(buf, len);
@@ -25830,7 +25835,7 @@ genfn_fmt_u(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         else
             format = "%.*"F_UNUMBER_T;
 
-        len = snprintf(buf, buflen, format, precision, arg);
+        len = os_snprintf(buf, buflen, format, precision, arg);
         if (len >= 0)
             val = value_string_new(buf, len);
     }
@@ -25856,7 +25861,7 @@ genfn_fmt_x(char *buf, size_t buflen, fprint_flags_t flags, int precision,
             format = "%+.*"FX_UNUMBER_T;
         else
             format = "%.*"FX_UNUMBER_T;
-        len = snprintf(buf, buflen, format, precision, arg);
+        len = os_snprintf(buf, buflen, format, precision, arg);
         if (len >= 0)
             val = value_string_new(buf, len);
     }
@@ -25883,7 +25888,7 @@ genfn_fmt_x_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
             format = "%+.*"FXC_UNUMBER_T;
         else
             format = "%.*"FXC_UNUMBER_T;
-        len = snprintf(buf, buflen, format, precision, arg);
+        len = os_snprintf(buf, buflen, format, precision, arg);
         if (len >= 0)
             val = value_string_new(buf, len);
     }

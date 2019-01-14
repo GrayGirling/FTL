@@ -43,6 +43,24 @@
 #ifndef _FTL_H
 #define _FTL_H
 
+/* undefine the following run time's that don't support stdbool.h here */
+#define HAS_STDBOOL 1
+
+#if HAS_STDBOOL
+#include <stdbool.h>
+/* should be in stdbool.h, but we can't count on it being there */
+#else
+
+/* we'd better do our own stdbool.h then */
+#ifndef __bool_true_false_are_defined
+#define bool  int
+#define true  1
+#define false 0
+#define __bool_true_false_are_defined 1
+#endif
+
+#endif /* HAS_STDBOOL */
+
 #include <stdarg.h> /* for va_list */
 #include <wchar.h>  /* for wchar_t */
 #include <limits.h> /* for MB_LEN_MAX */
@@ -51,13 +69,6 @@
 extern "C" {
 #endif
 
-/* should be in stdbool.h, but we can't count on it being there */
-#ifndef __bool_true_false_are_defined
-#define bool  int
-#define true  1
-#define false 0
-#define __bool_true_false_are_defined 1
-#endif
 
 #ifndef TRUE
 #define TRUE  true

@@ -198,7 +198,7 @@ file_executable_sibling(char* buf, size_t size, const char *sibling_name)
 #include <tchar.h>
 
 
-extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
+extern bool fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
 {
    bool success = FALSE;
    size_t dirnamelen = strlen(directory);
@@ -268,7 +268,7 @@ extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
  *  in the directory that is given as the "directory" parameter. The second
  *  parameter needs to be allocated as this pointer gets dereferenced
  */
-extern int fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
+extern bool fs_enum_dir(const char *directory, fs_enum_fn_t *fn, void *enum_arg)
 {
    bool success = FALSE;
    size_t dirnamelen = strlen(directory);
