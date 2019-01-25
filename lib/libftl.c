@@ -16105,6 +16105,9 @@ parse_oneof_matching(const char **ref_line, parser_state_t *state,
     arg.parse_match_fn = match_fn;
     arg.parse_arg = match_fn_arg;
     *out_val = dir_forall(prefixes, &parse_oneof_exec, &arg);
+    OMIT(printf("%s: matched %s\n",
+                codeid(), *out_val == NULL? "nothing":
+                *out_val == &value_null? "NULL": "something"););
     return (NULL != *out_val);
 }
 
@@ -22670,17 +22673,27 @@ fn_rdmod(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_scan(const value_t *this_fn, parser_state_t *state)
-{   const value_t *str = parser_builtin_arg(state, 1);
-    dir_t *vec = dir_vec_new();
+{   const value_t *val = &value_null;
+    const value_t *strcode = parser_builtin_arg(state, 1);
     const char *strbase;
     size_t len;
-    const value_t *dstr = value_string_get_terminated(str, &strbase, &len);
-    const value_t *val = &value_null;
+    const value_t *dstr = NULL;
 
-    if (NULL != vec && NULL != dstr)
-    {   dir_set(vec, value_zero, dstr);
-        val = (const value_t *)vec;
-    }
+    if (value_type_equal(strcode, type_code))
+    {   value_code_buf(strcode, &strbase, &len);
+        dstr = value_string_new(strbase, len);
+    } else if (value_type_equal(strcode, type_string))
+        dstr = value_string_get_terminated(strcode, &strbase, &len);
+    
+    if (NULL != dstr) 
+    {   dir_t *vec = dir_vec_new();
+
+        if (vec != NULL)
+        {   dir_set(vec, value_zero, dstr);
+            val = (const value_t *)vec;
+        }
+    } else
+        parser_report_help(state, this_fn);
 
     return val;
 }
@@ -22806,7 +22819,7 @@ genfn_scan(const value_t *this_fn, parser_state_t *state,
         if (NULL != dstr)
         {   const char *line = strbase;
             const value_t *newval = (*fnparse)(&line, state, arg);
-            if (&value_null != newval)
+            if (NULL != newval)
             {   val = value_true;
 
                 dir_set(vec, value_zero,
@@ -22846,7 +22859,7 @@ fnparse_key(const char **ref_line, parser_state_t *state, const value_t *arg)
         parse_key(ref_line, key))
         return value_true;
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -22868,7 +22881,7 @@ fnparse_match(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_oneof(ref_line, state, prefixes, &choice)) {
         return choice;
     } else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -22895,7 +22908,7 @@ fnparse_ending(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_one_ending(ref_line, state, delimiters, &choice)) {
         return choice;
     } else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -22937,7 +22950,7 @@ fnparse_int(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_int(ref_line, &n))
         return value_int_new(n);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -22958,7 +22971,7 @@ fnparse_hex(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_hex(ref_line, &n))
         return value_int_new(n);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -22980,7 +22993,7 @@ fnparse_intval(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_int_val(ref_line, &n))
         return value_int_new(n);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23002,7 +23015,7 @@ fnparse_hexw(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_hex_width(ref_line, width, &n))
         return value_int_new(n);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23030,7 +23043,7 @@ fnparse_id(const char **ref_line, parser_state_t *state, const value_t *arg)
     if (parse_id(ref_line, buf, sizeof(buf)))
         return value_string_new_measured(buf);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23051,12 +23064,13 @@ fn_scan_id(const value_t *this_fn, parser_state_t *state)
 static const value_t *
 fnparse_string(const char **ref_line, parser_state_t *state,
                const value_t *arg)
-{   char buf[128];
+{   char buf[4096];
+    /*< TODO: find a way to discover size before allocating string storage */
     size_t slen;
     if (parse_string(ref_line, buf, sizeof(buf), &slen))
         return value_string_new(buf, slen);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23084,7 +23098,7 @@ fnparse_code(const char **ref_line, parser_state_t *state,
         return value_code_new(strval, srcpos, srcline);
     }
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23108,7 +23122,7 @@ fnparse_value(const char **ref_line, parser_state_t *state,
     if (parse_base_env(ref_line, state, &out_val, &is_env))
         return out_val;
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23131,7 +23145,7 @@ fnparse_itemstr(const char **ref_line, parser_state_t *state,
     if (parse_itemstr(ref_line, buf, sizeof(buf)))
         return value_string_new_measured(buf);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -23159,7 +23173,7 @@ fnparse_item(const char **ref_line, parser_state_t *state, const value_t *arg)
         parse_item(ref_line, delimsbase, delimslen, buf, sizeof(buf)))
         return value_string_new_measured(buf);
     else
-        return &value_null;
+        return NULL;
 }
 
 
@@ -28004,9 +28018,11 @@ typedef struct
 
 /* This function may cause a garbage collection */
 static void *
-forall_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+forallwhile_exec(dir_t *dir, const value_t *name, const value_t *value,
+                 void *arg)
 {   for_exec_args_t *forval = (for_exec_args_t *)arg;
     dir_t *codeargs = parser_env(forval->state);
+    const value_t *result = NULL;
 
     /* don't execute for values that are NULL - warning this may mean that
        the perceived domain of an environment is larger than the range
@@ -28019,23 +28035,38 @@ forall_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             if (NULL != code)
                 code = substitute(code, name, forval->state, /*unstrict*/TRUE);
         }
-        (void)invoke(code, forval->state);
+        result = invoke(code, forval->state);
     }
-
-    return NULL; /* non-null would stop the enumeration here */
+    OMIT(if (result == value_false)
+             printf("%s: forallwhile body FALSE\n", codeid()););
+    return result == value_false? (void*)value_false: NULL;
+    /* non-null stops the enumeration here */
 }
 
 
 
+/* This function may cause a garbage collection */
+static void *
+forall_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{
+    (void)forallwhile_exec(dir, name, value, arg);
+    return NULL;
+}
 
-/*! execute 0, 1 or 2 argument function with names and values from dir
+
+    
+
+/*! Execute 0, 1 or 2 argument function with names and values from dir using a
+ *  given enumeration function.
+ *  return TRUE only if all values used
  */
-static const value_t *
-fn_forall(const value_t *this_fn, parser_state_t *state)
+static bool
+genfn_forall(const value_t *this_fn, parser_state_t *state,
+             dir_enum_fn_t enum_fn)
 {   const value_t *dir = parser_builtin_arg(state, 1);
     const value_t *code = parser_builtin_arg(state, 2);
     dir_t *env;
-    const value_t *val;
+    bool all_true = true;
     bool is_code = value_type_equal(code, type_code);
 
     if (value_as_dir(dir, &env) && NULL != code &&
@@ -28051,15 +28082,34 @@ fn_forall(const value_t *this_fn, parser_state_t *state)
                           dir_value(parser_env(state)));)
         pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
         OMIT(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
-        (void)dir_forall(env, &forall_exec, &forval);
+        all_true = NULL == dir_forall(env, enum_fn, &forval);
         (void)parser_env_return(state, pos);
-        val = &value_null;
     } else
     {   parser_report_help(state, this_fn);
-        val = &value_null;
     }
-    return val;
+    return all_true;
 }
+
+
+
+/*! execute 0, 1 or 2 argument function with names and values from dir
+ */
+static const value_t *
+fn_forall(const value_t *this_fn, parser_state_t *state)
+{   genfn_forall(this_fn, state, &forall_exec);
+    return &value_null;
+}
+
+
+
+/*! execute 0, 1 or 2 argument function with names and values from dir as long
+ *  as the execution does not return FALSE
+ */
+static const value_t *
+fn_forallwhile(const value_t *this_fn, parser_state_t *state)
+{   return value_bool(genfn_forall(this_fn, state, &forallwhile_exec));
+}
+
 
 
 
@@ -28068,9 +28118,10 @@ fn_forall(const value_t *this_fn, parser_state_t *state)
 
 /* This function may cause a garbage collection */
 static void *
-for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+forwhile_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   for_exec_args_t *forval = (for_exec_args_t *)arg;
     dir_t *codeargs = parser_env(forval->state);
+    const value_t *result = NULL;
 
     /* don't execute for values that are NULL - warning this may mean that
        the perceived domain of an environment is larger than the range
@@ -28079,24 +28130,39 @@ for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
     {   const value_t *code = forval->code;
         code = substitute(code, value, forval->state, /*unstrict*/FALSE);
         if (code != NULL)
-            (void)invoke(code, forval->state);
+            result = invoke(code, forval->state);
     }
 
-    return NULL; /* non-null would stop the enumeration here */
+    OMIT(if (result == value_false)
+             printf("%s: forwhile body FALSE\n", codeid()););
+    return result == value_false? (void *)value_false: NULL;
+    /* non-null stops the enumeration here */
+}
+
+
+
+
+/* This function may cause a garbage collection */
+static void *
+for_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{   (void)forwhile_exec(dir, name, value, arg);
+    return NULL;
 }
 
 
 
 
 
-/*! execute 1-argument function with values from dir
+/*! Execute 1-argument function with values from dir using a given enumeration
+ *  function.
+ *  return TRUE only if all values used
  */
-static const value_t *
-fn_for(const value_t *this_fn, parser_state_t *state)
+static bool
+genfn_for(const value_t *this_fn, parser_state_t *state, dir_enum_fn_t enum_fn)
 {   const value_t *dir = parser_builtin_arg(state, 1);
     const value_t *code = parser_builtin_arg(state, 2);
     dir_t *env;
-    const value_t *val = &value_null;
+    bool all_true = true;
 
     if (value_as_dir(dir, &env) && NULL != code &&
         value_istype(code, type_closure))
@@ -28115,8 +28181,8 @@ fn_for(const value_t *this_fn, parser_state_t *state)
                               dir_value(parser_env(state)));)
             pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
             OMIT(VALUE_SHOW("for environment: ",
-                              dir_value(parser_env(state)));)
-            (void)dir_forall(env, &for_exec, &forval);
+                            dir_value(parser_env(state))););
+            all_true = NULL == dir_forall(env, enum_fn, &forval);
             (void)parser_env_return(state, pos);
         } else
         {
@@ -28127,8 +28193,30 @@ fn_for(const value_t *this_fn, parser_state_t *state)
     } else
     {   parser_report_help(state, this_fn);
     }
-    return val;
+    return all_true;
 }
+
+
+
+
+/*! execute 1-argument function with values from dir
+ */
+static const value_t *
+fn_for(const value_t *this_fn, parser_state_t *state)
+{   (void)genfn_for(this_fn, state, &for_exec);
+    return &value_null;
+}
+
+
+
+/*! execute 1-argument function with values from dir as long as the execution
+ *  does not return FALSE
+ */
+static const value_t *
+fn_forwhile(const value_t *this_fn, parser_state_t *state)
+{   return value_bool(genfn_for(this_fn, state, &forwhile_exec));
+}
+
 
 
 
@@ -28238,6 +28326,12 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
     mod_addfnscope(cmds, "forall",
               "<env> <binding> - execute <binding> <val> <name> for all entries in <env>",
               &fn_forall, 2, scope);
+    mod_addfnscope(cmds, "forwhile",
+              "<env> <binding> - for <binding> while it is not FALSE",
+              &fn_forwhile, 2, scope);
+    mod_addfnscope(cmds, "forallwhile",
+              "<env> <binding> - forall <binding> while it is not FALSE",
+              &fn_forallwhile, 2, scope);
     mod_addfnscope(cmds, "if",
               "<n> <then-code> <else-code> - execute <then-code> if "
                    "<n>!=FALSE",
