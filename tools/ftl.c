@@ -800,7 +800,7 @@ main(int argc, char **argv)
                     } else
                     {
                         bool do_console = !do_args;
-                        bool insist_console = false;
+                        wbool insist_console = false;
 
                         if (do_console && !quiet)
                         {   int ftlmaj, ftlmin, ftldebug;

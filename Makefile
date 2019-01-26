@@ -3,6 +3,7 @@ CC:=gcc
 
 # CONFIGURATION (these can be specified on the 'make' command line)
 
+ftl2=no
 use_elf=yes
 use_xml=yes
 use_json=yes
@@ -140,21 +141,30 @@ ifeq ($(ndebug),yes)
     CC_OPT_DEBUGSYMS :=
 endif
 CFLAGS   := $(CFLAGS_CC) -Wall $(CC_OPT_DEBUGSYMS) $(INCLUDES)
-LIBFTL_DEFS = $(DEFINES) $(DEFS_READLINE)
+LIBFTL_DEFS := $(DEFINES) $(DEFS_READLINE)
 # DYNAMIC FTL ENVIRONMENTS
 
 # FTLEXTS := ftlext-test.so
 
 # TOOL CONSTRUCTION
 
-FTLLIB_OBJS := libftl$(OBJ) filenames$(OBJ) libdyn$(OBJ) $(OBJS_READLINE)
+FTLVER := 
 
-FTL_DEFS := 
-FTL_OBJS := ftl$(OBJ) $(FTLLIB_OBJS)
+ifeq ($(ftl2),yes)
+LIBFTL_DEFS += -DFTL_AUTORUN
+FTLVER := 2
+endif
+LIBFTL_OBJS := libftl$(FTLVER)$(OBJ) filenames$(OBJ) libdyn$(OBJ) $(OBJS_READLINE)
+
+FTL_DEFS :=
+FTL_OBJS := ftl$(OBJ) $(LIBFTL_OBJS)
 FTL_LIBS := $(LIBS)
 
+ifeq ($(ftl2),yes)
+endif
+
 PENV_DEFS := 
-PENV_OBJS := penv$(OBJ) $(FTLLIB_OBJS)
+PENV_OBJS := penv$(OBJ) $(LIBFTL_OBJS)
 PENV_LIBS := $(LIBS)
 
 HI_OBJS := hi$(OBJ)
@@ -180,14 +190,14 @@ endif
 vpath %.c tools:lib
 vpath %.h include
 
-#all:	ftl libs cscope
-all:	hi$(EXE) ftl$(EXE) cscope
+#all:	ftl$(FTLVER) libs cscope
+all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
 
-install: ftl$(EXE) 
-	cp ftl$(EXE) "$(INSTALL_DIR)"
+install: ftl$(FTLVER)$(EXE) 
+	cp ftl$(FTLVER)$(EXE) "$(INSTALL_DIR)"
 
 install-hi: hi$(EXE) 
-	cp ftl$(EXE) "$(INSTALL_DIR)"
+	cp hi$(EXE) "$(INSTALL_DIR)"
 
 %.so: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -shared $<
@@ -195,7 +205,7 @@ install-hi: hi$(EXE)
 %$(OBJ): %.c
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-libftl$(OBJ): libftl.c
+libftl$(FTLVER)$(OBJ): libftl.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
 
 libftl_elf$(OBJ): libftl_elf.c
@@ -226,10 +236,10 @@ libdyn.c: libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
 
-ftl$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
+ftl$(FTLVER)$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
 
-penv$(EXE): $(PENV_OBJS) ftl.h ftl_internal.h Makefile
+penv$(FTLVER)$(EXE): $(PENV_OBJS) ftl.h ftl_internal.h Makefile
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(PENV_OBJS) $(PENV_LIBS)
 
 hi$(EXE): $(HI_OBJS) Makefile
@@ -247,4 +257,4 @@ test:
 	tests/check -a
 
 clean:
-	rm -f ftl penv hi $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)
+	rm -f ftl$(FTLVER) penv$(FTLVER) hi$(FTLVER) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2018, Gray Girling
+ * Copyright (c) 2005-2019, Gray Girling
  *
  * All rights reserved.
  *
@@ -32,7 +32,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    Jun 2015
+** date    Jan 2019
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -227,7 +227,12 @@
 /* #define USE_LINENOISE */
 /* #define EXIT_ON_CTRL_C */
 
+#ifdef FTL_AUTORUN
+#define VERSION_MAJ 2
+#else
 #define VERSION_MAJ 1
+#endif
+
 #define VERSION_MIN 21
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
@@ -329,12 +334,6 @@
 
 #define APP_ARGC_MAX 64
 
-#define CATDELIM(a, delim, b) #a  delim  #b
-#define VERSIONSTR(max, min) CATDELIM(max, ".", min)
-#define VERSION VERSIONSTR(VERSION_MAJ, VERSION_MIN)
-
-
-
 #define ftl_assert assert
 
 #ifndef SYS_EPOCH_YEAR
@@ -354,6 +353,22 @@
 #define HAS_GETHOSTBYNAME
 #define HAS_SOCKETS 
 
+#ifdef FTL_AUTORUN  /* expect in compiler build flags */ 
+#define FTL_LIB_AUTORUN_DEFAULT true
+#endif /* FTL_AUTORUN */
+
+#ifndef FTL_USE_AUTORUN
+#define FTL_USE_AUTORUN 1
+#endif
+
+#ifndef FTL_LIB_AUTORUN_DEFAULT
+#define FTL_LIB_AUTORUN_DEFAULT false
+#endif
+
+
+#define CATDELIM(a, delim, b) #a  delim  #b
+#define VERSIONSTR(max, min) CATDELIM(max, ".", min)
+#define VERSION VERSIONSTR(VERSION_MAJ, VERSION_MIN)
 
 
 
@@ -456,6 +471,7 @@
 // #define DEBUG_EXPD DO 
 // #define DEBUG_SERIES DO 
 // #define DEBUG_TRACE DO
+// #define DEBUG_SUBST DO
 // #define DEBUG_DIR DO
 // #define DEBUG_ENV DO 
 // #define DEBUG_MOD DO
@@ -483,6 +499,7 @@
 #undef DEBUG_EXPD
 #undef DEBUG_SERIES
 #undef DEBUG_TRACE
+#undef DEBUG_SUBST
 #undef DEBUG_DIR
 #undef DEBUG_ENV
 #undef DEBUG_MOD
@@ -535,6 +552,9 @@
 #endif
 #ifndef DEBUG_TRACE
 #define DEBUG_TRACE OMIT
+#endif
+#ifndef DEBUG_SUBST
+#define DEBUG_SUBST OMIT
 #endif
 #ifndef DEBUG_DIR
 #define DEBUG_DIR OMIT
@@ -14473,6 +14493,7 @@ struct value_closure_s
 {   value_t value;           /* closure used as a value */
     const value_t *code;     /* code body */
     value_env_t *env;        /* environment */
+    bool autorun;            /* execute when all arguments substituted */
 } /* value_closure_t */;
 
 
@@ -14568,10 +14589,12 @@ value_closure_compare(const value_t *v1, const value_t *v2)
 
 static value_t *
 value_closure_init(value_closure_t *closure, type_t closure_type,
-                   const value_t *code, value_env_t *env, bool on_heap)
+                   const value_t *code, value_env_t *env, bool autorun,
+                   bool on_heap)
 {   value_t *initval;
     closure->code = code;
     closure->env = env;
+    closure->autorun = autorun;
     initval = value_init(&closure->value, closure_type, on_heap);
     value_unlocal(value_env_value(env));
     value_unlocal(code);
@@ -14583,9 +14606,14 @@ value_closure_init(value_closure_t *closure, type_t closure_type,
 
 
 
-
+/*! create a new closure with the given components
+ *    @param code    - the text to be executed
+ *    @param env     - the values to which the code has access
+ *    @param autorun - whether the code is automatically executed once it has
+ *                     no unbound variables
+ */
 extern value_t *
-value_closure_new(const value_t *code, value_env_t *env)
+value_closure_fn_new(const value_t *code, value_env_t *env, bool autorun)
 {   value_t *closureval = NULL;
 
     if (NULL == code || value_is_codebody(code))
@@ -14593,7 +14621,7 @@ value_closure_new(const value_t *code, value_env_t *env)
                                    FTL_MALLOC(sizeof(value_closure_t));
         if (PTRVALID(closure))
             closureval = value_closure_init(closure, type_closure, code, env,
-                                            /*on_heap*/true);
+                                            autorun, /*on_heap*/true);
     } else
     {   fprintf(stderr, "%s: closure code has wrong type - "
                  "type is %s, expected code or builtin\n",
@@ -14613,6 +14641,16 @@ value_closure_new(const value_t *code, value_env_t *env)
 
 
 
+extern value_t *
+value_closure_new(const value_t *code, value_env_t *env)
+{
+    return value_closure_fn_new(code, env, /*autorun*/false);
+}
+
+
+
+
+
 #if 0 != DEBUG_VALINIT(1+)0
 #define value_closure_new(code, env)                    \
     value_info((value_closure_new)(code, env), __LINE__)
@@ -14622,9 +14660,9 @@ value_closure_new(const value_t *code, value_env_t *env)
 
 
 
-
-extern value_t *
-value_closure_copy(const value_t *oldclosureval)
+/*! TODO: not sure why we have removecode here */
+static value_t *
+value_closure_copy(const value_t *oldclosureval, bool removecode, bool autorun)
 {   value_closure_t *closure = NULL;
 
     if (value_istype(oldclosureval, type_closure))
@@ -14633,14 +14671,54 @@ value_closure_copy(const value_t *oldclosureval)
         closure = (value_closure_t *)FTL_MALLOC(sizeof(value_closure_t));
 
         if (PTRVALID(closure))
-        {   value_closure_init(closure, type_closure, /*code*/NULL,
-                               value_env_copy(oldclosure->env),
+        {   const value_t *code = NULL;
+
+            if (!removecode)
+                code = oldclosure->code;
+            value_closure_init(closure, type_closure, code,
+                               value_env_copy(oldclosure->env), autorun,
                                /*on_heap*/TRUE);
         }
     }
     return closure==NULL? NULL: &closure->value;
 }
 
+
+
+
+/*! return an identical closure that does not auto execute
+ */
+extern value_t *
+value_closure_deprime(value_t *closureval)
+{   value_t *disarmed = closureval;
+
+    if (value_istype(closureval, type_closure))
+    {   value_closure_t *closure = (value_closure_t *)closureval;
+        if (closure->autorun)
+            disarmed = value_closure_copy(closureval, /*removecode*/false,
+                                          /*autorun*/false);
+    }
+    return disarmed;
+}
+
+
+
+
+
+/*! return an identical closure that does not auto execute
+ */
+extern value_t *
+value_closure_prime(value_t *closureval)
+{   value_t *armed = closureval;
+
+    if (value_istype(closureval, type_closure))
+    {   value_closure_t *closure = (value_closure_t *)closureval;
+        if (!closure->autorun)
+            armed = value_closure_copy(closureval, /*removecode*/false,
+                                       /*autorun*/true);
+    }
+    return armed;
+}
 
 
 
@@ -14736,6 +14814,30 @@ value_closure_get(const value_t *value, const value_t **out_code,
 
 
 
+static bool
+value_closure_fn_get(const value_t *value, const value_t **out_code,
+                     dir_t **out_env, const value_t **out_unbound,
+                     bool *out_autorun)
+{   if (value_istype(value, type_closure))
+    {   const value_closure_t *closure = (const value_closure_t *)value;
+        *out_code = closure->code;
+        *out_env  = value_env_dir(closure->env);
+        *out_unbound = value_env_unbound(closure->env);
+        *out_autorun = closure->autorun;
+        return TRUE;
+    } else
+    {   *out_code = NULL;
+        *out_env  = NULL;
+        *out_unbound = NULL;
+        *out_autorun = FALSE;
+        return FALSE;
+    }
+}
+
+
+
+
+
 
 
 extern value_t * /*pos*/
@@ -14774,16 +14876,25 @@ value_closure_setcode(value_t *value, const value_t *code)
 
 
 extern value_t *
-value_closure_bind(const value_t *closureval, const value_t *value)
+value_closure_fn_bind(const value_t *closureval, const value_t *value,
+                      bool autorun)
 {   if (value_istype(closureval, type_closure))
     {   value_closure_t *closure = (value_closure_t *)closureval;
-        return value_closure_new(closure->code,
-                                 (value_env_t *)value_env_bind(closure->env,
-                                                               value));
+        return value_closure_fn_new(closure->code,
+                                    (value_env_t *)value_env_bind(closure->env,
+                                                                  value),
+                                    autorun);
     } else
     {   value_unlocal(value);
         return NULL;
     }
+}
+
+
+
+extern value_t *
+value_closure_bind(const value_t *closureval, const value_t *value)
+{   return value_closure_fn_bind(closureval, value, /*autorun*/false);
 }
 
 
@@ -14812,10 +14923,32 @@ value_closure_argcount(const value_t *closureval)
 
 
 
+#if FTL_USE_AUTORUN
+static bool
+value_closure_autorun(const value_t *val)
+{
+    bool autorun = false;
+    if  (value_type_equal(val, type_closure))
+    {   value_closure_t *closure = (value_closure_t *)val;
+        autorun = closure->autorun &&
+                  NULL == value_env_unbound(closure->env);
+    }
+    return autorun;
+}
+#else
+#define value_closure_autorun(val) (false)
+#endif
+
+
+
+
+
 
 #if 0 != DEBUG_VALINIT(1+)0
 #define value_closure_bind(closure, val)                        \
     value_info((value_closure_bind)(closure, val), __LINE__)
+#define value_closure_fn_bind(closure, val,autorun)             \
+    value_info((value_closure_fn_bind)(closure, val, autorun), __LINE__)
 #endif
 
 
@@ -17908,7 +18041,8 @@ mod_add_cmd(dir_t *dir, const char *name, const char *help, value_t *cmd,
     else
     {   int args = value_type_equal(cmd, type_func)?
                    value_func_args((value_func_t *)cmd): 1;
-        value_t *closure = value_closure_new(cmd, value_env_new());
+        value_t *closure = value_closure_fn_new(cmd, value_env_new(),
+                                                FTL_LIB_AUTORUN_DEFAULT);
 
         if (scope != NULL)
             (void)value_closure_pushdir(closure,
@@ -18264,7 +18398,8 @@ value_bool_init(value_closure_t *closure, value_func_t *boolfunc,
                              /*implicit*/FALSE, /*on_heap*/FALSE);
     (void)value_env_init(boolargenv, /*on_heap*/FALSE);
     bval = value_closure_init(closure, &type_bool_val,
-                              bfnval, boolargenv, /*on_heap*/FALSE);
+                              bfnval, boolargenv, FTL_LIB_AUTORUN_DEFAULT,
+                              /*on_heap*/FALSE);
     bhelpstr = value_cstring_init(boolhelpstr, help, strlen(help),
                                   /*on_heap*/FALSE);
 
@@ -19242,7 +19377,7 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
  *  This function may cause a garbage collection
  */
 static bool
-parse_closure(const char **ref_line, parser_state_t *state,
+parse_closure(const char **ref_line, parser_state_t *state, bool autorun,
               const value_t **out_val)
 {   bool ok;
     bool is_closure = TRUE;   /* value (so far) can be represented as closure */
@@ -19425,7 +19560,7 @@ parse_closure(const char **ref_line, parser_state_t *state,
                                  NULL==code? "":"not "););
                 /* did we parse a no colon but found a dir with unbound vars? */
                 if (NULL != unbound || NULL != code)
-                    *out_val = value_closure_new(code, env);
+                    *out_val = value_closure_fn_new(code, env, autorun);
                 else
                     /* don't need a closure after all */
                     *out_val = value_env_value(env);
@@ -19556,7 +19691,7 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
         ok = parse_index_lhvalue(ref_line, state, parser_env_copy(state),
                                  out_val);
     else
-    {   ok = parse_closure(ref_line, state, out_val) &&
+    {   ok = parse_closure(ref_line, state, /*autorun*/false, out_val) &&
              parse_space(ref_line);
         need_index = parse_dot(ref_line);
     }
@@ -19669,8 +19804,9 @@ substitute_simple(const value_t *code, const value_t *arg,
         {   const value_t *codeval = NULL;
             dir_t *dir = NULL;
             const value_t *unbound = NULL;
+            bool will_autorun = false;
 
-            value_closure_get(code, &codeval, &dir, &unbound);
+            value_closure_fn_get(code, &codeval, &dir, &unbound, &will_autorun);
             if (NULL == unbound)
             {   if (unstrict)
                     val = code;
@@ -19683,7 +19819,8 @@ substitute_simple(const value_t *code, const value_t *arg,
                 }
                 value_unlocal(arg);
             } else
-            {   value_t *newbinding = value_closure_bind(code, arg);
+            {   value_t *newbinding = value_closure_fn_bind(code, arg,
+                                                            will_autorun);
 
                 if (NULL == newbinding)
                 {   parser_error(state, "can't bind symbol in closure\n");
@@ -19718,11 +19855,6 @@ substitute(const value_t *code, const value_t *arg,
 {   bool auto_eval = FALSE;
     const value_t *val = substitute_simple(code, arg, state,
                                            unstrict, &auto_eval);
-    /* I don't like this feature yet - it makes syntax less explicit and
-       difficult to understand
-    if (NULL != val && auto_eval)
-        val = invoke(val, state);
-     */
     return val;
 }
 
@@ -19890,24 +20022,38 @@ extern bool value_istype_invokable(const value_t *val)
 
 
 
-
-
-/*! parse up'!'* [<retrieval> '!'*]* 
+/*! parse '!'* [<op_expression> '!'*]*
+ * Note: if FLT_AUTORUN is enabled a <retrieval> is run if it is a closure
+ *       set to autorun with no unbound variables -
+ *       otherwise it must be run using '!' exiplicitly
+ * This behaviour is modified if autorun_defeat is set - since the first
+ * opportunity for the substitution to autorun is ignored.
  * This function may cause a garbage collection
  */
-                                
 static bool
 parse_substitution_args(const char **ref_line, parser_state_t *state,
-                        const value_t **ref_val)
+                        bool autorun_defeat, const value_t **ref_val)
 {   
     bool ok = TRUE;
     const value_t *newarg = NULL;
+    int ignored_autoruns = autorun_defeat? 1: 0;
 
-    DEBUG_TRACE(DPRINTF("(subst args: '%s'\n", *ref_line););
+    DEBUG_TRACE(DPRINTF("(subst args: <%sauto> '%s')\n",
+                                   value_closure_autorun(*ref_val)? "":"no",
+                                   *ref_line););
 
-    while (ok && parse_pling(ref_line) && parse_space(ref_line))
-        *ref_val = invoke(*ref_val, state);
+    while ((ok = (NULL != *ref_val)) &&
+           (   (value_closure_autorun(*ref_val) && ignored_autoruns-- <= 0) ||
+               (parse_pling(ref_line) && parse_space(ref_line))
+           )
+          )
+    {   *ref_val = invoke(*ref_val, state);
+        DEBUG_SUBST(DPRINTF(" pre invoke\n"););
+    }
 
+    DEBUG_SUBST(DPRINTF(" post invoke subst args: <%sauto> '%s' ok %s\n",
+                        value_closure_autorun(*ref_val)? "":"no",
+                        *ref_line, ok? "TRUE":"FALSE"););
     while (ok /* && parse_key(ref_line, "~") && parse_space(ref_line) */
            && parse_operator_expr(ref_line, state, &newarg) &&
            parse_space(ref_line))
@@ -19916,11 +20062,19 @@ parse_substitution_args(const char **ref_line, parser_state_t *state,
         if (ok)
         {   *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
 
-            if (NULL == *ref_val)
-                ok = FALSE;
-
-            while (ok && parse_pling(ref_line) && parse_space(ref_line))
-                *ref_val = invoke(*ref_val, state);
+            DEBUG_SUBST(
+                DPRINTF(" pre arg invoke subst args: <%sauto> '%s' ok %s\n",
+                        value_closure_autorun(*ref_val)? "":"no",
+                        *ref_line, ok? "TRUE":"FALSE"););
+            while ((ok = (NULL != *ref_val)) &&
+                   (   (value_closure_autorun(*ref_val) &&
+                        ignored_autoruns-- <= 0) ||
+                       (parse_pling(ref_line) && parse_space(ref_line))
+                   )
+                  )
+            {   *ref_val = invoke(*ref_val, state);
+                DEBUG_SUBST(DPRINTF(" post invoke\n"););
+            }
         }
     }
 
@@ -20009,6 +20163,9 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
                                  codeid(), fnname==NULL? "function": fnname,
                                  token_strings? " as string": "", line););
                 *ref_val = substitute(code, newarg, state, /*unstrict*/FALSE);
+                while (value_closure_autorun(*ref_val))
+                {   *ref_val = invoke(*ref_val, state);
+                }
 
                 if (NULL == *ref_val)
                     ok = FALSE;
@@ -20105,19 +20262,23 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
 
 
 
-/*! Parse [<retrieval> '!'*]* 
+/*! Parse [&][<op_expression> <substitution_args>] *]* 
  *  This function may cause a garbage collection
  */
 static bool
 parse_substitution(const char **ref_line, parser_state_t *state,
                    const value_t **out_val)
 {   bool ok;
+    bool autorun_defeat = false;
     
-    DEBUG_TRACE(DPRINTF("(substitute: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(substitute: '%s'\n", *ref_line););
 
+    if (parse_key(ref_line, "&") && parse_space(ref_line))
+        autorun_defeat = true;
+    
     if (parse_operator_expr(ref_line, state, out_val) && parse_space(ref_line))
     {   OMIT(DPRINTF("substitute args: '%s'\n", *ref_line););
-        ok = parse_substitution_args(ref_line, state, out_val);
+        ok = parse_substitution_args(ref_line, state, autorun_defeat, out_val);
     } else
     {   *out_val = &value_null;
         ok = FALSE;
@@ -20758,8 +20919,9 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
     {   const value_t *code;
         dir_t *env;
         const value_t *unbound;
+        bool autorun=false;
 
-        value_closure_get(value, &code, &env, &unbound);
+        value_closure_fn_get(value, &code, &env, &unbound, &autorun);
 
         if (NULL == code)
         {   parser_error(state, "closure has no code part to execute:");
@@ -20773,9 +20935,26 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
             value = mod_invoke_cmd(ref_line, code, state);
             return value;
         } else
-        {   if (parse_substitution_args(ref_line, state, &value))
-            {   DEBUG_MOD(DPRINTF("%s: invoke closure non-code\n", codeid());)
-                return value_nl(invoke(value, state));
+        {   if (parse_substitution_args(ref_line, state,
+                                        /*autorun_defeat*/false, &value))
+            {   if (autorun)
+                {   DEBUG_MOD(DPRINTF("%s: invoke autorun closure non-code\n",
+                                      codeid()););
+                    /* the substitution should have performed an invocation */
+                    return value_nl(value);
+                } else
+                {
+                    value_closure_fn_get(value, &code, &env, &unbound,
+                                         &autorun);
+                    DEBUG_MOD(DPRINTF("%s: invoke closure non-code\n",
+                                      codeid()););
+                    if (NULL != unbound)
+                    {   /* don't try to execute it - just return it */
+                        return value_nl(value);
+                    } else
+                    {   return value_nl(invoke(value, state));
+                    }
+                }
             } else
             {   parser_error(state, "error in parsing closure arguments\n");
                 return &value_null;
@@ -20813,7 +20992,8 @@ mod_invoke_cmd(const char **ref_line, const value_t *value,
         }
     } else
     if (value_type_equal(value, type_func))
-    {   if (parse_substitution_args(ref_line, state, &value))
+    {   if (parse_substitution_args(ref_line, state, /*autorun_defeat*/FALSE,
+                                    &value))
         {   DEBUG_MOD(DPRINTF("%s: invoke direct function\n", codeid());)
             return invoke(value, state);
         } else
@@ -22163,6 +22343,38 @@ fn_bind(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
+fn_prime(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(closure, type_closure))
+        val = value_closure_prime((value_t *)closure);
+    else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
+fn_deprime(const value_t *this_fn, parser_state_t *state)
+{   const value_t *closure = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(closure, type_closure))
+        val = value_closure_deprime((value_t *)closure);
+    else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+static const value_t *
 fn_code(const value_t *this_fn, parser_state_t *state)
 {   const value_t *closure = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
@@ -22213,7 +22425,7 @@ fn_argname(const value_t *this_fn, parser_state_t *state)
             /* WARNING - the values returned in this vector have an _in use_
                          link field.  It could be overwritten if the value
                          were used in a context that wanted to use the link
-                         This needs fixing really.
+                         TODO: This needs fixing really.
             */
             val = unbound;
     } else
@@ -22269,6 +22481,13 @@ cmds_generic_closure(parser_state_t *state, dir_t *cmds)
     mod_addfn(cmds, "bind",
               "<closure> <arg> - bind argument to unbound closure argument",
               &fn_bind, 2);
+    mod_addfn(cmds, "prime",
+              "<closure> - mark closure for automatic execution "
+              "when all args bound",
+              &fn_prime, 1);
+    mod_addfn(cmds, "deprime",
+              "<closure> - unmark closure for automatic execution",
+              &fn_deprime, 1);
     mod_addfn(cmds, "code",
               "<closure> - return code component of a closure",
               &fn_code, 1);
@@ -28006,6 +28225,37 @@ cmd_set(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
 
 
 
+/* This function may cause a garbage collection */
+static const value_t *
+cmd_func(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
+{   const value_t *val = NULL;
+    dir_t *parent;
+    const value_t *id;
+
+    if (parse_lvalue(ref_line, state, parser_env(state), &parent, &id) &&
+        parse_space(ref_line) &&
+        parse_closure(ref_line, state, /*autoexec*/true, &val) &&
+        parse_space(ref_line) && parse_empty(ref_line) &&
+        value_istype(val, type_closure))
+    {   if (!dir_set(parent, id, val))
+        {   parser_error(state, "can't set a value for ");
+            parser_value_print(state, id);
+            fprintf(stderr, " here\n");
+        }
+        val = &value_null;
+    } else
+    {   parser_report_help(state, this_cmd);
+        val = &value_null;
+    }
+
+    return val;
+}
+
+
+
+
+
+
 
 typedef struct
 {   parser_state_t *state;
@@ -28319,6 +28569,9 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
             &cmd_help);
     mod_add(cmds, "set",
             "<name> <expr> - set value in environment",  &cmd_set);
+    mod_add(cmds, "func",
+            "<name> <closure> - set auto exec closure value in environment",
+            &cmd_func);
     mod_addfn(cmds, "exit", "- abandon all command inputs", &fn_exit, 0);
     mod_addfnscope(cmds, "for",
               "<env> <binding> - execute <binding> <val> for every <env> value",
@@ -29081,10 +29334,10 @@ fn_cmd(const value_t *this_fn, parser_state_t *state)
     {   value_env_t *env = value_env_new();
         dir_t *helpenv = dir_id_new();
         char argname[16];
-        value_t *closure = value_closure_new(value_cmd_new(&cmd_from_fn,
-                                                           fnval,
-                                                           /*help*/NULL),
-                                             env);
+        value_t *closure = value_closure_fn_new(
+                               value_cmd_new(
+                                   &cmd_from_fn, fnval, /*help*/NULL),
+                               env, FTL_LIB_AUTORUN_DEFAULT);
         if (NULL != helpval && helpval != &value_null)
             if (value_istype(helpval, type_string))
                 dir_cstring_set(helpenv, BUILTIN_HELP, helpval);

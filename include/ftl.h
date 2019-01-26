@@ -1346,6 +1346,21 @@ value_env_bind(value_env_t *envval, const value_t *value);
 extern value_t *
 value_closure_new(const value_t *code, value_env_t *env);
 
+/* create a closure that will optionally invoke once supplied with its last
+ * argument (autorun) */
+extern value_t *
+value_closure_fn_new(const value_t *code, value_env_t *env, bool autorun);
+
+/*! return an identical closure that does not auto execute
+ */
+extern value_t *
+value_closure_unprime(value_t *oldclosureval);
+
+/*! return an identical closure that will auto execute
+ */
+extern value_t *
+value_closure_prime(value_t *oldclosureval);
+
 extern bool
 value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end);
 
@@ -1355,7 +1370,7 @@ value_closure_pushenv(const value_t *value, value_env_t *env, bool env_end);
 /*! return the component code, environment and unbound arguments of a closure */
 extern bool
 value_closure_get(const value_t *value, const value_t **out_code,
-          dir_t **out_env, const value_t **out_unbound);
+                  dir_t **out_env, const value_t **out_unbound);
 
 /*! give a closure an unbound argument */
 extern value_t * /*pos*/
@@ -1365,9 +1380,14 @@ value_closure_pushunbound(value_t *value, value_t *pos, value_t *name);
 extern int
 value_closure_argcount(const value_t *closureval);
 
+/*! mark closure for excution when no unbound variables */
+extern value_t *
+value_closure_prime(value_t *closureval);
+
 /*! bind a new argument to a closure */
 extern value_t *
 value_closure_bind(const value_t *envval, const value_t *value);
+
 
 
 /*          Transfer Functions                               */
