@@ -1,0 +1,113 @@
+#!/usr/bin/env ftl
+
+# Note: to allow this script to called on its own
+#       (1) make sure it is executable
+#       (2) ensure 'ftl' is on your path
+#       (3) set environment variable FTL_PATH to include '.'
+#           (e.g. export FTL_PATH="~/.ftl:.")
+
+set printf[fmt,vals]:{io.fprintf io.out fmt vals!;}
+
+set parseseq [parseprog,po]:{
+   .first = TRUE;
+   .lastix = NULL;
+   .ok = forallwhile parseprog [step,ix]:{
+       lastix = ix;
+       #printf "parsing using step %v: %v\n" <ix, step>!;
+       step po! {first = FALSE;TRUE}!
+   }!;
+   not ok {not first}! {
+       printf "parse failed ...<here>%.20s (at step %v)\n"
+           <parse.scanned po!, lastix>!
+   }!;
+   ok
+}
+
+set parseoneof [parseprog,po]:{
+   .ok = forallwhile parseprog [step,ix]:{
+       #printf "parsing using step %v: %v\n" <ix, step>!;
+       step po!
+   }!;
+   not ok {
+       printf "parse failed ...<here>%.20s\n"<parse.scanned po!>!
+   }!;
+   ok
+}
+
+
+set parselist [delim, ofthing, setlist, po]:{
+   .val = <>;
+   .ok = TRUE;
+   .item = NULL;
+   while {ok {ofthing @item po!}!
+             {# printf "got list item [%d] %v\n" <len val!,item>!;
+              val.(len val!) = item;
+              delim po!}!
+   }{
+       ;# printf "got delim\n"<>!;
+   }!;
+   ok {setlist val!}!;
+   ok
+}
+
+
+set parsewhole [parseprog,str]:{
+    .po = parse.scan str!;
+    parseseq parseprog po! {
+        .rol = parse.scanned po!;
+        if rol == "" {TRUE}{
+            printf "parse terminated early ...<here>%.20s\n"<rol>!;
+            FALSE
+        }!
+    }!
+}
+
+
+set ignore [v]:{}
+
+set grammar [
+    seq = parseseq,
+    oneof = parseoneof,
+    list = parselist,
+    white = parse.scanwhite,
+    space = parse.scanspace,
+    int = parse.scanintval,
+    str = parse.scanstr,
+    id = parse.scanid,
+    intexpr = parse.scanvalue,
+    match = parse.scanmatch,
+    comma = parse.scanmatch [","=NULL] ignore,
+    eq = parse.scanmatch ["="=NULL] ignore,
+]
+
+
+set grammar.thing [thing_out, po]:grammar:{
+    .val = [index=NULL, name=NULL];
+    seq <int @val.index, white, str @val.name>
+        po! {thing_out val!;TRUE}!
+}
+
+
+set grammar.args[args_out,po]:grammar:{list comma intexpr args_out po!}
+
+set grammar.assign[assign_out,po]:grammar:{
+    .val = [var=NULL, expr=NULL];
+    seq <id @val.var, space, eq, space, intexpr @val.expr>
+        po! {assign_out val!;TRUE}!
+}
+
+
+set testrun[rule,string]:{
+    .this = NULL;
+    printf "parsing %v using rule %s\n" <string,rule>!;
+    .ok = parsewhole <grammar.(rule) @this> string!;
+    printf "parse result %v\n"<ok>!;
+    printf "parse %s - %v\n\n" <if ok{"successfully"}{"failed"}!, this>!;
+}
+
+testrun "thing" "333 \"a string\""
+testrun "thing" "333 freddy \"a string\""
+testrun "args" "5,\"string\",(8+6)"
+testrun "args" "5,\"string\",(8+6),(TRUE)"
+testrun "assign" {a=8}
+
