@@ -32,7 +32,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    Jan 2019
+** date    Mar 2019
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -233,7 +233,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 21
+#define VERSION_MIN 22
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -26133,7 +26133,102 @@ genfn_fmt_x_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
 
 
 
+/*! deal with %c format - output (possibly multi-byte encoded) character
+ */
+static const value_t *
+genfn_fmt_c(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
 
+    if (value_istype(argval, type_int))
+    {   number_t arg = value_int_number(argval);
+        char mbstring[FTL_MB_LEN_MAX+1];
+        wchar_t ch = (wchar_t)arg;
+        size_t len = wctomb(&mbstring[0], ch);
+
+        if ((int)len >= 0 && len < sizeof(mbstring))
+        {   mbstring[len] = '\0';
+            len = os_snprintf(buf, buflen, "%s", &mbstring[0]);
+
+            if (len >= 0)
+                val = value_string_new(buf, len);
+        }
+    }
+
+    return val;
+}
+
+
+
+
+/*! deal with %b format - output little endian encoded binary integer
+ */
+static const value_t *
+genfn_fmt_b(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
+
+    if (value_istype(argval, type_int))
+    {   number_t arg = value_int_number(argval);
+        char le_data[8];
+        size_t len = 8;
+        le_data[0] = (arg >> 0)  & 0xff;
+        le_data[1] = (arg >> 8)  & 0xff;
+        le_data[2] = (arg >> 16) & 0xff;
+        le_data[3] = (arg >> 24) & 0xff;
+        le_data[4] = (arg >> 32) & 0xff;
+        le_data[5] = (arg >> 40) & 0xff;
+        le_data[6] = (arg >> 48) & 0xff;
+        le_data[7] = (arg >> 54) & 0xff;
+        if (precision < len)
+            len = precision;
+        len = os_snprintf(buf, buflen, "%.*s", (int)len, &le_data[0]);
+
+        if (len >= 0)
+            val = value_string_new(buf, len);
+    }
+
+    return val;
+}
+
+
+
+
+/*! deal with %B format - output big endian encoded binary integer
+ */
+static const value_t *
+genfn_fmt_b_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+               const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
+
+    if (value_istype(argval, type_int))
+    {   number_t arg = value_int_number(argval);
+        char be_data[8];
+        size_t len = 8;
+        be_data[7] = (arg >> 0)  & 0xff;
+        be_data[6] = (arg >> 8)  & 0xff;
+        be_data[5] = (arg >> 16) & 0xff;
+        be_data[4] = (arg >> 24) & 0xff;
+        be_data[3] = (arg >> 32) & 0xff;
+        be_data[2] = (arg >> 40) & 0xff;
+        be_data[1] = (arg >> 48) & 0xff;
+        be_data[0] = (arg >> 54) & 0xff;
+        if (precision < len)
+            len = precision;
+        len = os_snprintf(buf, buflen, "%.*s", (int)len, &be_data[8-len]);
+
+        if (len >= 0)
+            val = value_string_new(buf, len);
+    }
+
+    return val;
+}
+
+
+
+
+/*! deal with %s format - output non-zero-terminated (binary) string
+ */
 static const value_t *
 genfn_fmt_s(char *buf, size_t buflen, fprint_flags_t flags, int precision,
             const value_t *argval, parser_state_t *state)
@@ -26146,6 +26241,35 @@ genfn_fmt_s(char *buf, size_t buflen, fprint_flags_t flags, int precision,
 
     if (value_string_get(argval, &strbuf, &strsize))
     {   if (precision > 0 && precision < (int)strsize)
+            strsize = precision;
+        val = value_string_new(strbuf, strsize);
+    }
+
+    return val;
+}
+
+
+
+
+
+
+/*! deal with %S format - output zero-terminated string
+ */
+static const value_t *
+genfn_fmt_s_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+               const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
+    const char *strbuf;
+    size_t strsize;
+
+    (void)buf;
+    (void)buflen;
+
+    if (value_string_get(argval, &strbuf, &strsize))
+    {   size_t zero_len = strlen(strbuf); // TODO: get and use safe strlen?
+        if (zero_len < strsize)
+            strsize = zero_len;
+        if (precision > 0 && precision < (int)strsize)
             strsize = precision;
         val = value_string_new(strbuf, strsize);
     }
@@ -26213,6 +26337,30 @@ fn_fmt_x_uc(const value_t *this_fn, parser_state_t *state)
 static const value_t *
 fn_fmt_s(const value_t *this_fn, parser_state_t *state)
 {   return fn_fmt_generic(this_fn, state, &genfn_fmt_s);
+}
+
+
+static const value_t *
+fn_fmt_s_uc(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_s_uc);
+}
+
+
+static const value_t *
+fn_fmt_c(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_c);
+}
+
+
+static const value_t *
+fn_fmt_b(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_b);
+}
+
+
+static const value_t *
+fn_fmt_b_uc(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_b_uc);
 }
 
 
@@ -27048,6 +27196,16 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_x_uc);
     printf_addformat(type_int, "s", "<f> <p> <val> - %s string format",
                      &fn_fmt_s);
+    printf_addformat(type_int, "S", "<f> <p> <val> - %s zero terminated string format",
+                     &fn_fmt_s_uc);
+    printf_addformat(type_int, "c", "<f> <p> <val> - %c character format",
+                     &fn_fmt_c);
+    printf_addformat(type_int, "b", "<f> <p> <val> - %b little endian binary "
+                     "format",
+                     &fn_fmt_b);
+    printf_addformat(type_int, "B", "<f> <p> <val> - %B big endian binary "
+                     "format",
+                     &fn_fmt_b_uc);
     printf_addformat(type_int, "v", "<f> <p> <val> - %v value format",
                      &fn_fmt_v);
 
