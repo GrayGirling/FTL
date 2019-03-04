@@ -26773,71 +26773,185 @@ static char *strnstrn(const char *buf, size_t len,
 
 
 
+/*! chop out a substring of str according given its stride
+    updates ref_buf and ref_buflen to the remaining substring
+    used in \c fn_chop()
+*/
 static const value_t *
-fn_chop(const value_t *this_fn, parser_state_t *state)
-{   const value_t *strideval = parser_builtin_arg(state, 1);
-    const value_t *str = parser_builtin_arg(state, 2);
-    const value_t *val = &value_null;
+strchop_substr(const value_t *str, const char **ref_buf, long *ref_buflen,
+               const char *initbuf, number_t stride)
+{
+    const value_t *substr = NULL;
+    long len = *ref_buflen;
 
-    if (value_istype(str, type_string) &&
-        value_istype(strideval, type_int))
+    if (stride > 0)
+    {   /* split into individual octet substrings forward */
+        const char *buf = *ref_buf;
+
+        /*printf("vec[%d]=%p[%d,%d]\n",
+                 veclen,initbuf,buf-initbuf,len);*/
+        if (len < stride)
+            substr = value_substring_new(str, buf-initbuf, len);
+        else
+            substr = value_substring_new(str, buf-initbuf, (size_t)stride);
+        *ref_buf += stride;
+        *ref_buflen -= (size_t)stride;
+    } else
+    if (stride < 0) {
+        /* split into individual octet substrings going backwards */
+        /* remember: stride is negative */
+        const char *buf = *ref_buf + len + stride;
+        if (len < -stride)
+            substr = value_substring_new(str, buf-initbuf+
+                                              ((size_t)(-stride))-len, len);
+        else
+            substr = value_substring_new(str, buf-initbuf, (size_t)(-stride));
+        *ref_buflen -= (size_t)(-stride);
+    }
+    return substr;
+}
+
+
+
+
+
+typedef struct
+{   dir_t *dir_build;
+    const value_t *str;
+    const char *buf;
+    long buflen;
+    const char *initbuf;
+} enum_chop_arg_t;
+
+
+
+
+static void *
+substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
+{
+    if (value_type_equal(value, type_int))
     {
-        const char *buf;
-        const char *initbuf;
-        size_t buflen = 0;
-        long len;
-        number_t stride = value_int_number(strideval);
+        enum_chop_arg_t *choparg = (enum_chop_arg_t *)arg;
+        dir_t *dir_new = choparg->dir_build;
+        number_t stride = value_int_number(value);
+
+        if (NULL == dir_new)
+        {   if (value_type_equal(name, type_int))
+                dir_new = dir_vec_new();
+            else
+                dir_new = dir_id_new();
+
+            choparg->dir_build = dir_new;
+        }
+
+        return dir_set(dir_new, name,
+                       strchop_substr(choparg->str,
+                                      &choparg->buf, &choparg->buflen,
+                                      choparg->initbuf, stride)
+                       )? NULL: (void *)name;
+        /* will stop on first non-null */
+    }
+    else
+        /* would stop on first non-null */
+        return NULL;
+}
+
+
+
+
+static const value_t *
+genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
+{   const value_t *strideval = parser_builtin_arg(state, argstart+0);
+    const value_t *str = parser_builtin_arg(state, argstart+1);
+    const value_t *val = &value_null;
+    bool is_vecstride = value_type_equal(strideval, type_dir);
+    const char *initbuf;
+    size_t buflen = 0;
+    bool n_infinite = n<0;
+
+    if (value_string_get(str, &initbuf, &buflen) &&
+        (is_vecstride || value_istype(strideval, type_int)))
+    {
+        const char *buf = initbuf;
+        long len = buflen;  /* make sure it's a signed variable */
         dir_t *vec = dir_vec_new();
         int veclen = 0;
 
-        (void)value_string_get(str, &initbuf, &buflen);
-        len = buflen; /* make sure it's a signed variable */
-        buf = initbuf;
+        if (is_vecstride)
+        {
+            enum_chop_arg_t choparg;
 
-        /*printf("stride %"F_NUMBER_T"\n", stride);*/
+            choparg.str = str;
+            choparg.buf = buf;
+            choparg.buflen = len;
+            choparg.initbuf = initbuf;
 
-        if (stride > 0)
-        {   /* split into individual octet substrings forward */
-            while (len > 0)
-            {   /*printf("vec[%d]=%p[%d,%d]\n",
-                         veclen,initbuf,buf-initbuf,len);*/
-                if (len < stride)
-                    dir_int_set(vec, veclen++,
-                                value_substring_new(str, buf-initbuf, len));
-                else
-                    dir_int_set(vec, veclen++,
-                                value_substring_new(str, buf-initbuf,
-                                                    (size_t)stride));
-                buf += stride;
-                len -= (size_t)stride;
+            while (choparg.buflen > 0 && (n_infinite || n-- > 0))
+            {
+                choparg.dir_build = NULL;
+                if (NULL == dir_forall((dir_t *)strideval, &substr_exec,
+                                       &choparg))
+                {   dir_t *newdir = choparg.dir_build;
+
+                    if (NULL == newdir)
+                        newdir = dir_vec_new();
+
+                    dir_int_set(vec, veclen++, dir_value(newdir));
+                }
             }
-        } else if (stride < 0) {
-            /* split into individual octet substrings going backwards */
-            /* remember: stride is negative */
-            buf = buf+len+stride;
-
-            while (len > 0)
-            {   if (len < -stride)
-                    dir_int_set(vec, veclen++,
-                                value_substring_new(str,
-                                                    buf-initbuf+
-                                                    ((size_t)(-stride))-len,
-                                                    len));
-                else
-                    dir_int_set(vec, veclen++,
-                                value_substring_new(str, buf-initbuf,
-                                                    (size_t)(-stride)));
-                buf += stride;
-                len -= (size_t)(-stride);
-            }
+            if (!n_infinite)
+                dir_int_set(vec, veclen++,
+                            value_substring_new(str, choparg.buf-initbuf,
+                                                choparg.buflen));
+            val = dir_value(vec);
         }
-        val = dir_value(vec);
+        else
+        {
+            number_t stride = value_int_number(strideval);
+            /*printf("stride %"F_NUMBER_T"\n", stride);*/
+
+            while (len > 0 && (n_infinite || n-->0))
+                dir_int_set(vec, veclen++,
+                            strchop_substr(str, &buf, &len, initbuf, stride));
+
+            if (!n_infinite)
+                dir_int_set(vec, veclen++,
+                            value_substring_new(str, buf-initbuf, len));
+            val = dir_value(vec);
+        }
     } else
         parser_report_help(state, this_fn);
 
     return val;
 }
 
+
+
+
+
+static const value_t *
+fn_chop(const value_t *this_fn, parser_state_t *state)
+{   return genfn_chop(this_fn, state, /*infinite repeat*/-1, /*startarg*/1);
+}
+
+
+
+
+
+static const value_t *
+fn_chopn(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *val = &value_null;
+    const value_t *rptnval = parser_builtin_arg(state, 1);
+
+    if (value_istype(rptnval, type_int))
+    {   number_t rptn = value_int_number(rptnval);
+        val = genfn_chop(this_fn, state, (int)rptn, /*startarg*/2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
 
 
 
@@ -27248,6 +27362,10 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
               "<stride> <str> - make vector of strings each <stride> bytes "
               "or less",
               &fn_chop, 2);
+    mod_addfn(cmds, "chopn",
+              "<n> <stride> <str> - make vector of <n> strings each <stride> "
+              "bytes or less",
+              &fn_chopn, 3);
     mod_addfn(cmds, "join",
               "<delim> <str> - join vector of octets and strings separated by "
               "<delim>s",
