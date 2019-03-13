@@ -26182,10 +26182,10 @@ genfn_fmt_b(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         le_data[7] = (arg >> 54) & 0xff;
         if (precision < len)
             len = precision;
-        len = os_snprintf(buf, buflen, "%.*s", (int)len, &le_data[0]);
-
-        if (len >= 0)
-            val = value_string_new(buf, len);
+        if (len > buflen)
+            len = buflen;
+        memcpy(buf, &le_data[0], len);
+        val = value_string_new(buf, len);
     }
 
     return val;
@@ -26215,10 +26215,11 @@ genfn_fmt_b_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         be_data[0] = (arg >> 54) & 0xff;
         if (precision < len)
             len = precision;
-        len = os_snprintf(buf, buflen, "%.*s", (int)len, &be_data[8-len]);
 
-        if (len >= 0)
-            val = value_string_new(buf, len);
+        if (len > buflen)
+            len = buflen;
+        memcpy(buf, &be_data[8-len], len);
+        val = value_string_new(buf, len);
     }
 
     return val;
