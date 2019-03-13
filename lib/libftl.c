@@ -7201,7 +7201,7 @@ value_substring_get_fn(const value_stringbase_t *value,
     size_t offset = str->offset;
     bool ok = value_stringbase_get(str->ref, &refstr, &refsize);
 
-    if (offset < refsize)
+    if (offset <= refsize)
     {   *out_buf = refstr+offset;
         if (offset + str->len <= refsize)
             *out_len = str->len;
@@ -26785,7 +26785,7 @@ strchop_substr(const value_t *str, const char **ref_buf, long *ref_buflen,
     const value_t *substr = NULL;
     long len = *ref_buflen;
 
-    if (stride > 0)
+    if (stride >= 0)
     {   /* split into individual octet substrings forward */
         const char *buf = *ref_buf;
 
@@ -26835,6 +26835,9 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         enum_chop_arg_t *choparg = (enum_chop_arg_t *)arg;
         dir_t *dir_new = choparg->dir_build;
         number_t stride = value_int_number(value);
+
+        if (stride > choparg->buflen)
+            stride = choparg->buflen;
 
         if (NULL == dir_new)
         {   if (value_type_equal(name, type_int))
@@ -26910,6 +26913,9 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
         {
             number_t stride = value_int_number(strideval);
             /*printf("stride %"F_NUMBER_T"\n", stride);*/
+
+            if (stride > buflen)
+                stride = buflen;
 
             while (len > 0 && (n_infinite || n-->0))
                 dir_int_set(vec, veclen++,
