@@ -1,0 +1,14 @@
+> eval {}
+{}
+> eval {}!
+> eval []:{}!
+> eval {;}!
+> eval []:{;}!
+> eval ({}!) == NULL
+TRUE
+> eval ([]:{}!) == NULL
+TRUE
+> eval ({;}!) == NULL
+TRUE
+> eval ([]:{;}!) == NULL
+TRUE
