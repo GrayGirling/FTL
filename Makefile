@@ -26,6 +26,32 @@ ndebug=no
 # To make commands that run under WSL (but not natively) use
 #          make use_elf=no force_native=no
 
+help:
+	@echo "Makefile arguments: "
+	@echo "        ftl2=yes/no"
+	@echo "        use_xml=yes/no (default $(use_xml))"
+	@echo "        use_json=yes/no (default $(use_json)"
+	@echo "        use_elf =yes/no (default $(use_elf)"
+	@echo "        elf_lib_type=ELF/GELF (default $(elf_lib_type)"
+	@echo "        force_native=yes/no (default $force_native)"
+	@echo "        ndebug=yes/no default $(ndebug)"
+	@echo
+	@echo "  ftl2         - parse ftl2 (call closures when last arg supplied)"
+	@echo "  use_xml      - include commands for XML parsing"
+	@echo "  use_json     - include commands for JSON parsing"
+	@echo "  use_elf      - include commands for parsing ELF files"
+	@echo "  elf_lib_type - the name of the ELF API to use"
+	@echo "  force_native - (on win WSL) generate WIN32 code not Linux code"
+	@echo "  ndebug       - don't generate debuggable binaries"
+	@echo
+	@echo "Makefile targets: "
+	@echo "        all - makes all buildable objects"
+	@echo "        clean - cleans current build"
+	@echo "        install - make and copy result into installation dir "
+	@echo "        test - run built in tests"
+	@echo "        help - prints this text"
+
+
 # OS CUSTOMIZATION
 
 ARCH=$(OSARCH)
