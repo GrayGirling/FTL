@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
@@ -471,6 +472,7 @@
 // #define DEBUG_ARGV DO
 // #define DEBUG_FILEPATH DO
 // #define DEBUG_SOCKET DO
+// #define DEBUG_CHOP DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_GC
@@ -499,6 +501,7 @@
 #undef DEBUG_ARGV
 #undef DEBUG_FILEPATH
 #undef DEBUG_SOCKET
+#undef DEBUG_CHOP
 #endif
 
 
@@ -580,6 +583,9 @@
 #endif
 #ifndef DEBUG_SOCKET
 #define DEBUG_SOCKET OMIT
+#endif
+#ifndef DEBUG_CHOPP
+#define DEBUG_CHOP OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -18934,16 +18940,16 @@ static void *
 enum_lookup_exec(dir_t *dir, const value_t *name, const value_t *value,
                  void *arg)
 {   enum_lookup_arg_t *luarg = (enum_lookup_arg_t *)arg;
-    dir_t *dir_new = luarg->dir_build;
-    if (NULL == dir_new)
+    dir_t *new_dir = luarg->dir_build;
+    if (NULL == new_dir)
     {   if (value_type_equal(name, type_int))
-            dir_new = dir_vec_new();
+            new_dir = dir_vec_new();
         else
-            dir_new = dir_id_new();
+            new_dir = dir_id_new();
 
-        luarg->dir_build = dir_new;
+        luarg->dir_build = new_dir;
     }
-    return dir_set(dir_new, name, dir_dot_lookup(luarg->dir_env, value))?
+    return dir_set(new_dir, name, dir_dot_lookup(luarg->dir_env, value))?
            NULL: (void *)name;
     /* will stop on first non-null */
 }
@@ -25668,7 +25674,7 @@ fn_rndseed(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
     const char *seedbin = NULL;
     size_t seedlen = 0;
-    bool is_int = value_istype(seedval, type_int);
+    bool is_int = value_type_equal(seedval, type_int);
 
     if (is_int || value_string_get(seedval, &seedbin, &seedlen))
     {
@@ -26780,8 +26786,8 @@ strchop_substr(const value_t *str, const char **ref_buf, long *ref_buflen,
     {   /* split into individual octet substrings forward */
         const char *buf = *ref_buf;
 
-        /*printf("vec[%d]=%p[%d,%d]\n",
-                 veclen,initbuf,buf-initbuf,len);*/
+        DEBUG_CHOP(printf("%s: vec[%d]=%p[%d,%d]\n", codeid(),
+                          (int)stride, initbuf, (int)(buf-initbuf), (int)len););
         if (len < stride)
             substr = value_substring_new(str, buf-initbuf, len);
         else
@@ -26793,7 +26799,7 @@ strchop_substr(const value_t *str, const char **ref_buf, long *ref_buflen,
         /* split into individual octet substrings going backwards */
         /* remember: stride is negative */
         const char *buf = *ref_buf + len + stride;
-        if (len < -stride)
+        if ((number_t)len < -stride)
             substr = value_substring_new(str, buf-initbuf+
                                               ((size_t)(-stride))-len, len);
         else
@@ -26827,8 +26833,11 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         dir_t *dir_new = choparg->dir_build;
         number_t stride = value_int_number(value);
 
-        if (stride > choparg->buflen)
+        DEBUG_CHOP(printf("%s: for substr int\n", codeid()););
+        if (stride > (number_t)choparg->buflen)
             stride = choparg->buflen;
+        else if (-stride > (number_t)choparg->buflen)
+            stride = -choparg->buflen;
 
         if (NULL == dir_new)
         {   if (value_type_equal(name, type_int))
@@ -26839,6 +26848,8 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             choparg->dir_build = dir_new;
         }
 
+        DEBUG_CHOP(printf("%s: for substr set substring (len %d)\n", codeid(),
+                          (int)stride););
         return dir_set(dir_new, name,
                        strchop_substr(choparg->str,
                                       &choparg->buf, &choparg->buflen,
@@ -26846,7 +26857,47 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
                        )? NULL: (void *)name;
         /* will stop on first non-null */
     }
-    else
+    else if (value_type_equal(value, type_dir))
+    {
+        enum_chop_arg_t *choparg = (enum_chop_arg_t *)arg;
+        dir_t *shape_dir = (dir_t *)value;
+        dir_t *save_dir = choparg->dir_build;
+        void *for_return;
+
+        DEBUG_CHOP(printf("%s: for substr dir\n", codeid()););
+        choparg->dir_build = NULL;
+
+        /* recurse */
+        for_return = dir_forall(shape_dir, &substr_exec, choparg);
+
+        if (NULL == for_return) /* success */
+        {   dir_t *new_dir = choparg->dir_build;
+            /* substrings section of string now held in new_dir */
+
+            if (NULL == new_dir)
+                new_dir = dir_vec_new();
+
+            if (NULL == save_dir)
+            {   if (value_type_equal(name, type_int))
+                    save_dir = dir_vec_new();
+                else
+                    save_dir = dir_id_new();
+
+                choparg->dir_build = save_dir;
+            }
+            DEBUG_CHOP(printf("%s: for substr set dir %sNULL\n", codeid(),
+                              value==NULL || value == &value_null?"": "non-"););
+            if (!dir_set(save_dir, name, dir_value(new_dir)))
+            {   for_return = &value_false; /* any non-NULL value */
+                DEBUG_CHOP(printf("%s: dir set failed\n", codeid()););
+            }
+        }
+        DEBUG_CHOP(else printf("%s: dir enum failed\n", codeid()););
+        
+        choparg->dir_build = save_dir;
+
+        return for_return;
+    } else
         /* would stop on first non-null */
         return NULL;
 }
@@ -26875,23 +26926,27 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
         if (is_vecstride)
         {
             enum_chop_arg_t choparg;
+            bool progress = true;
 
             choparg.str = str;
             choparg.buf = buf;
             choparg.buflen = len;
             choparg.initbuf = initbuf;
 
-            while (choparg.buflen > 0 && (n_infinite || n-- > 0))
+            while (choparg.buflen > 0 && (n_infinite || n-- > 0) && progress)
             {
                 choparg.dir_build = NULL;
                 if (NULL == dir_forall((dir_t *)strideval, &substr_exec,
                                        &choparg))
-                {   dir_t *newdir = choparg.dir_build;
+                {   progress = choparg.buflen < len;
+                    if (progress)
+                    {   dir_t *new_dir = choparg.dir_build;
 
-                    if (NULL == newdir)
-                        newdir = dir_vec_new();
+                        if (NULL == new_dir)
+                            new_dir = dir_vec_new();
 
-                    dir_int_set(vec, veclen++, dir_value(newdir));
+                        dir_int_set(vec, veclen++, dir_value(new_dir));
+                    }
                 }
             }
             if (!n_infinite)
@@ -26903,10 +26958,15 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
         else
         {
             number_t stride = value_int_number(strideval);
-            /*printf("stride %"F_NUMBER_T"\n", stride);*/
+            DEBUG_CHOP(printf("%s: stride %"F_NUMBER_T" %s%s\n", codeid(),
+                              stride,
+                              stride>(number_t)buflen? "too big ":"",
+                              -stride>(number_t)buflen? "too little ":""););
 
-            if (stride > buflen)
+            if (stride > (number_t)buflen)
                 stride = buflen;
+            else if (-stride > (number_t)buflen)
+                stride = -buflen;
 
             while (len > 0 && (n_infinite || n-->0))
                 dir_int_set(vec, veclen++,
@@ -27973,17 +28033,17 @@ select_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         include = invoke(code, selectval->state);
 
         if (!value_bool_is_false(include))
-        {   dir_t *dir_new = selectval->dir_build;
+        {   dir_t *new_dir = selectval->dir_build;
 
-            if (NULL == dir_new)
+            if (NULL == new_dir)
             {   if (value_type_equal(name, type_int))
-                    dir_new = dir_vec_new();
+                    new_dir = dir_vec_new();
                 else
-                    dir_new = dir_id_new();
+                    new_dir = dir_id_new();
 
-                selectval->dir_build = dir_new;
+                selectval->dir_build = new_dir;
             }
-            dir_set(dir_new, name, value);
+            dir_set(new_dir, name, value);
         }
     }
 

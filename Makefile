@@ -26,6 +26,10 @@ ndebug=no
 # To make commands that run under WSL (but not natively) use
 #          make use_elf=no force_native=no
 
+# default build target
+#all:	ftl$(FTLVER) libs cscope
+all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
+
 help:
 	@echo "Makefile arguments: "
 	@echo "        ftl2=yes/no"
@@ -216,8 +220,6 @@ endif
 vpath %.c tools:lib
 vpath %.h include
 
-#all:	ftl$(FTLVER) libs cscope
-all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
 
 install: ftl$(FTLVER)$(EXE) 
 	cp ftl$(FTLVER)$(EXE) "$(INSTALL_DIR)"
