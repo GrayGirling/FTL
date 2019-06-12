@@ -1,7 +1,5 @@
 #-----------------------------------------------------------------------------
-#
 # command line argument handling
-#
 #-----------------------------------------------------------------------------
 
 set parse_codeitemstr[arg_wr,left]:{
@@ -19,7 +17,7 @@ set split_args[line]:{
        args.(len args!) = arg;
    }!;
    if (parse.scanempty left!) {args}{
-       errorf "unknown text on line - '%s'" <line>!;
+       errorf "Unknown text on line - '%s'" <line>!;
        NULL
    }!
 }
@@ -39,7 +37,7 @@ set split_argrol[first_args, line]:{
        args.(len args!) = parse.scanned left!;
        args
    }{
-       errorf "too few arguments, syntax - <item>*%d <rest of line>"
+       errorf "Too few arguments, syntax - <item>*%d <rest of line>"
            <first_args>!;
        NULL
    }!
@@ -51,11 +49,11 @@ set get_argv[cmin,cmax,help,line]:{
    .ok = TRUE;
    ln lt cmin {
        ok = FALSE;
-       errorf "too few arguments (%d), syntax - %s" <ln,help>!;
+       errorf "Too few arguments (%d), syntax - %s" <ln,help>!;
    }!;
    ln gt cmax {
        ok = FALSE;
-       errorf "too many arguments (%d), syntax - %s" <ln,help>!;
+       errorf "Too many arguments (%d), syntax - %s" <ln,help>!;
    }!;
    # printf "get_argv %d..%d ok=%v %v\n"<cmin,cmax,ok, argv>!; 
    if ok {argv}{NULL}!
@@ -64,7 +62,7 @@ set get_argv[cmin,cmax,help,line]:{
 
 set checkstr[s]:{
    if (typeof s!) != type_str {
-      errorf "sorry, an argument is missing"<>!; FALSE
+      errorf "Sorry, an argument is missing"<>!; FALSE
    }{ TRUE }!
 }
 
@@ -72,7 +70,7 @@ set checkcode[s]:{
    .sty = typeof s!;
    .ok = (sty == type_code _or_ sty == type_closure);
    not ok {
-       errorf "sorry, an argument code block is missing (has %v type)"<sty>!
+       errorf "Sorry, an argument code block is missing (has %v type)"<sty>!
    }!;
    ok
 }
@@ -81,7 +79,7 @@ set checkstrcode[s]:{
    .sty = typeof s!;
    .ok = not (sty != type_str {sty != type_code}!);
    sty == type_str {(len s!) == 0}! {ok = FALSE}!;
-   not ok {errorf "sorry, an argument item or code block is missing"<>!}!;
+   not ok {errorf "Sorry, an argument item or code block is missing"<>!}!;
    ok
 }
 
@@ -123,7 +121,7 @@ set cmd_3item_rol[cvt, fn,help]:{
        .argv = split_argrol 2 line!;
        if (argv != NULL {(len argv!) _ge_ 3}!) {
            fn (cvt.0 argv.0!) (cvt.1 argv.1!) (cvt.2 argv.2!)!
-       }{ errorf "syntax %s"<help>! }!;
+       }{ errorf "Syntax %s"<help>! }!;
    } help!
 }
 
@@ -132,7 +130,7 @@ set cmd_2item_rol[cvt, fn,help]:{
        .argv = split_argrol 1 line!;
        if (argv != NULL {(len argv!) _ge_ 1}!) {
            fn (cvt.0 argv.0!) (cvt.1 argv.1!)!
-       }{ errorf "syntax %s"<help>! }!;
+       }{ errorf "Syntax %s"<help>! }!;
    } help!
 }
 
@@ -150,7 +148,7 @@ set cmd_2item[cvt, fn,help]:{
        if (argv != NULL {(len argv!) _ge_ 1}!) {
            # printf "cvt %v size %d\n"<domain cvt!, len cvt!>!;
            fn (cvt.0 argv.0!) (cvt.1 argv.1!)!
-       }{ errorf "syntax %s"<help>! }!;
+       }{ errorf "Syntax %s"<help>! }!;
    } help!
 }
 
@@ -159,7 +157,7 @@ set cmd_3item[cvt, fn,help]:{
        .argv = get_argv 3 3 help line!;
        if (argv != NULL {(len argv!) _ge_ 2}!) {
            fn (cvt.0 argv.0!) (cvt.1 argv.1!) (cvt.2 argv.2!)!
-       }{errorf "syntax %s"<help>!}!;
+       }{errorf "Syntax %s"<help>!}!;
    } help!
 }
 
