@@ -28079,7 +28079,10 @@ fn_select(const value_t *this_fn, parser_state_t *state)
                           dir_value(parser_env(state)));)
         (void)dir_forall(env, &select_exec, &selectval);
         (void)parser_env_return(state, pos);
-        val = dir_value(selectval.dir_build);
+        if (selectval.dir_build == NULL)
+            val = &value_null;
+        else
+            val = dir_value(selectval.dir_build);
     } else
     {   parser_report_help(state, this_fn);
         val = &value_null;
