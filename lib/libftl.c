@@ -24330,6 +24330,8 @@ genfn_file(const value_t *this_fn, parser_state_t *state, bool binary)
         {   if (parse_stream_access(&name, &read, &write))
             {   if (value_string_get(filename, &name, &namelen))
                 {   val = value_stream_file_new(name, binary, read, write);
+                    if (val == NULL)
+                        val = &value_null;
                 }
             } else
                 parser_report(state, "stream access string must contain "
