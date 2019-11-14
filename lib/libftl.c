@@ -212,7 +212,7 @@
 /* #define USE_FTL_XML */
 /* #define USE_READLINE */
 /* #define USE_LINENOISE */
-/* #define EXIT_ON_CTRL_C */
+#define EXIT_ON_CTRL_C
 
 #ifdef FTL_AUTORUN
 #define VERSION_MAJ 2
@@ -248,6 +248,7 @@
 
 /*#define FTL_BOOL_ISINT*/
 
+#define TRAP_SIGNAL_TERMINATE 0
 #define FTL_ERROR_TRAIL_LINES 4
 
 #ifdef _WIN32
@@ -1393,14 +1394,17 @@ fd_is_ready(int fd)
 
 static bool /*writeable*/ charsink_stream_ready(charsink_t *sink)
 {
+    bool is_ready = false;
 #if HAS_FILE_DESCRIPTORS
     charsink_stream_t *stream = (charsink_stream_t *)sink;
-    int fd = os_fileno(stream->out);
-    if (fd >= 0)
-        return fd_is_ready(fd);
-    else
+    /* if (!feof(stream->out)) - omit for speed */
+    {
+        int fd = os_fileno(stream->out);
+        if (fd >= 0)
+            is_ready = fd_is_ready(fd);
+    }
 #endif
-        return FALSE; /* assume always causes an I/O wait */
+    return is_ready; /* assume always causes an I/O wait */
 }
 
 
@@ -20540,8 +20544,8 @@ exception_throw(const value_t *this_fn, parser_state_t *state,
         bool thrown = parser_throw(state, info);
         val = value_bool(thrown);
         if (!thrown)
-            parser_error(state,  "exception thrown without an "
-                         "enclosing try block\n");
+            parser_error(state,  "exception '%s' thrown without an "
+                         "enclosing try block\n", name);
     } else
         parser_report_help(state, this_fn);
 
@@ -20602,13 +20606,7 @@ cmds_generic_exception(parser_state_t *state, dir_t *cmds)
 static bool exiting = FALSE;
 static parser_state_t *global_int_state = NULL;
 
-/* We have to define the function cause_sigint() */
-
-#define EXIT_ON_CTRL_C
-
-
 #ifdef EXIT_ON_CTRL_C
-
 
 static bool throw_signal(parser_state_t *state, int signal)
 {
@@ -20728,6 +20726,20 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 }
 
 
+#if TRAP_SIGNAL_TERMINATE
+static bool terminate_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
+{   return handler_init(ref_old_handler, int_state, SIGTERM,
+                        "terminate request");
+}
+
+
+static void terminate_handler_end(interrupt_state_t *ref_old_handler)
+{   handler_end(ref_old_handler, SIGTERM);
+}
+#endif /* TRAP_SIGNAL_TERMINATE */
+
+
 static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
                                    parser_state_t *int_state)
 {   return handler_init(ref_old_handler, int_state, SIGFPE,
@@ -20745,7 +20757,6 @@ static void badmaths_handler_end(interrupt_state_t *ref_old_handler)
 
 
 #ifdef _WIN32
-
 
 typedef PHANDLER_ROUTINE interrupt_handler_fn;
 
@@ -20809,6 +20820,19 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 }
 
 
+#if TRAP_SIGNAL_TERMINATE
+static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
+                                   parser_state_t *int_state)
+{   BOOL ok = false; //TODO: unimplemented
+    return ok;
+}
+
+static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
+{
+    return; //TODO: unimplemented
+}
+#endif /* TRAP_SIGNAL_TERMINATE */
+
 
 static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
                                    parser_state_t *int_state)
@@ -20824,7 +20848,7 @@ static void badmaths_handler_end(interrupt_state_t *ref_old_handler)
 #endif /* _WIN32 */
 
 
-#else
+#else /* EXIT_ON_CTRL_C not defined */
 
 
 /* no interrupt handling */
@@ -20844,6 +20868,13 @@ typedef struct {
 #define badmaths_handler_init(ref_old_handler, state) \
         ((void)(ref_old_handler),TRUE)
 #define badmaths_handler_end(ref_old_handler)
+
+
+#if TRAP_SIGNAL_TERMINATE
+#define terminate_handler_init(ref_old_handler, state) \
+        ((void)(ref_old_handler),TRUE)
+#define terminate_handler_end(ref_old_handler)
+#endif /* TRAP_SIGNAL_TERMINATE */
 
 
 #if 0

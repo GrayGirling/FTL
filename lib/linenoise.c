@@ -14,6 +14,8 @@
  *
  * Copyright (c) 2010-2014, Salvatore Sanfilippo <antirez at gmail dot com>
  * Copyright (c) 2010-2013, Pieter Noordhuis <pcnoordhuis at gmail dot com>
+ * Modified by Gray Girling
+ * Copyright (c) 2016-2019, Gray Girling <graygirling at gmail dot com>
  *
  * All rights reserved.
  *
@@ -39,6 +41,9 @@
  * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Modified by NXP
+ * Copyright 2019 NXP
  *
  * ------------------------------------------------------------------------
  *
@@ -221,7 +226,7 @@ enum KEY_ACTION{
 	KEY_CTRL_D = 4,         /* Ctrl-d */
 	KEY_CTRL_E = 5,         /* Ctrl-e */
 	KEY_CTRL_F = 6,         /* Ctrl-f */
-	KEY_CTRL_H = 8,         /* Ctrl-h */
+	KEY_CTRL_H = 8,         /* Ctrl-h backspace */
 	KEY_TAB = 9,            /* Tab */
 	KEY_CTRL_K = 11,        /* Ctrl+k */
 	KEY_CTRL_L = 12,        /* Ctrl+l */
@@ -232,7 +237,7 @@ enum KEY_ACTION{
 	KEY_CTRL_U = 21,        /* Ctrl+u */
 	KEY_CTRL_W = 23,        /* Ctrl+w */
 	KEY_ESC = 27,           /* Escape */
-	KEY_BACKSPACE =  127    /* Backspace */
+	KEY_DELETE = 127        /* Delete */
 };
 
 static void linenoiseAtExit(void);
@@ -1038,8 +1043,8 @@ static int linenoiseEdit(ttyio_t stdin_fd, ttyio_t stdout_fd, char *buf, size_t 
                 edit_complete = 1/*TRUE*/;
                 cb_len = -1;
                 break;
-            case KEY_BACKSPACE:   /* backspace */
-            case 8:     /* ctrl-h */
+            case KEY_DELETE:      /* delete */
+            case KEY_CTRL_H:      /* backspace */
                 linenoiseEditBackspace(&l);
                 break;
             case KEY_CTRL_D:     /* ctrl-d, remove char at right of cursor, or if the

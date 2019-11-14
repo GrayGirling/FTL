@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2018, Gray Girling
+ * Copyright (c) 2005-2019, Gray Girling
  *
  * All rights reserved.
  *
