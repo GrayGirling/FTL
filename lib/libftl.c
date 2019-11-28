@@ -15880,7 +15880,9 @@ parse_item(const char **ref_line, const char *delims, size_t ndelim,
     const char *line = start;
 
     if (delims == NULL)
+    {   ndelim = 0;
         delims="";
+    }
 
     while (*line != '\0' && !isspace((unsigned char)*line) &&
            NULL == memchr(delims, *line, ndelim))
@@ -24313,6 +24315,8 @@ genfn_pathfile(const value_t *this_fn, parser_state_t *state, bool binary)
                                                      binary, read, write,
                                                      fullname,
                                                      sizeof(fullname));
+                    if (val == NULL)
+                        val = &value_null;
                 }
             } else
                 parser_report(state, "stream access string must contain "
@@ -24839,9 +24843,10 @@ cmd_filetostring(const char **ref_line, const value_t *this_cmd,
     {   FILE *inchars = fopen(filename, "r");
         if (NULL == inchars)
         {   rc = errno;
-            parser_error(state,
-                         "couldn't open file \"%s\" to read - %s (rc %d)\n",
-                         &filename[0], strerror(errno), errno);
+            DO(parser_error(state,
+                            "couldn't open file \"%s\" to read - "
+                            "%s (rc %d)\n",
+                            &filename[0], strerror(errno), errno););
         } else
         {   FILE *to = stdout;
 
@@ -24850,10 +24855,10 @@ cmd_filetostring(const char **ref_line, const value_t *this_cmd,
             {   to = fopen(filename, "w");
                 if (NULL == to)
                 {   rc = errno;
-                    parser_error(state,
-                                  "couldn't open file \"%s\" to write - %s "
-                                  "(rc %d)\n",
-                                  &filename[0], strerror(errno), errno);
+                    DO(parser_error(state,
+                                    "couldn't open file \"%s\" to write - %s "
+                                    "(rc %d)\n",
+                                    &filename[0], strerror(errno), errno););
                 }
             }
 
@@ -24985,9 +24990,11 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
 
         if (NULL == inchars)
         {   rc = errno;
-            parser_error(state,
-                         "couldn't open file \"%s\" to read - %s (rc %d)\n",
-                         &filename[0], strerror(errno), errno);
+            /* errors must be picked up by user - look at return code */
+            OMIT(parser_error(state,
+                             "couldn't open source file \"%s\" to read - "
+                             "%s (rc %d)\n",
+                              &filename[0], strerror(errno), errno););
         } else
         {   (void)parser_expand_exec_int(state, inchars, NULL, NULL,
                                          /*expect_no_locals*/FALSE,
