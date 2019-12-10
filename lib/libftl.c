@@ -220,7 +220,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 22
+#define VERSION_MIN 23
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
