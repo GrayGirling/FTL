@@ -585,7 +585,6 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
 typedef struct value_s value_t;
 typedef const struct value_type_s *type_t;
 
-
 extern const char *
 value_type_name(const value_t *val);
 
@@ -627,18 +626,6 @@ value_fprint_detail(FILE *out, const value_t *root, const value_t *val,
         VALUE_SHOW_DR(msg, parser_env(state), val)
 
 #define VALUE_SHOW(msg, val) VALUE_SHOW_RT(msg, NULL, val)
-
-/*          Type Values                                      */
-
-
-typedef struct value_type_s value_type_t;
-typedef int type_id_t;
-
-extern type_t type_type;
-
-extern const char *
-type_name(type_t kind);
-
 
 /*          NULL Values                                      */
 
@@ -1537,6 +1524,63 @@ parser_expand(parser_state_t *state, outchar_t *out,
           const char *phrase, size_t len);
 
 
+/*          Type Values                                      */
+
+
+typedef struct value_type_s value_type_t;
+typedef int type_id_t;
+
+extern type_t type_type;
+
+extern const char *
+type_name(type_t kind);
+
+extern type_id_t
+type_id_new(void);
+
+/*! Return a type_id unique to the given kind
+ */
+extern type_id_t
+type_type_id(type_t kind);
+
+extern void
+type_register(parser_state_t *state, type_t newtype);
+
+
+/*          Handle Types and Values                                          */
+
+typedef void handle_close_fn_t(void **ref_handle);
+
+typedef struct value_handle_s value_handle_t;
+
+/*! Create a new handle value with type handle_type
+ *  If autoclose is set close the handle when the object is deleted
+ */
+extern value_t *
+value_handle_new(void *handle, type_t handle_type,
+                 handle_close_fn_t *closefn, bool autoclose);
+
+
+/*! Return whether the value handle is still open
+ */
+extern bool value_handle_isopen(const value_handle_t *handleval);
+
+/*! Retrieve handle and open status from a handle value
+ *  Updates *out_is_open unless out_is_open is NULL
+ */
+extern void */*handle*/
+value_handle_get(const value_handle_t *handleval, bool *out_is_open);
+
+extern void
+value_handle_close(value_handle_t *handleval);
+
+/*! Register a new "handle" type with a given type ID and name
+ *  e.g. values_handletype_type_init(type_id_new(), "myhandle");
+ */
+extern value_t *
+values_handle_type_init(value_type_t *typeval, type_id_t typeid,
+                        const char *typename);
+
 /*          Dynamic Directories                                 */
 
 /*! create a new dynamic environment from FTL functions
@@ -1627,7 +1671,7 @@ extern bool
 parse_itemstr(const char **ref_line, char *buf, size_t size);
 
 extern bool
-parse_type(const char **ref_line, type_t *out_type_id);
+parse_type(const char **ref_line, type_t *out_type);
 
 typedef bool
 parse_match_fn_t(const char **ref_line, parser_state_t *state,

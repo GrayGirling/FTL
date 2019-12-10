@@ -5503,6 +5503,14 @@ type_name(type_t kind)
 
 
 
+extern type_id_t
+type_type_id(type_t kind)
+{   return kind == NULL? -1: kind->id;
+}
+
+
+
+
 
 
 
@@ -7525,6 +7533,163 @@ values_code_init(void)
 
 
 
+/*****************************************************************************
+ *                                                                           *
+ *          Generic Handle Values                                            *
+ *          =====================                                            *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+/* This support the creation of multiple types - each supporting a different
+   kind of "handle".  The defining characteristic of a Handle is just that it
+   is a closeable value.  It can be closed either automatically (when the
+   value is garbage collected) or explicitly.
+*/
+
+
+
+struct value_handle_s
+{   value_t value;           /* code used as a value */
+    void *handle;
+    bool autoclose;          /* true if should be closed on deletion */
+    bool is_closed;          /* initially false but true after closure */
+    handle_close_fn_t *close;
+} /* value_handle_t */;
+
+
+
+#define value_handle_value(handleval) (&(handleval)->value)
+
+
+
+static value_type_t type_handle_val;
+type_t type_handle = &type_handle_val;
+
+
+
+extern void
+value_handle_close(value_handle_t *handleval)
+{   if (!handleval->is_closed && handleval->close != NULL)
+    {
+        (*handleval->close)(&handleval->handle);
+        handleval->is_closed = true;
+    }
+}
+
+
+
+
+/*! Return whether the value handle is still open
+ */
+extern bool value_handle_isopen(const value_handle_t *handleval)
+{   return !handleval->is_closed;
+}
+
+
+
+/*! Retrieve handle and open status from a handle value
+ *  Updates *out_is_open unless out_is_open is NULL
+ */
+extern void */*handle*/
+value_handle_get(const value_handle_t *value, bool *out_is_open)
+{
+    value_handle_t *handleval = (value_handle_t *)value;
+    if (out_is_open != NULL)
+        *out_is_open = !handleval->is_closed;
+
+    return handleval->handle;
+}
+
+
+
+
+static int
+value_handle_print(outchar_t *out,
+                   const value_t *root, const value_t *value, bool detailed)
+{   bool is_open = false;
+    /* assume can only be called when value is a vlue_handle_t */
+    value_handle_t *handleval = (value_handle_t *)value;
+    void *handle = value_handle_get(handleval, &is_open);
+    int n = 0;
+
+    (void)root;
+
+    if (is_open)
+        n += outchar_printf(out, "$%s.{%p}", value_type_name(value),
+                            handle);
+    else
+        n += outchar_printf(out, "$%s.CLOSED", value_type_name(value));
+
+    return n;
+}
+
+
+
+
+
+extern value_t *
+value_handle_init(value_handle_t *handleval, type_t handle_imp_type,
+                  handle_close_fn_t *close, bool autoclose, void *handle,
+                  bool on_heap)
+{   handleval->close = close;
+    handleval->handle = handle;
+    handleval->autoclose = true;
+    handleval->is_closed = false;
+    return value_init(&handleval->value, handle_imp_type, on_heap);
+}
+
+
+
+
+static void
+value_handle_delete(value_t *value)
+{   value_handle_t *handleval = (value_handle_t *)value;
+    if (handleval->autoclose)
+        value_handle_close(handleval);
+    FTL_FREE((void *)value);
+}
+
+
+
+
+/*! Register a new type with a given type ID and name
+ *  e.g. values_handletype_type_init(type_id_new(), "myhandle");
+ */
+extern value_t *
+values_handle_type_init(value_type_t *typeval, type_id_t typeid,
+                        const char *typename)
+{
+    return type_init(typeval, /*on_heap*/FALSE, typeid, typename,
+                     &value_handle_print, NULL /* &value_handle_parse */,
+                     /* &value_handle_compare*/NULL, &value_handle_delete,
+                     /*mark*/NULL);
+}
+
+
+
+
+extern value_t *
+value_handle_new(void *handle, type_t handle_type,
+                 handle_close_fn_t *closefn, bool autoclose)
+{   value_handle_t *valhandle = (value_handle_t *)
+                                FTL_MALLOC(sizeof(value_handle_t));
+    if (NULL != valhandle)
+    {   return value_handle_init(valhandle, handle_type, closefn, autoclose,
+                                 handle, /*on_heap*/TRUE);
+    } else
+        return NULL;
+}
+
+
+
+
+
+
+
 
 /*****************************************************************************
  *                                                                           *
@@ -7535,6 +7700,15 @@ values_code_init(void)
 
 
 
+
+
+
+
+
+/* A stream value is an object supporting a combined input (charsource_t) and
+   output (charsink_t)
+*/
+   
 
 
 
@@ -9154,7 +9328,7 @@ dir_init(dir_t *dir, type_t dir_subtype,
 
 
 #if 0 != DEBUG_VALINIT(1+)0
-#define dir_init(dir, kind, add, lookup, get, forall, on_heap) \
+#define dir_init(dir, typeval, add, lookup, get, forall, on_heap) \
     value_info((dir_init)(dir, kind, add, lookup, get, forall, on_heap), \
                __LINE__)
 #endif
@@ -25280,6 +25454,20 @@ cmds_generic_type(parser_state_t *state, dir_t *cmds)
              &fn_cmp, 2);
 }
 
+
+
+
+
+extern void
+type_register(parser_state_t *state, type_t newtype)
+{
+    dir_t *cmds = parser_root(state);
+    const value_t *typesval = dir_string_get(cmds, ROOT_DIR_TYPE);
+
+    if (typesval != NULL && value_type_equal(typesval,type_dir))
+        mod_add_val((dir_t *)typesval, type_name(newtype),
+                    value_type_value(newtype));
+}
 
 
 

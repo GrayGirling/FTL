@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2013-2018, Gray Girling
@@ -473,6 +474,165 @@ cmds_ftl_end(parser_state_t *state)
 
 
 
+/*****************************************************************************
+ *                                                                           *
+ *          OBJ Handle Values                                                *
+ *          =================                                                *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+/* Objects */
+
+typedef struct {
+    int n;
+} objval_t;
+
+
+static void objval_close(objval_t *obj)
+{
+    printf("closing object %p\n", obj);
+    if (obj != NULL)
+        free(obj);
+}
+
+
+static objval_t *objval_new(int n)
+{   objval_t *obj = (objval_t *)malloc(sizeof(objval_t));
+    if (obj != NULL)
+        obj->n = n;
+    return obj;
+}
+
+
+
+/* FTL Handle Support */
+
+
+#include "ftl_internal.h"  /* needed for value_type_t */
+
+
+typedef value_handle_t value_obj_t;
+
+static value_type_t type_obj_val;
+
+extern type_t type_obj;
+type_t type_obj = &type_obj_val;
+
+
+
+static void value_obj_close(void **ref_handle)
+{   objval_t *objobj = (objval_t *)*ref_handle;
+    if (objobj != NULL)
+    {   objval_close(objobj);
+        *ref_handle = NULL;
+    }
+}
+
+
+extern value_t *
+value_obj_new(objval_t *obj, bool autoclose)
+{   return value_handle_new(obj, type_obj, &value_obj_close, autoclose);
+}
+
+
+
+static void
+values_obj_init(parser_state_t *state)
+{   values_handle_type_init(&type_obj_val, type_id_new(), "obj");
+    type_register(state, type_obj);
+}
+
+
+/* FTL functions */
+
+
+
+static const value_t *
+fn_obj_new(const value_t *this_fn, parser_state_t *state)
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(nval, type_int))
+    {   number_t n = value_int_number(nval);
+        objval_t *obj = objval_new(n);
+        if (obj != NULL)
+        {
+            val = value_obj_new(obj, /*autoclose*/true);
+            if (val == NULL)
+                free(obj);
+        }
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+static const value_t *
+fn_obj_state(const value_t *this_fn, parser_state_t *state)
+{   const value_t *objval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(objval, type_obj))
+    {
+        bool is_open = false;
+        value_handle_t *objhandle = (value_handle_t *)objval;
+        objval_t *obj = value_handle_get(objhandle, &is_open);
+        if (is_open)
+            printf("object contains %d\n", obj->n);
+        else
+            printf("object is CLOSED\n");
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+static const value_t *
+fn_obj_close(const value_t *this_fn, parser_state_t *state)
+{   const value_t *objval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_istype(objval, type_obj))
+    {
+        value_handle_t *objhandle = (value_handle_t *)objval;
+        value_handle_close(objhandle);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+static void cmds_obj(parser_state_t *state)
+{   dir_t *cmds = parser_env(state);
+    dir_t *objcmds = dir_id_new();
+
+    values_obj_init(state);
+    mod_add_dir(cmds, "obj", objcmds);
+    mod_addfn(objcmds, "new", "<n> - create object holing <n>",
+              &fn_obj_new, 1);
+    mod_addfn(objcmds, "status", "<obj> - report status of obj",
+              &fn_obj_state, 1);
+    mod_addfn(objcmds, "close", "<obj> - close obj",
+              &fn_obj_close, 1);
+}
+    
+
+static void cmds_obj_end(void)
+{
+}
+
+
+
+
 
 /*****************************************************************************
  *                                                                           *
@@ -721,6 +881,8 @@ main(int argc, char **argv)
                 int opt_argc = app_argc-1;
                 bool do_args = opt_argc > 0;
 
+                cmds_obj(state);
+                
                 if (do_prolog)
                 {   exit_rc = read_prolog(state, "prolog", getenv(ENV_PROLOG),
                                           &prolog_text[0]);
@@ -868,6 +1030,7 @@ main(int argc, char **argv)
                     }
                 }
 	        ftl_libs_end(state);
+                cmds_obj_end();
                 if (!quiet)
                     printf("%s: finished\n", codeid());
 	    }

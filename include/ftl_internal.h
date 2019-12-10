@@ -192,7 +192,6 @@ struct value_type_s
     value_cmp_fn_t *compare;    /**< used when this type is first to compare */
 } /* value_type_t */;
 
-extern type_id_t type_id_new(void);
 
 extern /*internal*/ value_t *
 type_init(value_type_t *kind, bool on_heap,
