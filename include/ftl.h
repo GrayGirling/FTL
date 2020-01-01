@@ -1577,9 +1577,8 @@ value_handle_close(value_handle_t *handleval);
 /*! Register a new "handle" type with a given type ID and name
  *  e.g. values_handletype_type_init(type_id_new(), "myhandle");
  */
-extern value_t *
-values_handle_type_init(value_type_t *typeval, type_id_t typeid,
-                        const char *typename);
+extern value_t *values_handle_type_init(value_type_t *typeval, type_id_t tid,
+		                                const char *tname);
 
 /*          Dynamic Directories                                 */
 
