@@ -21108,7 +21108,18 @@ mod_execv(const value_t **out_val, argv_token_t *args,
 
 
 
-
+/*! Execute the given value (which was looked up from the first name on the
+ *  command line)
+ *    - if the value is a closure parse arguments from the line and execute
+ *    - if the value is a command pass the rest of the line to the command's
+ *      parsing and execution function
+ *    - if the value is code execute the lines in it as FTL
+ *    - if the value is a (C defined) function invoke it (it will parse its
+ *      own arguments)
+ *    - if the value is a directory push the directory on the environment
+ *      stack (to makes its values available) and parse the rest of the
+ *      line as a command again
+ */
 /* This function may cause a garbage collection */
 static const value_t *
 mod_invoke_cmd(const char **ref_line, const value_t *value,
@@ -21399,7 +21410,13 @@ mod_invoke_argv(const char *fnname, argv_token_t *args, const char *execpath,
 
 
 
-/* This function may cause a garbage collection */
+/*! Parse a command from the line and then, if found, execute it returning the
+ *  result.  Otherwise (if the command is not found) look for the function
+ *  FN_UNDEF_HOOK and execute it with the line that could not be parsed
+ *  provided as a string argument
+ *
+ *  May cause garbage collection.
+ */
 static const value_t *
 mod_exec(const char **ref_line, parser_state_t *state)
 {   const value_t *value = NULL;
@@ -29814,9 +29831,11 @@ cmd_every(const char **ref_line, const value_t *this_cmd,
 
     if (ok && parse_space(ref_line))
     {   bool ok = TRUE;
+        const char *phrase;
         do {
-            const char *phrase = *ref_line;
             const value_t *val;
+
+            phrase = *ref_line;
 
             val = mod_exec_cmd(&phrase, state);
 
@@ -29826,6 +29845,10 @@ cmd_every(const char **ref_line, const value_t *this_cmd,
                                   "(every) warning - trailing text '%s'\n",
                                   phrase);
                     ok = FALSE;
+                } else {
+                    ok = (val != value_false);
+                    OMIT(printf("%s: 'every' value is %sFALSE\n",
+                                codeid(), ok? "not ":""););
                 }
             } else
             {   parser_error(state,"(every) unknown command '%s'\n", phrase);
@@ -29833,15 +29856,21 @@ cmd_every(const char **ref_line, const value_t *this_cmd,
             }
 
             val = &value_null;
+            /* in case it interferes with garbage collection */
             parser_collect(state);
 
-            if (ok)
+            if (ok && duration_ms >= 0)
                 (*parser_suspend_get(state))((unsigned long)duration_ms);
         } while (ok);
+        *ref_line = phrase;
+        val = &value_null; /* seems to be necessary! */
+        OMIT(printf("%s: 'every' commands are complete\n", codeid()););
     } else
     {   parser_error(state,"failed to evaluate expression\n");
         val = &value_null;
     }
+    OMIT(printf("%s: 'every' returns %sNULL\n",
+                codeid(), val==&value_null? "": "non-"););
     return val;
 }
 
