@@ -21712,7 +21712,7 @@ extern charsource_t *
 charsource_rcfile(parser_state_t *state, const char *rccode_name,
                   FILE **out_rcfile)
 {   char rccode_name_uc[64];
-    char rcfile_env[64];
+    char rcfile_env[80];
     char rcfile_name_buf[256];
     const char *rcfile_name;
     FILE *rcfile = NULL;
