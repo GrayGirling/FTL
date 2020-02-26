@@ -1568,7 +1568,7 @@ extern bool value_handle_isopen(const value_handle_t *handleval);
 /*! Retrieve handle and open status from a handle value
  *  Updates *out_is_open unless out_is_open is NULL
  */
-extern void */*handle*/
+extern void * /*handle*/
 value_handle_get(const value_handle_t *handleval, bool *out_is_open);
 
 extern void

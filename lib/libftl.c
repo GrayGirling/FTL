@@ -7594,7 +7594,7 @@ extern bool value_handle_isopen(const value_handle_t *handleval)
 /*! Retrieve handle and open status from a handle value
  *  Updates *out_is_open unless out_is_open is NULL
  */
-extern void */*handle*/
+extern void * /*handle*/
 value_handle_get(const value_handle_t *value, bool *out_is_open)
 {
     value_handle_t *handleval = (value_handle_t *)value;
@@ -26422,7 +26422,7 @@ genfn_fmt_b(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         le_data[5] = (arg >> 40) & 0xff;
         le_data[6] = (arg >> 48) & 0xff;
         le_data[7] = (arg >> 54) & 0xff;
-        if (precision < len)
+        if (precision < (int)len)
             len = precision;
         if (len > buflen)
             len = buflen;
@@ -26455,7 +26455,7 @@ genfn_fmt_b_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         be_data[2] = (arg >> 40) & 0xff;
         be_data[1] = (arg >> 48) & 0xff;
         be_data[0] = (arg >> 54) & 0xff;
-        if (precision < len)
+        if (precision < (int)len)
             len = precision;
 
         if (len > buflen)
@@ -27133,7 +27133,7 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             DEBUG_CHOP(printf("%s: for substr set dir %sNULL\n", codeid(),
                               value==NULL || value == &value_null?"": "non-"););
             if (!dir_set(save_dir, name, dir_value(new_dir)))
-            {   for_return = &value_false; /* any non-NULL value */
+            {   for_return = (void *)&value_false; /* any non-NULL value */
                 DEBUG_CHOP(printf("%s: dir set failed\n", codeid()););
             }
         }
@@ -27211,7 +27211,7 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
             if (stride > (number_t)buflen)
                 stride = buflen;
             else if (-stride > (number_t)buflen)
-                stride = -buflen;
+                stride = -(number_t)buflen;
 
             while (len > 0 && (n_infinite || n-->0))
                 dir_int_set(vec, veclen++,
