@@ -1,0 +1,16 @@
+set noauto[a,b]:{a+b}
+func auto[a,b]:{a+b}
+eval noauto 1
+# [b]:{a+b}
+eval auto 1
+# [b]:{a+b}
+eval noauto 1 2
+# []:{a+b}
+eval auto 1 2
+# 3
+eval noauto 1 2 !
+#3
+eval &auto 1 2
+# []:{a+b}
+eval &auto 1 2 !
+# 3

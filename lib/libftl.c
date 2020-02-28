@@ -152,12 +152,6 @@
        > parse ops 1 + 3 * 8
        { add 1 (times 3 8!)! }
 
-   Implement syntax &<operator name> to return function it maps to?  It would
-   something affecting the type of binding created that persists as additional
-   unbound variables are bound.  It would be possible to have a variable in the
-   environment that determines which kind of binding are created by default.
-   In environments with the variable set '&' would have no effect.
-
    Provide an annotation that makes the value of an environment name a constant
 
    Provide explicit functions equivalent to those implicit in the
