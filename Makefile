@@ -284,5 +284,8 @@ endif
 test:
 	tests/check -a
 
+doc:
+	make -C doc
+
 clean:
 	rm -f ftl$(FTLVER) penv$(FTLVER) hi$(FTLVER) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)
