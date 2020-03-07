@@ -63,16 +63,16 @@ this repository.
 
 A description of the use of the library to create C or C++ command-line
 programs can be downloaded from
-[here](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-commandline-tutorial.md).
+[here](doc/markdown/FTL-commandline-tutorial.md).
 
-[This](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-build-setup.md) describes how the tool (or a new tool) can be built in different software environments (such as on Windows, MacOS or Linux).
+[This](doc/markdown/FTL-build-setup.md) describes how the tool (or a new tool) can be built in different software environments (such as on Windows, MacOS or Linux).
 
 If using FTL as the basis of a language you may need to know what the built-in
 commands and functions are - see the user guide at: [user
-guide](https://github.com/GrayGirling/FTL/raw/master/doc/pdf/FTL-user-guide.pdf).
+guide](doc/pdf/FTL-user-guide.pdf).
 
 A simple outline of the language is contained in:
-[spec](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-spec.md).
+[spec](doc/markdown/FTL-spec.md).
 
 ## License
 
