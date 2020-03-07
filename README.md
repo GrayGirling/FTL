@@ -68,8 +68,7 @@ programs can be downloaded from
 [This](doc/markdown/FTL-build-setup.md) describes how the tool (or a new tool) can be built in different software environments (such as on Windows, MacOS or Linux).
 
 If using FTL as the basis of a language you may need to know what the built-in
-commands and functions are - see the user guide at: [user
-guide](doc/pdf/FTL-user-guide.pdf).
+commands and functions are - see the user guide: [here](doc/markdown/FTL-user-guide.md) (or [as PDF](doc/pdf/FTL-user-guide.pdf)).
 
 A simple outline of the language is contained in:
 [spec](doc/markdown/FTL-spec.md).
