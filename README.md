@@ -53,7 +53,7 @@ A number of solutions are possible in windows:
 * In Windows 10 (post the 2017 'Creators' edition) it is possible to use the Ubuntu Linux subsystem
 * Cygwin can be downloaded and installed (selecting the mingw compilers), https://www.cygwin.com/
 * MinGW can be used, http://www.mingw.org/
-* Git for Windows can be used (I think), https://git-scm.com/download/win
+* Git for Windows can be used, https://git-scm.com/download/win
 
 
 ## Documentation
@@ -63,13 +63,16 @@ this repository.
 
 A description of the use of the library to create C or C++ command-line
 programs can be downloaded from
-[here](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-commandline-tutorial.html).
+[here](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-commandline-tutorial.md).
 
-If used as the basis of a language see the user guide at:
-[user guide](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-user-guide.pdf).
+[This](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-build-setup.md) describes how the tool (or a new tool) can be built in different software environments (such as on Windows, MacOS or Linux).
+
+If using FTL as the basis of a language you may need to know what the built-in
+commands and functions are - see the user guide at: [user
+guide](https://github.com/GrayGirling/FTL/raw/master/doc/pdf/FTL-user-guide.pdf).
 
 A simple outline of the language is contained in:
-[spec](https://github.com/GrayGirling/FTL/raw/master/doc/FTL-spec.html).
+[spec](https://github.com/GrayGirling/FTL/raw/master/doc/markdown/FTL-spec.md).
 
 ## License
 
