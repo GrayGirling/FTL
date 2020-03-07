@@ -93,7 +93,7 @@ Three options providing for line editing are available:
 * the linenoise line editor, under a (non-viral) BSD license (see LICENSE-linenoise).
 
 
-## Test suite
+## Testing
 
 There is a test suite that requires the use of "bash" which tests many of the bult-in functions and can be used to spot regressions.  (Currently these tests work best when not used under Windows.) Help can be found using
 

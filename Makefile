@@ -284,7 +284,7 @@ endif
 test:
 	tests/check -a
 
-doc:
+docs:
 	make -C doc
 
 clean:
