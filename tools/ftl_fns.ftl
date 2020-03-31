@@ -3,7 +3,7 @@
 # Assuming this file is in ~/tools/ftl_fns.ftl, This file can be copied into a
 # long string suitable for incorporating into penv.c using the command:
 #
-#        ./ftl -q -- io filetostring tools/ftl_fns.ftl > tools/ftl_fns.str
+#        ./ftl -np -q -- io filetostring tools/ftl_fns.ftl > tools/ftl_fns.str
 #
 # To test a new version use
 #

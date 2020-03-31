@@ -89,7 +89,7 @@
 
 
 #define VERSION_MAJ 1
-#define VERSION_MIN 1
+#define VERSION_MIN 2
 
 #define ENV_PATH "FTL_PATH"
 #define ENV_PROLOG "FTL_PROLOG"
@@ -108,7 +108,11 @@
 
 #define APP_ARGC_MAX 128
 
+#ifdef _WIN32
+#define STATIC_INLINE static __inline
+#else
 #define STATIC_INLINE static inline
+#endif
 
 #define CATDELIM(a, delim, b) #a  delim  #b
 #define VERSIONSTR(max, min) CATDELIM(max, ".", min)
@@ -196,7 +200,7 @@ usage(const char* msg)
 	fprintf(stderr, "error: %s\n", msg);
 
     fprintf(stderr, "\nusage:\n");
-    fprintf(stderr, "  "CODEID" [-e|-ne] [-c <commands> | [-f <cmdfile>] "
+    fprintf(stderr, "  "CODEID" [-e|-ne] [--version] [-c <commands> | [-f <cmdfile>] "
 	    "[[--] <script arg>...]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "     -f <cmdfile>       - read commands from this file instead of the console\n");
@@ -205,6 +209,8 @@ usage(const char* msg)
 		    "[don't] echo executed commands\n");
     fprintf(stderr, "     -q | --quiet       - "
 	            "don't report unnecessary info\n");
+    fprintf(stderr, "     --version          - "
+	            "just print version number and quit\n");
     exit(1);
 }
 
@@ -218,7 +224,8 @@ static const char *
 parse_args(int argc, char **argv,
 	   int *out_argc, const char **out_argv, size_t out_argv_len,
 	   const char **ref_cmd, const char **ref_input,
-	   bool *out_echo, bool *out_do_prolog, bool *out_quiet)
+	   bool *out_echo, bool *out_do_version, bool *out_do_prolog,
+           bool *out_quiet)
 {   int argn = 1;
     int out_argn = 0;
     const char *err = NULL;
@@ -253,7 +260,11 @@ parse_args(int argc, char **argv,
 		parse_empty(&arg))
 		*out_quiet = TRUE;
 	    else
-	    if ((parse_key(&arg, "-e") || parse_key(&arg, "--emit")) &&
+            if ((parse_key(&arg, "--version")) &&
+                parse_empty(&arg))
+                *out_do_version = TRUE;
+            else
+            if ((parse_key(&arg, "-e") || parse_key(&arg, "--emit")) &&
 		parse_empty(&arg))
 		*out_echo = TRUE;
 	    else
@@ -646,7 +657,7 @@ static void cmds_obj_end(void)
 
 const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
 #include "ftl_fns.str"
-    ;
+    "";
 
 
 
@@ -838,6 +849,27 @@ static int /*rc*/ read_prolog(parser_state_t *state,
 
 
 
+static void show_version(const char *codeid)
+{   int ftlmaj, ftlmin, ftldebug;
+    ftl_version(&ftlmaj, &ftlmin, &ftldebug);
+    printf("%s: v%s:%d.%d"
+#ifdef __DATE__
+           " built " __DATE__
+#endif
+           "%s\n",
+           codeid, VERSION, ftlmaj, ftlmin,
+#ifdef NDEBUG
+           ""
+#else
+           " (debug)"
+#endif
+          );
+}
+
+
+
+
+
 extern int
 main(int argc, char **argv)
 {   const char *err;
@@ -848,6 +880,7 @@ main(int argc, char **argv)
     bool echo_lines = FALSE;
     bool do_prolog = TRUE;
     bool do_rcfile = TRUE;
+    bool do_version = FALSE;
     FILE *echo_log = stdout;
     bool quiet = FALSE;
     int exit_rc = EXIT_OK;
@@ -856,11 +889,15 @@ main(int argc, char **argv)
     ftl_init();
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
-		     &init, &cmd_file, &echo_lines, &do_prolog, &quiet);
+		     &init, &cmd_file, &echo_lines, &do_version, &do_prolog,
+                     &quiet);
                  
     if (NULL != err)
     {   usage(err);
         exit_rc = EXIT_BAD_APPOPT;
+    }
+    else if (do_version)
+    {   show_version(CODEID);
     }
     else
     {   parser_state_t *state = parser_state_new(dir_id_new());
@@ -926,8 +963,10 @@ main(int argc, char **argv)
                         charsource_rcfile(state, codeid(), /*&rcfile*/NULL);
 
                     if (rcstream != NULL) {
-                        if (NULL == parser_expand_exec(state, rcstream, NULL,
-                                                       NULL, /*no_locals*/TRUE))
+                        if (NULL == parser_expand_exec(state, rcstream,
+                                                       /*no cmd string*/NULL,
+                                                       /*no rcfile*/NULL,
+                                                       /*no_locals*/TRUE))
                         {   fprintf(stderr, "%s: attempted execution of "
                                     "init file for \"%s\" failed\n",
                                     codeid(), codeid());
@@ -952,7 +991,9 @@ main(int argc, char **argv)
                                    CODEID, cmd_file);
                             exit_rc = EXIT_BAD_CMDFILE;
                         } else
-                        if (NULL == parser_expand_exec(state, fin, NULL, NULL,
+                        if (NULL == parser_expand_exec(state, fin,
+                                                       /*no cmd string*/NULL,
+                                                       /*no rcfile*/NULL,
                                                        /*no_locals*/TRUE))
                         {   fprintf(stderr, "%s: attempted execution of "
                                     "file \"%s\" failed\n",
@@ -1024,7 +1065,7 @@ main(int argc, char **argv)
                             DEBUG_CLI(fprintf(stderr,
                                               "%s: executing from console\n",
                                               codeid()););
-                            cli(state, init, /*rcfile*/codeid());
+                            cli(state, init, /*rcfile*/NULL);
                         } else
                             quiet = true;
                     }

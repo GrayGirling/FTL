@@ -2,7 +2,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2019, Gray Girling
+ * Copyright (c) 2005-2020, Gray Girling
  *
  * All rights reserved.
  *
@@ -276,9 +276,10 @@
 #define ENV_FTL_RCFILE_POST "_RC"
 #ifdef _WIN32
 #define ENV_FTL_HOMEDIR        "USERPROFILE"
-#define ENV_FTL_HOMEDIR_HOME   OS_FILE_SEP "Documents"
+#define ENV_FTL_HOMEDIR_HOME   "" //OS_FILE_SEP "Documents"
 #define ENV_FTL_RCFILE_DEFAULT(code_name) \
-                  "%s%s", code_name, ".rc"
+                  "%s%s%s%s%s", ".", code_name, OS_FILE_SEP, code_name, ".rc"
+// #define ENV_FTL_RCFILE_DEFAULT(code_name) "%s%s", code_name, ".rc"
 #define ENV_FTL_PATH(code_name) \
                   "%s%s", code_name, "_PATH"
 #define ENV_PATHNAME_MAX 32
@@ -13541,6 +13542,22 @@ dir_regkeyval_add(dir_t *dir, const value_t *name, const value_t *value)
 
 
 
+static void
+dir_regkeyval_delete(value_t *value)
+{   if (value_istype(value, type_dir))
+    {   dir_regkeyval_t *keydir = (dir_regkeyval_t *)value;
+        win_regkeyval_close(&keydir->key);
+        FTL_FREE(value);
+    }
+    /* else type error */
+}
+
+
+
+
+
+
+
 static long /* rc */
 dir_regkeyval_init(dir_regkeyval_t *keydir, key_t root,
                    const char *keyname, size_t keynamelen,
@@ -13552,26 +13569,11 @@ dir_regkeyval_init(dir_regkeyval_t *keydir, key_t root,
         dir_init(&keydir->dir, &type_dir_regkeyval_val,
                  &dir_regkeyval_add, /*lookup*/ NULL,
                  &dir_regkeyval_get, &dir_regkeyval_forall, on_heap);
+    /* TODO: use dir_regkeyval_delete as deletion method */
     OMIT(else
               fprintf(stderr, "%s: failed to create registry key environment"
                       " - rc %d\n", codeid(), rc);)
     return rc;
-}
-
-
-
-
-
-
-
-static void
-dir_regkeyval_delete(value_t *value)
-{   if (value_istype(value, type_dir))
-    {   dir_regkeyval_t *keydir = (dir_regkeyval_t *)value;
-        win_regkeyval_close(&keydir->key);
-        FTL_FREE(value);
-    }
-    /* else type error */
 }
 
 
@@ -21702,15 +21704,15 @@ strnuccpy(char *dest, const char *src, size_t n)
 
 
 
-extern charsource_t *
-charsource_rcfile(parser_state_t *state, const char *rccode_name,
-                  FILE **out_rcfile)
-{   char rccode_name_uc[64];
-    char rcfile_env[80];
-    char rcfile_name_buf[256];
+static const char *filename_env_rcfile(const char *rccode_name,
+                                       bool *out_using_default,
+                                       char *name_buf, size_t name_len)
+{
     const char *rcfile_name;
-    FILE *rcfile = NULL;
-    bool using_default = FALSE;
+    char rccode_name_uc[64];
+    char rcfile_env[80];
+
+    *out_using_default = FALSE;
 
     strnuccpy(&rccode_name_uc[0], rccode_name, sizeof(rccode_name_uc));
     os_snprintf(&rcfile_env[0], sizeof(rcfile_env), "%s%s",
@@ -21718,32 +21720,67 @@ charsource_rcfile(parser_state_t *state, const char *rccode_name,
     rcfile_name = getenv(rcfile_env);
 
     if (rcfile_name == NULL)
-    {    rcfile_name = &rcfile_name_buf[0];
-         os_snprintf(&rcfile_name_buf[0], sizeof(rcfile_name_buf),
-                     ENV_FTL_RCFILE_DEFAULT(rccode_name));
-         using_default = TRUE;
-         DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", rccode_name, rcfile_name););
+    {   rcfile_name = name_buf;
+        os_snprintf(name_buf, name_len,
+                    ENV_FTL_RCFILE_DEFAULT(rccode_name));
+        *out_using_default = TRUE;
+        DEBUG_RCFILE(DPRINTF("%s: rc file '%s'\n", rccode_name, rcfile_name););
     }
+    return rcfile_name;
+}
+
+
+
+
+static const char *
+filename_home_alloc(const char *homedir, const char *homefile)
+{   char *rc_home = NULL;
+
+    if (homedir != NULL)
+    {   size_t homefile_len = 0;
+        if (homefile != NULL)
+            homefile_len = strlen(OS_FILE_SEP) + strlen(homefile);
+        rc_home = FTL_MALLOC(strlen(homedir)+strlen(ENV_FTL_HOMEDIR_HOME)+
+                             homefile_len + 1);
+    }
+    if (NULL != rc_home)
+    {
+        if (homefile != NULL)
+            sprintf(rc_home, "%s%s"OS_FILE_SEP"%s",
+                    homedir, ENV_FTL_HOMEDIR_HOME, homefile);
+        else
+            sprintf(rc_home, "%s%s", homedir, ENV_FTL_HOMEDIR_HOME);
+        DEBUG_RCFILE(DPRINTF("%s: full rc file name '%s'\n",
+                             codeid(), rc_home););
+    }
+    return rc_home;
+}
+
+
+
+
+extern charsource_t *
+charsource_rcfile(parser_state_t *state, const char *rccode_name,
+                  FILE **out_rcfile)
+{   FILE *rcfile = NULL;
+    bool using_default = FALSE;
+    char rcfile_name_buf[256];
+    const char *rcfile_name =
+        filename_env_rcfile(rccode_name, &using_default,
+                            &rcfile_name_buf[0], sizeof(rcfile_name_buf));
 
     if (rcfile_name != NULL)
     {   rcfile = fopen(rcfile_name, "r");
         if (NULL == rcfile)
         {   const char *homedir = getenv(ENV_FTL_HOMEDIR);
             if (NULL != homedir)
-            {   char *rc_home = FTL_MALLOC(strlen(homedir)+
-                                           strlen(ENV_FTL_HOMEDIR_HOME)+
-                                           strlen(OS_FILE_SEP)+
-                                           strlen(rcfile_name)+1);
-                if (NULL != rc_home)
-                {   sprintf(rc_home, "%s%s"OS_FILE_SEP"%s",
-                            homedir, ENV_FTL_HOMEDIR_HOME, rcfile_name);
-                    DEBUG_RCFILE(DPRINTF("%s: full rc file name '%s'\n",
-                                         codeid(), rc_home););
-                    rcfile = fopen(rc_home, "r");
+            {   const char *rc_home = filename_home_alloc(homedir, rcfile_name);
+                if (rc_home != NULL)
+                {   rcfile = fopen(rc_home, "r");
                     if (NULL == rcfile && !using_default)
                         DPRINTF("%s: can't open RC file '%s'\n",
                                 codeid(), rc_home);
-                    FTL_FREE(rc_home);
+                    FTL_FREE((void *)rc_home);
                 }
             }
             DEBUG_RCFILE(else DPRINTF("%s: no %s directory\n",
@@ -24338,6 +24375,12 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     static char sep[2];
     static char exec_buf[PATHNAME_MAX];
     const char *executable = file_executable(&exec_buf[0], sizeof(exec_buf));
+    bool is_default_rcfile = FALSE;
+    char rcfile_name_buf[256];
+    const char *rcfile_name =
+        filename_env_rcfile(codeid(), &is_default_rcfile,
+                            &rcfile_name_buf[0], sizeof(rcfile_name_buf));
+    const char *homedir = filename_home_alloc(getenv(ENV_FTL_HOMEDIR), NULL);
 
 #ifdef _WIN32
     osfamily = "windows";
@@ -24356,8 +24399,11 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     sep[1] = '\0';
 
     mod_add_val(fscmds, "sep", value_string_new_measured(sep));
-    mod_add_val(fscmds, "nowhere", value_string_new_measured(OS_FS_NOWHERE));
-    mod_add_val(fscmds, "thisdir", value_string_new_measured(OS_FS_DIR_HERE));
+    mod_add_val(fscmds, "nowhere", value_cstring_new_measured(OS_FS_NOWHERE));
+    mod_add_val(fscmds, "thisdir", value_cstring_new_measured(OS_FS_DIR_HERE));
+    mod_add_val(fscmds, "userdir", value_string_new_measured(homedir));
+    mod_add_val(fscmds, "rcfile", value_string_new_measured(rcfile_name));
+    FTL_FREE((void *)homedir);
     mod_add_val(fscmds, "casematch", OS_FS_CASE_EQ? value_true: value_false);
     mod_addfn(fscmds, "absname",
               "<file> - TRUE iff file has an absolute path name",
