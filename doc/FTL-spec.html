@@ -1,1992 +1,592 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html lang="en-gb"><head>
-
-
-
-
-
-
-
-
-
-
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  <meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL</title>
-
-
-
-
-
-
-
-
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  <meta content="Gray Girling" name="author">
-
-
-
-
-  
-  
-  
-  
-  <style type="text/css">
-  h2 { border-bottom-style: dotted;
-    }
-
-  pre { margin: 5pt 0mm 5pt 10mm;
-    padding: 4pt;
-    border-top-width: 4pt ! important;
-    border-left-width: 4pt;
-    border-right-width: 4pt;
-    border-bottom-width: 4pt;
-    overflow: auto;
-    background-color: rgb(238, 238, 238) ! important;
-    }
-
-
-  </style></head><body>
-
-
-
-
-
-
-
-
-
-<div style="text-align: center;">
-<h1>FTL</h1>
-
-
-
-
-
-
-
-<h2 style="text-align: left;">Language Design</h2>
-
-
-
-
-
-
-
-
-<div style="text-align: left;">The cornerstone construct in FTL is a closure, which can be specified using the following syntax (which will be extended below)<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;closure&gt; ::= '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-where &lt;code&gt; is a normal expression that evaluates to a code value, which could be a literal value such as<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;code&gt; ::= '{' &lt;code-item&gt;* '}'</pre>
-
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=windows-1252"/>
+	<title>FTL</title>
+	<meta name="generator" content="LibreOffice 6.3.5.2 (Windows)"/>
+	<meta name="author" content="Gray Girling"/>
+	<meta name="created" content="00:00:00"/>
+	<meta name="changed" content="2020-03-30T10:03:51.920000000"/>
+	<style type="text/css">
+		h2 { border: none; padding: 0cm }
+		h2.cjk { font-family: "NSimSun" }
+		h2.ctl { font-family: "Lucida Sans" }
+		pre { margin-left: 1cm; margin-top: 0.18cm; margin-bottom: 0.18cm; background: #eeeeee; border: none; padding: 0cm }
+		pre.cjk { font-family: "NSimSun", monospace }
+		h3.cjk { font-family: "NSimSun" }
+		h3.ctl { font-family: "Lucida Sans" }
+		h4.cjk { font-family: "NSimSun" }
+		h4.ctl { font-family: "Lucida Sans" }
+	</style>
+</head>
+<body lang="en-GB" dir="ltr"><h1 align="center">FTL</h1>
+<h2 class="western" align="left">Language Design</h2>
+<p align="left">The cornerstone construct in FTL is a closure, which
+can be specified using the following syntax (which will be extended
+below)</p>
+<pre class="western" style="text-align: left">&lt;closure&gt;<span lang="zxx"> :</span>:= '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
+where &lt;code&gt; is a normal expression that evaluates to a code
+value, which could be a literal value such as</p>
+<pre class="western" style="text-align: left">&lt;code&gt; ::= '{' &lt;code-item&gt;* '}'</pre><p align="left">
 The &lt;code-items&gt; in the code primarily consist of symbols whose
-meaning is determined by the environment in which the code is executed.
-&nbsp;FTL implements an environment as an ordered set of
-"bound"&nbsp;symbol-value pairs in which a value can be found from a
-given symbol; and an "unbound" symbol which has not yet been assigned a
-value.<br>
-
-When an argument is applied to a closure a substitution of the
-unbound&nbsp;symbol with the value given by &lt;expression&gt; is
-effected:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;substitution&gt; ::= &nbsp;&lt;closure&gt; &lt;expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-in which the resulting closure value &lt;substitution&gt; incorporates an environment in
-which the unbound &lt;symbol&gt; in the &lt;closure&gt; is paired with
-the value of the &lt;expression&gt; . &nbsp;When the closure is subsequently invoked<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;invocation&gt; := &lt;closure-expression&gt; '!'</pre>
-
-the code of the closure is interpreted in this environment so
-that the bound values are available within the&nbsp;code. <br>
-
-
-
-
-
-
-
-
-
-<br>
-
-So, conceptually a closure value is composed of three parts<br>
-
-
-
-
-
-
-
-
-
+meaning is determined by the environment in which the code is
+executed. &nbsp;FTL implements an environment as an ordered set of
+&quot;bound&quot;&nbsp;symbol-value pairs in which a value can be
+found from a given symbol; and an &quot;unbound&quot; symbol which
+has not yet been assigned a value.<br/>
+When an argument is applied
+to a closure a substitution of the unbound symbol with the value
+given by &lt;expression&gt; is effected:</p>
+<pre class="western" style="text-align: left">&lt;substitution&gt; ::= &lt;closure&gt; &lt;expression&gt;</pre><p align="left">
+in which the resulting closure value &lt;substitution&gt;
+incorporates an environment in which the unbound &lt;symbol&gt; in
+the &lt;closure&gt; is paired with the value of the &lt;expression&gt;.
+&nbsp;When the resulting closure is subsequently invoked</p>
+<pre class="western" style="text-align: left">&lt;invocation&gt; := &lt;closure-expression&gt; '!'</pre><p align="left">
+the code of the closure is interpreted in this environment so that
+the bound values are available within the&nbsp;code. <br/>
+<br/>
+So,
+conceptually a closure value is composed of three parts</p>
 <ol>
-
-
-
-
-
-
-
-
-
-  <li>an ordered environment stack in which the most recently entered
-symbol values take priority over former values for the same symbol when
-they are sought</li>
-
-
-
-
-
-
-
-
-
-  <li>an optional unbound symbol</li>
-
-
-
-
-
-
-
-
-
-  <li>a code value</li>
-
-
-
-
-
-
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">an ordered
+	environment stack in which the most recently entered symbol values
+	take priority over former values for the same symbol when they are
+	sought 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">an optional unbound
+	symbol 
+	</p>
+	<li><p align="left">a code value 
+	</p>
 </ol>
-
-
-
-
-
-
-
-
-
-As a generalization of the simple &lt;closure&gt; syntax above the part of the syntax before '<span style="font-family: monospace;">::</span>' 
-<pre style="margin-left: 40px;">'[' &lt;symbol&gt; ']'</pre>
-
-
-
-
-
-
-
-
-
+<p align="left">As a generalization of the simple &lt;closure&gt;
+syntax above the part of the syntax before '<font face="monospace">::</font>'
+</p>
+<pre class="western" style="margin-left: 2.71cm; text-align: left">'[' &lt;symbol&gt; ']'</pre><p align="left">
 is treated as a literal environment that may be generalized to an
-&lt;environment-expression&gt; - the '<span style="font-family: monospace;">::</span>' being an operator that binds
-an environment to some code, or - more generally - extends the
-environment in an existing closure with the environment given.<br>
-
-
-
-
-
-
-<br>
-
-
-
-
-
-
-It is often the case that the execution environment at the point of
-closure definition is required as part of the closure's own
-environment. &nbsp;This can be achieved by using the '<span style="font-family: monospace;">:</span>' operator in
-place of '<span style="font-family: monospace;">::</span>'.&nbsp; That is, a closure formed using<br>
-
-
-
-
-
-
-
-<pre>&lt;environment-expression&gt; '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-creates a closure with whose environment is exactly what is specified in the &lt;environment-expression&gt;, but 
-<pre>&lt;environment-expression&gt; ':' &lt;code-expression&gt;<br></pre>
-
-
-
-
-
-
-also includes the current environment at the point of definition plus the environment in &lt;environment-expression&gt;.<br>
-
-
-
-
-
-
-<br>
-
-
-
-
-
-
-Thus the
-full syntax for a closure expression is:<br>
-
-
-
-
-
-
-
-
-
-<pre style="margin-left: 40px;">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
+&lt;environment-expression&gt; - the '<font face="monospace">::</font>'
+being an operator that binds an environment to some code, or - more
+generally - extends the environment in an existing closure with the
+environment given.<br/>
+<br/>
+It is often the case that the execution
+environment at the point of closure definition is required to be part
+of the closure's own environment. &nbsp;This can be achieved by using
+the '<font face="monospace">:</font>' operator in place of '<font face="monospace">::</font>'.&nbsp;
+That is, a closure formed using</p>
+<pre class="western" style="text-align: left">&lt;environment-expression&gt; '::' &lt;code-expression&gt;</pre><p align="left">
+creates a closure with whose environment is exactly what is specified
+in the &lt;environment-expression&gt;, but 
+</p>
+<pre class="western" style="text-align: left">&lt;environment-expression&gt; ':' &lt;code-expression&gt;</pre><p align="left">
+also includes the current environment at the point of definition plus
+the environment in &lt;environment-expression&gt;.<br/>
+<br/>
+Thus
+the full syntax for a closure expression is:</p>
+<pre class="western" style="margin-left: 2.71cm; text-align: left">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre><p align="left">
 where either expression may involve literals, brackets, substitution,
-invocation etc. &nbsp;One option for an
-&lt;environment-expression&gt; is a &lt;closure&gt;, which, when used
-in this way refers only to the environment part of the closure.<br>
-
-
-
-
-
-
-
-
-
-<br>
-
-
-
-
-
-
-
-
-
-<h2><a class="mozTocH2" name="mozTocId409702"></a>Syntactic Sugar</h2>
-
-
-
-
-
-
-
-
-
-The above specification is sufficient to provide all the language's,
-typing, data structuring and code control primitives as well as its
-object-orientated features. &nbsp;However in order to reduce the
-complexity of the code there is syntax to simplify certain idioms.<br>
-
-
-
-
-
-
-
-
-
-<h3><a class="mozTocH3" name="mozTocId280832"></a>Creating Bindings</h3>
-
-
-
-
-
-
-
-
-
-This syntax <br>
-
-
-
-
-
-
-
-
-
-<br>
-
-
-
-
-
-
-
-
-
-
-<pre> '[' &lt;symbol1&gt; ']' '::' '[' &lt;symbol2&gt; ']' '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-(in which '<span style="font-family: monospace;">::</span>' binds more tightly to the right) can be replaced by:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'[' &lt;symbol1&gt;, &lt;symbol2&gt; ']' '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
+invocation etc. &nbsp;One option for an &lt;environment-expression&gt;
+is a &lt;closure&gt;, which, when used in this way refers only to the
+environment part of the closure.</p>
+<h2 class="western" align="left"><a name="mozTocId409702"></a>Syntactic
+Sugar</h2>
+<p align="left">The above specification is sufficient to provide all
+the language's, typing, data structuring and code control primitives
+as well as its object-orientated features. &nbsp;However in order to
+reduce the complexity of the code there is syntax to simplify certain
+idioms.</p>
+<h3 class="western" align="left"><a name="mozTocId280832"></a>Creating
+Bindings</h3>
+<p align="left">This syntax 
+</p>
+<pre class="western" style="text-align: left"> '[' &lt;symbol2&gt; ']' '::' '[' &lt;symbol1&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
+(in which '<font face="monospace">::</font>' binds more tightly to
+the right) can be replaced by:</p>
+<pre class="western" style="text-align: left">'[' &lt;symbol1&gt;, &lt;symbol2&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
 and in general any number of unbound symbols can be placed in an
-environment. &nbsp;Note,&nbsp;that values associated with <span style="font-family: monospace;">&lt;symbol2&gt;</span> take
-precidence over those of <span style="font-family: monospace;">&lt;symbol1&gt;</span> when both symbols have the
-same name. &nbsp;The first substitution applied to these expressions will
-bind <span style="font-family: monospace;">&lt;symbol1&gt;</span>.<br>
-
-
-
-
-
-<br>
-
-
-
-
-
-This syntax <br>
-
-
-
-
-
-
-
-
-
-
-<pre> '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt; &lt;value&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-can be replaced by:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'[' &lt;symbol&gt; '=' &lt;value&gt; ']' '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-and in general<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'[' &lt;sym_1&gt; ']' '::' ... '::' '[' &lt;sym_m&gt; ']'&nbsp;'::' &lt;code-expression&gt; &lt;val_1&gt;&nbsp; ... &lt;val_n&gt;</pre>
-
-
-
-
-<br>
-
-
-
-
-
-
-
-
-
-can be replaced by<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'[' &lt;sym_1&gt; '=' &lt;val_1&gt; ',' ... ',' &lt;sym_n&gt; = &lt;val_n&gt; ',' ... &lt;sym_m&gt; ']' '::' &lt;code-expression&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-Note that each <span style="font-family: monospace;">&lt;val_i&gt;</span> is still evaluated in the environment
-outside the closure (in which none of the <span style="font-family: monospace;">&lt;sym_i&gt;</span> symbols have
-been set). &nbsp; The symbols with an associated '=' will be bound symbols, and those without will be unbound. <br>
-
-
-
-
-
-<br>
-
-
-
-
-
-
-
-In addition this environment syntax <br>
-
-
-
-
-
-
-
-
-
-
-<pre>'[' &lt;sym_1&gt; '=' &lt;val_1&gt; ',' ... ',' &lt;sym_n&gt; = &lt;val_n&gt; ',' ... &lt;sym_m&gt; ']'</pre>
-
-
-
-
-
-
-
-
+environment. &nbsp;Note,&nbsp;that values associated with <font face="monospace">&lt;symbol2&gt;</font>
+take precedence over those of <font face="monospace">&lt;symbol1&gt;</font>
+when both symbols have the same name. &nbsp;The first substitution
+applied to these expressions will bind <font face="monospace">&lt;symbol1&gt;</font>.<br/>
+<br/>
+This
+syntax 
+</p>
+<pre class="western" style="text-align: left"> '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt; &lt;value&gt;</pre><p align="left">
+can be replaced by:</p>
+<pre class="western" style="text-align: left">'[' &lt;symbol&gt; '=' &lt;value&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
+and in general</p>
+<pre class="western" style="text-align: left">'[' &lt;sym_m&gt; ']' '::' ... '::' '[' &lt;sym_1&gt; ']''::' &lt;code-expression&gt; &lt;val_1&gt; ... &lt;val_n&gt;</pre><p align="left">
+<br/>
+can be replaced by</p>
+<pre class="western" style="text-align: left">'[' &lt;sym_1&gt; '=' &lt;val_1&gt; ',' ... ',' &lt;sym_n&gt; = &lt;val_n&gt; ',' ... &lt;sym_m&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
+Note that each <font face="monospace">&lt;val_i&gt;</font> is still
+evaluated in the environment outside the closure (in which none of
+the <font face="monospace">&lt;sym_i&gt;</font> symbols have been
+set). &nbsp; The symbols with an associated '=' will be bound
+symbols, and those without will be unbound. <br/>
+<br/>
+In addition
+this environment syntax 
+</p>
+<pre class="western" style="text-align: left">'[' &lt;sym_1&gt; '=' &lt;val_1&gt; ',' ... ',' &lt;sym_n&gt; = &lt;val_n&gt; ',' ... &lt;sym_m&gt; ']'</pre><p align="left">
 specifies a first-class element in the language that can be used as a
-value anywhere. &nbsp;Note that no bound symbols can be specified
-following the first unbound symbol in the specification.<br>
-
-
-
-
-
-
-
-
-
-<h3><a class="mozTocH3" name="mozTocId807267"></a>Obtaining Bound Values in Closures</h3>
-
-
-
-
-
-
-
-
-
-This syntax <br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;closure&gt; '::' '{' &lt;symbol&gt; '}' '!' </pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-can be replaced by<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;closure&gt; '.' &lt;symbol&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-In addition the following syntax can be used to create a symbol value from an expression<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'&lt;closure&gt; '.' '(' &lt;expressionl&gt; ')'</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-where, for example, an expression returning an integer or a string is converted to a symbol before use.
-<h3><a class="mozTocH3" name="mozTocId495578"></a>Integers</h3>
-
-
-
-
-
-
-
-
-
-Although it would theoretically be possible to create an environment defining all the values for 32 bit integers:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>{ int = { 0=&lt;0 value&gt;, 1=&lt;1 value&gt;, .... 4294967295=&lt;4294967295 value&gt; }:<br>[ int: [.... main body of program ....] ] <br>!</pre>
-
-
-
-
-
-
-
-
-
-this step is assumed as part of the runtime library - thus all numeric
-symbols are interpreted with their expected values (unless overridden
-by higher priority definitions).&nbsp;
-<h3><a class="mozTocH3" name="mozTocId541092"></a>Vectors</h3>
-
-
-
-
-
-
-
-
-
-This syntax<br>
-
-
-
-
-
-
-
-
-
-
-<pre>[ 0=expr0, 1=expr1, ... N=exprN ]</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-can be replaced by<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt; expr0, expr1, ... exprN &gt;</pre>
-
-
-or where not all of the indeces are consecutive may be broken into subseries<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt; &lt;int_i&gt;=expr_i, expr_i+1, ..., &lt;int_j&gt;=expr_j, expr_j+1..., ... &gt;</pre>
-
-
-i.e. using the general syntax<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'&lt;' [ [&lt;integer&gt;=]&lt;expression&gt; [',' [&lt;integer&gt;=]&lt;expression&gt; ]* ] '&gt;' </pre>
-
-
-<br>
-
-
-Vectors that are simple numeric series can be represented<br>
-
-
-
-
-
-
-
-
-
-
-<pre>'&lt;' [&lt;expression-int_first&gt; [ &lt;expression-int_second&gt; ]] '..' [ &lt;expression-int_last&gt; ] '&gt;'</pre>
-
-
-
-
-
-
-
-
-
-
+value anywhere. &nbsp;Note that, to simplify implementation, no bound
+symbols can be specified following the first unbound symbol in the
+specification.</p>
+<h3 class="western" align="left"><a name="mozTocId807267"></a>Obtaining
+Bound Values in Closures</h3>
+<p align="left">This syntax 
+</p>
+<pre class="western" style="text-align: left">&lt;closure&gt; '::' '{' &lt;symbol&gt; '}' '!' </pre><p align="left">
+(which simply expands to the value of &lt;symbol&gt; in &lt;closure&gt;&rsquo;s
+environment) can be replaced by</p>
+<pre class="western" style="text-align: left">&lt;closure&gt; '.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">value</font></font>&gt;</pre><p align="left">
+Currently &lt;value&gt;s are constrained to be either integers or
+strings.  For the sake of convenience strings can be provided as
+symbols (with no associated quotes) if they have the syntax of an
+identifier.</p>
+<p align="left">In addition the following syntax can be used to
+create a symbol value from an expression</p>
+<pre class="western" style="text-align: left">'&lt;closure&gt; '.' '(' &lt;expression&gt; ')'</pre><p align="left">
+where, for example, an expression returning an integer or a string is
+converted to a symbol before use. 
+</p>
+<h3 class="western" align="left"><a name="mozTocId495578"></a>Integers</h3>
+<p align="left">Although it would theoretically be possible to create
+an environment defining all the values for 64 bit integers:</p>
+<pre class="western" style="text-align: left">{ int = { 0=&lt;0 value&gt;, 1=&lt;1 value&gt;, .... 9223372036854775807=&lt;9223372036854775807 value&gt; }:
+[ int: [.... main body of program ....] ] 
+!</pre><p align="left">
+this step is assumed as part of the runtime library - thus all
+numeric symbols are interpreted with their expected values (unless
+overridden by higher priority definitions).&nbsp; 
+</p>
+<h3 class="western" align="left"><a name="mozTocId541092"></a>Vectors</h3>
+<p align="left">This syntax</p>
+<pre class="western" style="text-align: left">[ 0=expr0, 1=expr1, ... N=exprN ]</pre><p align="left">
+can be replaced by</p>
+<pre class="western" style="text-align: left">&lt; expr0, expr1, ... exprN &gt;</pre><p align="left">
+or ,where not all of the indices are consecutive, this may be broken
+into subseries</p>
+<pre class="western" style="text-align: left">&lt; &lt;int_i&gt;=expr_i, expr_i+1, ..., &lt;int_j&gt;=expr_j, expr_j+1..., ... &gt;</pre><p align="left">
+i.e. using the general syntax</p>
+<pre class="western" style="text-align: left">'&lt;' [ [&lt;integer&gt;=]&lt;expression&gt; [',' [&lt;integer&gt;=]&lt;expression&gt; ]* ] '&gt;' </pre><p align="left">
+<br/>
+Vectors that are simple numeric series can be represented</p>
+<pre class="western" style="text-align: left">'&lt;' [&lt;expression-int_first&gt; [ &lt;expression-int_second&gt; ]] '..' [ &lt;expression-int_last&gt; ] '&gt;'</pre><p align="left">
 where, if &lt;expression-int_second&gt; is missing an integer one
 greater than&nbsp;&lt;expression-int_first&gt; is used, and if
 &lt;expression-int_first&gt; is missing the number 1 is used. &nbsp;
 Thus, there would be the 42 numbers from one to forty-two indexed by
-the
-integers 0 to 41 in<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;..42&gt;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-so that the following would have value 10<br>
-
-
-
-
-
-
-
-
-
-
-<pre>&lt;..42&gt;.11</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-<h3>Code Concatenation</h3>
-
-The infix operator ";" is available in a code object to ignore its
-left-hand value and replace it with its right (if there is one).
-&nbsp;Thus the value of <br>
-
-<pre>&lt;expression 1&gt; ; &lt;expression 2&gt; ; ... ; &lt;expression n&gt;</pre>
-
-is &lt;expression n&gt;. &nbsp;And the value of <br>
-
-<pre>&lt;expression 1&gt; ; &lt;expression 2&gt; ; ... ;</pre>
-
-is the special empty value "<span style="font-family: monospace;">NULL</span>" (which is therefore a name for the value of "<span style="font-family: monospace;">{}!</span>")<br>
-
- 
-<h3>Boolean Expressions</h3>
-
-The standard environment in FTL includes two "built-in" values "<span style="font-family: monospace;">TRUE</span>" and "<span style="font-family: monospace;">FALSE</span>". &nbsp;In principle they are implemented as if they had been defined:<br>
-
-<pre>TRUE = [val]::{val!}<br>FALSE = [val]::{FALSE}<br></pre>
-
-That is, <span style="font-family: monospace;">TRUE</span> is a closure that will execute its argument and <span style="font-family: monospace;">FALSE</span> is a closure that will discard its argument and return <span style="font-family: monospace;">FALSE</span> instead. &nbsp;Thus if a value that is either <span style="font-family: monospace;">TRUE</span> or <span style="font-family: monospace;">FALSE</span> is given code as an argument: <br>
-
-<pre>&lt;true_or_false&gt; { &lt;code&gt; }!</pre>
-
-the result will be either the result of the code's execution or the value <span style="font-family: monospace;">FALSE</span>. &nbsp;Thus the code is conditionally executed.&nbsp;
-<h2><a class="mozTocH2" name="mozTocId347665"></a>Syntactic Details</h2>
-
-
-
-
-
-The format of the source file is not specified since it is normal for
-FTL expressions to be embedded in an external application.
-&nbsp;Typically such an application will apply such formatting
-conventions as:<br>
-
-
-
-
-
-
-
-
-
+the integers 0 to 41 in</p>
+<pre class="western" style="text-align: left">&lt;..42&gt;</pre><p align="left">
+so that the following would have value 10</p>
+<pre class="western" style="text-align: left">&lt;..42&gt;.11</pre><h3 class="western" align="left">
+Code Concatenation</h3>
+<p align="left">The infix operator &quot;;&quot; is available in a
+code object to ignore its left-hand value and replace it with its
+right (if there is one). &nbsp;Thus the value of 
+</p>
+<pre class="western" style="text-align: left">&lt;expression 1&gt; ; &lt;expression 2&gt; ; ... ; &lt;expression n&gt;</pre><p align="left">
+is &lt;expression n&gt;. &nbsp;And the value of 
+</p>
+<pre class="western" style="text-align: left">&lt;expression 1&gt; ; &lt;expression 2&gt; ; ... ;</pre><p align="left">
+is the special empty value &quot;<font face="monospace">NULL</font>&quot;
+(which is therefore a name for the value of &quot;<font face="monospace">{}!</font>&quot;)</p>
+<h3 class="western" align="left">Boolean Expressions</h3>
+<p align="left">The standard environment in FTL includes two
+&quot;built-in&quot; values &quot;<font face="monospace">TRUE</font>&quot;
+and &quot;<font face="monospace">FALSE</font>&quot;. &nbsp;In
+principle they are implemented as if they had been defined:</p>
+<pre class="western" style="text-align: left">TRUE = [val]::{val!}
+FALSE = [val]::{FALSE}</pre><p align="left">
+That is, <font face="monospace">TRUE</font> is a closure that will
+execute its argument and <font face="monospace">FALSE</font> is a
+closure that will discard its argument and return <font face="monospace">FALSE</font>
+instead. &nbsp;Thus if a value that is either <font face="monospace">TRUE</font>
+or <font face="monospace">FALSE</font> is given code as an argument: 
+</p>
+<pre class="western" style="text-align: left">&lt;true_or_false&gt; { &lt;code&gt; }!</pre><p align="left">
+the result will be either the result of the code's execution or the
+value <font face="monospace">FALSE</font>. &nbsp;Thus the code is
+conditionally executed.&nbsp; 
+</p>
+<h2 class="western" align="left"><a name="mozTocId347665"></a>Syntactic
+Details</h2>
+<p align="left">The format of the source file is not specified since
+it is normal for FTL expressions to be embedded in an external
+application. &nbsp;Typically such an application will apply such
+formatting conventions as:</p>
 <ul>
-
-
-
-
-
-
-
-
-
-  <li>discard of commented out lines (e.g. those beginning '#')</li>
-
-
-
-
-
-
-
-
-
-  <li>concatenation of lines ending with an escape (e.g. '\')</li>
-
-
-
-
-
-
-
-
-
-  <li>expansion of textual substitutions (e.g. base on FTL expressions) introduced with an expansion escape (e.g. '$')</li>
-
-
-
-
-
-
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">discard of commented
+	out lines (e.g. those beginning '#') 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">concatenation of
+	lines ending with an escape (e.g. '\') 
+	</p>
+	<li><p align="left">expansion of textual substitutions (e.g. base on
+	FTL expressions) introduced with an expansion escape (e.g. '$') 
+	</p>
 </ul>
-
-
-
-
-
-
-
-
-
-The characters '#', '\' and '$' are not used as part of FTL syntax.
-
-
-
-
-
-<pre>&lt;code-item&gt; ::= &lt;symbol&gt; | &lt;string&gt; |<br>                '[' | ']' | '{' | '}' | '&lt;' | '&gt;' | '(' | ')' |<br>                '!' | '~' |  <br>                ';' | ',' | ':' | '.'<br><br>&lt;symbol&gt; ::= &lt;integer&gt; | &lt;identifier&gt;<br><br>&lt;integer&gt; ::= &lt;digit&gt;+<br><br>&lt;identifier&gt; ::= &lt;common_identifier&gt; | &lt;builtin_identifier&gt;<br><br>&lt;common_identifier&gt; ::= &lt;alphabetic&gt; (&lt;alphabetic&gt; | '_' | &lt;digit&gt;)*<br><br>&lt;builtin_identifier&gt; ::= '_' &lt;digit&gt;+ <br></pre>
-
-
-
-
-
-
-The precedence of the various operators outlined above is specified as part of the syntax for an expression:
-<pre>&lt;expression&gt; ::= (&lt;index&gt; '=')* &lt;invocation&gt;<br><br>&lt;invocation&gt; ::= (&lt;substitution&gt; ['!']*)+ <br><br>&lt;substitution&gt; ::= &lt;retrieval&gt;+<br><br>&lt;retrieval&gt; ::= &lt;closure&gt;['.' &lt;index&gt;]*<br><br>&lt;closure&gt; ::= (&lt;base&gt; [':' | '::'])* &lt;base&gt;<br><br>&lt;base&gt; ::= '(' &lt;expression&gt; ')' |<br>           &lt;code&gt; |<br>           &lt;id_environment&gt; |<br>           &lt;identifier&gt; |<br>           &lt;vector&gt; |<br>           &lt;type_literal&gt;<br>           <br>&lt;code&gt; ::= '{' &lt;expression_list&gt; '}'<br><br>&lt;expression_list&gt; ::= &lt;expression&gt; (';' &lt;expression&gt;)* [';']<br><br>&lt;id_environment&gt; ::= '[' [&lt;binding_list&gt; | &lt;binding_list&gt; ',' &lt;unbound_list&gt; | &lt;unbound_list&gt;] ']' <br><br>&lt;binding_list&gt; ::= [&lt;binding&gt; (',' &lt;binding&gt;)*]  <br><br>&lt;unbound_list&gt; ::= &lt;index&gt; (',' &lt;index&gt;)*<br><br>&lt;binding&gt; ::= &lt;index&gt; '=' &lt;invocation&gt;&lt;vector&gt; ::= '&lt;' &lt;implied_series&gt; | &lt;series&gt; '&gt;'<br><br>&lt;index&gt; ::= &lt;identifier&gt; | &lt;type_literal&gt;<br><br>&lt;type_literal&gt; ::= &lt;integer&gt; |<br>                   &lt;string&gt; <br><br>&lt;series&gt; ::= &lt;expression&gt;*<br><br>&lt;implied_series&gt; ::= [&lt;expression&gt; [&lt;expression&gt;]] '..' [&lt;expression&gt;]<br></pre>
-
-
-
-
-
-
-<h2>Compilation and Semantics</h2>
-
-
-
-
-
-
-The semantics of the language can partly be specified by describing how
-an expression that is an equivalent canonical representation of a code
-value can be obtained (i.e. how a code value can be "compiled").
-&nbsp;This specification requires the premise of a small number of
-built-in closures:<br>
-
-
-
-
-
-
+<p align="left">The characters '#', '\' and '$' are not used as part
+of FTL syntax. 
+</p>
+<pre class="western" style="text-align: left">&lt;code-item&gt; ::= &lt;symbol&gt; | &lt;string&gt; |
+                '[' | ']' | '{' | '}' | '&lt;' | '&gt;' | '(' | ')' |
+                '!' | '&amp;' | '~' | '@' | 
+                ';' | ',' | ':' | '.'
+&lt;symbol&gt; ::= &lt;integer&gt; | &lt;identifier&gt;
+&lt;integer&gt; ::= &lt;digit&gt;+
+&lt;identifier&gt; ::= &lt;common_identifier&gt; | &lt;builtin_identifier&gt;
+&lt;common_identifier&gt; ::= &lt;alphabetic&gt; (&lt;alphabetic&gt; | '_' | &lt;digit&gt;)*
+&lt;builtin_identifier&gt; ::= '_' &lt;digit&gt;+ </pre><p align="left">
+The precedence of the various operators outlined above is specified
+as part of the syntax for an expression: 
+</p>
+<pre class="western" style="text-align: left">&lt;expression&gt; ::= (&lt;index&gt; '=')* &lt;invocation&gt;
+&lt;invocation&gt; ::= (&lt;substitution&gt; ['!']*)+ 
+&lt;substitution&gt; ::= &lt;retrieval&gt;+
+&lt;retrieval&gt; ::= &lt;closure&gt;['.' &lt;index&gt;]*
+&lt;closure&gt; ::= (&lt;base&gt; [':' | '::'])* &lt;base&gt;
+&lt;base&gt; ::= '(' &lt;expression&gt; ')' |
+           &lt;code&gt; |
+           &lt;id_environment&gt; |
+           &lt;identifier&gt; |
+           &lt;vector&gt; |
+           &lt;type_literal&gt;
+           
+&lt;code&gt; ::= '{' &lt;expression_list&gt; '}'
+&lt;expression_list&gt; ::= &lt;expression&gt; (';' &lt;expression&gt;)* [';']
+&lt;id_environment&gt; ::= '[' [&lt;binding_list&gt; | &lt;binding_list&gt; ',' &lt;unbound_list&gt; | &lt;unbound_list&gt;] ']' 
+&lt;binding_list&gt; ::= [&lt;binding&gt; (',' &lt;binding&gt;)*]  
+&lt;unbound_list&gt; ::= &lt;index&gt; (',' &lt;index&gt;)*
+&lt;binding&gt; ::= &lt;index&gt; '=' &lt;invocation&gt;&lt;vector&gt; ::= '&lt;' &lt;implied_series&gt; | &lt;series&gt; '&gt;'
+&lt;index&gt; ::= &lt;identifier&gt; | &lt;type_literal&gt;
+&lt;type_literal&gt; ::= &lt;integer&gt; |
+                   &lt;string&gt; 
+&lt;series&gt; ::= &lt;expression&gt;*
+&lt;implied_series&gt; ::= [&lt;expression&gt; [&lt;expression&gt;]] '..' [&lt;expression&gt;]</pre><h2 class="western" align="left">
+Compilation and Semantics</h2>
+<p align="left">The semantics of the language can partly be specified
+by describing how an expression that is an equivalent canonical
+representation of a code value can be obtained (i.e. how a code value
+can be &quot;compiled&quot;). &nbsp;This specification requires the
+premise of a small number of built-in closures:</p>
 <ul>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">substitute</span>: &nbsp;Closure x Value -&gt; Closure<br>
-
-
-
-
-
-
-Returns a closure in which the first unbound variable of the argument closure is bound to the value</li>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">cat</span>: Closure x Closure -&gt; Value<br>
-
-
-
-
-
-
-Evaluates both closures (which must have no unbound variables) and returns the value of the second</li>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">eval</span>: Closure -&gt; Value<br>
-
-
-
-
-
-
-Evaluates the closure and returns its value</li>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">push</span>: Env x Env -&gt; Env<br>
-
-
-
-
-
-
-Returns an environment in which the names, value mappings specified in
-both environments are available and in which any mapping in the second
-takes precedence when its name is also specified in the first </li>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">lookup</span>: Env x Value -&gt; Value<br>
-
-
-
-
-
-
-Returns the value associated with the argument value (interpreted as a name) in the environment provided</li>
-
-
-
-
-
-
-  <li><span style="font-weight: bold;">assign</span>: Env x Value x Value -&gt; Env<br>
-
-
-
-
-
-
-Returns the environment in which the the mapping named by the first value now maps on to the new (second) value provided</li>
-
-
-
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm"><b>substitute</b>:
+	&nbsp;Closure x Value -&gt; Closure<br/>
+Returns a closure in which
+	the first unbound variable of the argument closure is bound to the
+	value 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm"><b>cat</b>: Closure x
+	Closure -&gt; Value<br/>
+Evaluates both closures (which must have no
+	unbound variables) and returns the value of the second 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm"><b>eval</b>: Closure
+	-&gt; Value<br/>
+Evaluates the closure and returns its value 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm"><b>push</b>: Env x
+	Env -&gt; Env<br/>
+Returns an environment in which the names, value
+	mappings specified in both environments are available and in which
+	any mapping in the second takes precedence when its name is also
+	specified in the first 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm"><b>lookup</b>: Env x
+	Value -&gt; Value<br/>
+Returns the value associated with the
+	argument value (interpreted as a name) in the environment provided 
+	</p>
+	<li><p align="left"><b>assign</b>: Env x Value x Value -&gt;
+	Env<br/>
+Returns the environment in which the mapping named by the
+	first value now maps on to the new (second) value provided 
+	</p>
 </ul>
-
-
-
-
-
-
-The algorithms is specified as a series of "rewrite" rules that can be
-used to convert a code value into a "simpler" expression involving code
-values until the simplest (a code value with only a single symbol in
-it) can be replaced by the use of the&nbsp;<span style="font-weight: bold;">lookup</span> function above.<br>
-
-
-
-
-
-
-<br>
-
-
-
-
-
-
-As a simple example of compilation observe that <br>
-
-
-
-
-
-
-
-<pre>{ function! }</pre>
-
-
-
-
-
-
-(in the execution environment) could be "compiled" to the replacement
-
-<pre><span style="font-weight: bold;">eval</span> function<br></pre>
-
-
-
-
-
-
+<p align="left">The algorithm is specified as a series of &quot;rewrite&quot;
+rules that can be used to convert a code value into a &quot;simpler&quot;
+expression involving code values until the simplest (a code value
+with only a single symbol in it) can be replaced by the use of
+the&nbsp;<b>lookup</b> function above.<br/>
+<br/>
+As a simple example
+of compilation observe that 
+</p>
+<pre class="western" style="text-align: left">{ function! }</pre><p align="left">
+(in the execution environment) could be &quot;compiled&quot; to the
+replacement 
+</p>
+<pre class="western" style="text-align: left"><b>eval</b> function</pre><p align="left">
 because this is a closure value that has yet to be executed. &nbsp;The
 expressions are equivalent because both of the following would yield
-the same result:<br>
-
-
-
-
-
-
-
-<pre>{ function! }!</pre>
-
-
-
-
-
-
-<pre><span style="font-weight: bold;">eval</span> function!</pre>
-
-
-
-
-
-
-
-
-The rules use 'E' to specify an execution environment, and 'X' and 'Y'
-to specify symbols parsing to the syntax relevant to the operator each
-rule deals with. &nbsp;They are as follows:<br>
-
-
-
-
-
-
+the same result:</p>
+<pre class="western" style="text-align: left">{ function! }!
+<b>eval</b> function!</pre><p align="left">
+The rules use 'E' to specify an execution environment, and 'X' and
+'Y' to specify symbols parsing to the syntax relevant to the operator
+each rule deals with. &nbsp;They are as follows:</p>
 <ol>
-
-
-
-
-
-
-  <li>E::{&lt;index&gt;} =&gt; <span style="font-weight: bold;">lookup</span> E &lt;index&gt;</li>
-
-
-
-
-
-
-  <li>E::{ X::Y } =&gt; (<span style="font-weight: bold;">eval</span> E::{X})::{Y}</li>
-
-
-
-
-
-
-  <li>E::{ X:Y } =&gt; (<span style="font-weight: bold;">eval</span> (<span style="font-weight: bold;">push</span> E (<span style="font-weight: bold;">eval</span> E::{X})))::{Y}</li>
-
-
-
-
-
-
-  <li>E::{ X.Y } =&gt; <span style="font-weight: bold;">eval</span> ((<span style="font-weight: bold;">eval</span> E::{X})::{Y})</li>
-
-
-
-
-
-
-  <li>E::{ X Y } =&gt; <span style="font-weight: bold;">substitute</span> E::{X} E::{Y}</li>
-
-
-
-
-
-
-  <li>E::{ X! } =&gt; <span style="font-weight: bold;">eval</span> E::{X}</li>
-
-
-
-
-
-
-  <li>E::{ X=Y } =&gt; <span style="font-weight: bold;">cat</span> (<span style="font-weight: bold;">assign</span> E X&nbsp;E::{Y})&nbsp;E::{Y}</li>
-
-
-
-
-
-
-  <li>E::{ X;Y } =&gt; <span style="font-weight: bold;">cat</span> E::{X} E::{Y}</li>
-
-
-
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">E::{&lt;index&gt;} =&gt;
+	<b>lookup</b> E &lt;index&gt; 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X::Y } =&gt;
+	(<b>eval</b> E::{X})::{Y} 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X:Y } =&gt;
+	(<b>eval</b> (<b>push</b> E (<b>eval</b> E::{X})))::{Y} 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X.Y } =&gt; <b>eval</b>
+	((<b>eval</b> E::{X})::{Y}) 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X Y } =&gt;
+	<b>substitute</b> E::{X} E::{Y} 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X! } =&gt; <b>eval</b>
+	E::{X} 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">E::{ X=Y } =&gt; <b>cat</b>
+	(<b>assign</b> E X&nbsp;E::{Y})&nbsp;E::{Y} 
+	</p>
+	<li><p align="left">E::{ X;Y } =&gt; <b>cat</b> E::{X} E::{Y} 
+	</p>
 </ol>
-
-
-
-
-
-
-Simplification rules can be applied during this process when the
-environment is known to be constant or when the values associated with
-names in environments are known to be constant. &nbsp;If both
-compilation and simplification is applied to expressions the cost of
-execution can be significantly decreased.
-<h2><a class="mozTocH2" name="mozTocId878738"></a>Techniques</h2>
-
-
-
-
-
-
-
-
-
-This section illustrates the expressive power of the language so far introduced.<br>
-
-
-
-
-
-
-
-
-
-<h3><a class="mozTocH3" name="mozTocId431017"></a>Function calls</h3>
-
-
-
-
-
-
-
-
-
-Closures have an obvious relation to
+<p align="left">Simplification rules can be applied during this
+process when the environment is known to be constant or when the
+values associated with names in environments are known to be
+constant. &nbsp;If both compilation and simplification is applied to
+expressions the cost of execution can be significantly decreased. 
+</p>
+<h2 class="western" align="left"><a name="mozTocId878738"></a>Techniques</h2>
+<p align="left">This section illustrates the expressive power of the
+language so far introduced.  In particular it shows how many
+constructs present in other languages can be emulated.</p>
+<h3 class="western" align="left"><a name="mozTocId431017"></a>Function
+calls</h3>
+<p align="left">Closures have an obvious relation to
 procedures/procedures - the unbound symbols act as formal parameters
-and the code becomes the body of the procedure. &nbsp;In effect functions
-are curried - closure values being available at intermediate stages
-when not all of the arguments have been provided. &nbsp;For example<br>
-
-
-
-
-
-
-
-
-
-
-<pre>square = [n]: {times n n !}</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<pre>length = [width, height]: { sqroot (add (square width !) (square height !) !) ! }</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Notice that<br>
-
-
-
-
-
-
-
-
-
-
-<pre>square 5 </pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-simply returns the code in the binding that would evaluate 5 times 5 if
-it were executed. &nbsp;If its value were printed it would be<br>
-
-
-
-
-
-
-
-
-
-
-<pre>[n=5]: {times n n !}</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-whereas printing the expression<br>
-
-
-
-
-
-
-
-
-
-
-<pre>square 5 !</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-would produce the answer<br>
-
-
-
-
-
-
-
-
-
-
-<pre>25</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-similarly <br>
-
-
-
-
-
-
-
-
-
-
-<pre>width4length = length 4;</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-simply returns a binding which is similar to a function that adds four squared to its argument:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>[width=4, height]: { sqroot (add (square width !) (square height !) !) ! } </pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-The value of<br>
-
-
-
-
-
-
-
-
-
-
-<pre>width4length 3 !</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-would be<br>
-
-
-
-
-
-
-
-
-
-
-<pre>5</pre>
-
-
-
-
-
-
-
-
-
-<h3><a class="mozTocH3" name="mozTocId146722"></a>Records</h3>
-
-
-
-
-
-
-
-
-
-Closure bound variables can be used as the names in a record. &nbsp;for example<br>
-
-
-
-
-
-
-
-
-
-
-<pre>point = [x=15, y=32]</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-The fields can be accessed as follows:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>radius = length point.x point.y !</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<h3><a class="mozTocH3" name="mozTocId434879"></a>If .. then .. else</h3>
-
-Conditional execution of a single element of code code is provided
-using boolean expressions returning TRUE or FALSE (as described above).
-&nbsp;<br>
-
-<pre>too_big { <br>&nbsp; &nbsp; print "not small enough" !;<br>}!;</pre>
-
-If the given code returns one of the values <span style="font-family: monospace;">TRUE</span> or <span style="font-family: monospace;">FALSE</span>,
-a compound boolean expression can be built up in which each item in the
-chain is executed only if previous ones have evaluated to <span style="font-family: monospace;">TRUE</span>:<br>
-
-<pre>&lt;true_or_false&gt; {&lt;boolean_expression&gt;}! {&lt;boolean_expression&gt;}! ... {&lt;boolean_expression&gt;}!<br></pre>
-
-Thus this construct can be used as a conditionally executed "and".<br>
-
-The standard environment also includes a function "<span style="font-family: monospace;">invert</span>" that returns <span style="font-family: monospace;">FALSE</span> only if its argument is <span style="font-family: monospace;">TRUE</span> and returns <span style="font-family: monospace;">FALSE</span>
-otherwise. &nbsp;When combined with the "and" functionality above this
-provides a sufficient basis for the evaluation of any boolean
-expression.<br>
-
-It would also be possible to select between two (or more) elements of
-code by using the numeric values 0 and 1 to represent a condition in a
-function that takes the condition and two code values as arguments and
-choses which
-code value to execute depending on the numeric argument. &nbsp;One such
-definition might be:<br>
-
-
-
-
-
-
-
-
-
-
-<pre>if = [condition, if_part, else_part]: { &lt;if_part,&nbsp;else_part&gt;.(condition) }</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-which enables code to be written such as<br>
-
-
-
-
-
-
-
-
-
-
-<pre>if (max 1 radius !) {<br>    print "here already\n" !<br>}{<br>    print "travelling some way\n" !<br>}!</pre>
-
-
-
-
-
-
-
-
-
-Such code is not required, however, since the standard environment in FTL includes an "if" function which takes a <span style="font-family: monospace;">TRUE</span> or <span style="font-family: monospace;">FALSE</span> value as an argument rather than an integer.<br>
-<h3>Switch Statements</h3>
-Given the semantics of <span style="font-family: monospace;">TRUE</span> and <span style="font-family: monospace;">FALSE</span> it is possible to create a switch-like construct such as:<br>
-<pre>when = [cond,code]:{if cond {code!;FALSE} {TRUE}!}</pre>
-which enables code such as this to be written:<br>
-<pre>(when (equal n 1!) {echo "n is one"!})! <br>(when (equal n 2!) {echo "n is two"!})! <br>(when (equal n 3!) {echo "n is three"!})! <br>{echo "n is unknown"!}!;</pre>
-
-<h3><a class="mozTocH3" name="mozTocId937909"></a>For loops</h3>
-
-
-
-
-
-
-
-
-
-Repetitive execution can be provided recursively by a function that
-keeps decrementing its counter by one and applying the counter to an
-argument block of code, e.g.<br>
-
-
-
-
-
-
-
-
-
-
-<pre>for = [first, n, code]: <br>       { code n !;<br>         if ( gt n 0 ! ) <br>         {   for first minus n 1 ! code ! <br>         } {} !<br>       }</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-which enables code to be written such as<br>
-
-
-
-
-
-
-
-
-
-<pre style="margin-left: 40px;">for 0 4 [n]: {<br> &nbsp; &nbsp;print n!; print " squared is "!; print squared n ! ; print "\n"!;<br>}!</pre>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-which will print out the squares from 0 to 3.
-<h3><a class="mozTocH3" name="mozTocId737869"></a>Objects and their methods</h3>
-
-
-
-
-
-
-
-
-A record that combines both internal state and a number of methods that
-interact with that state can be constructed using a closure. &nbsp;For
-example:<br>
-
-
-
-
-
-
-
-<pre>point = [x,y]:{<br>    echo "New point";<br>    [   print = []:{<br>            echo "&lt;\$x,\$y&gt;"!<br>        },<br>        distance = []:{<br>            sqrt add times x x! times y y!!! <br>        },<br>        xcoord = []:{x},<br>        ycoord = []:{y},<br>        sub = [pt]: {<br>            sub x (pt.xcoord!) sub y (pt.ycoord!)!!<br>        }<br>    ]<br>}<br><br>p = point 4 5!;<br><br>p.print!;<br><br>q = point 2 1!;<br><br>(p.sub q!).print!</pre>
-
-
-
-
-
-
-would print out "New point", "&lt;4,5&gt;", "New point" and then "New point", "&lt;2,4&gt;". &nbsp;There are some points to note<br>
-
-
-
-
-
-
+and the code becomes the body of the procedure. &nbsp;In effect
+functions are curried - closure values being available at
+intermediate stages when not all of the arguments have been provided.
+&nbsp;For example</p>
+<pre class="western" style="text-align: left">square = [n]: {<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">mul</font></font> n n !}
+length = [width, height]: { sqroot (add (square width !) (square height !) !) ! }</pre><p align="left">
+Notice that</p>
+<pre class="western" style="text-align: left">square 5 </pre><p align="left">
+simply returns the code in the binding that would evaluate 5 times 5
+if it were executed. &nbsp;If its value were printed it would be</p>
+<pre class="western" style="text-align: left">[n=5]: {<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">mul</font></font> n n !}</pre><p align="left">
+(Note: in the implementation, there is no primitive that will print
+the value in this format.  Printing the value as &ldquo;[]:{mul n n
+!}&rdquo;, where only unbound variables are shown, is more convenient
+because of the size of the environment associated with a typical
+binding.)</p>
+<p align="left">whereas printing the expression</p>
+<pre class="western" style="text-align: left">square 5 !</pre><p align="left">
+would produce the answer</p>
+<pre class="western" style="text-align: left">25</pre><p align="left">
+similarly 
+</p>
+<pre class="western" style="text-align: left">width4length = length 4</pre><p align="left">
+simply assigns a binding which is similar to a function that adds
+four squared to its argument:</p>
+<pre class="western" style="text-align: left">[width=4, height]: { sqroot (add (square width !) (square height !) !) ! } </pre><p align="left">
+The value of</p>
+<pre class="western" style="text-align: left">width4length 3 !</pre><p align="left">
+would be</p>
+<pre class="western" style="text-align: left">5</pre><h3 class="western" align="left">
+<a name="mozTocId146722"></a>Records</h3>
+<p align="left">Closure bound variables can be used as the names in a
+record. &nbsp;for example</p>
+<pre class="western" style="text-align: left">point = [x=15, y=32]</pre><p align="left">
+The fields can be accessed as follows:</p>
+<pre class="western" style="text-align: left">radius = length point.x point.y !</pre><h3 class="western" align="left">
+<a name="mozTocId434879"></a>If .. then .. else</h3>
+<p align="left">Conditional execution of a single element of code
+code is provided using boolean expressions returning TRUE or FALSE
+(as described above). &nbsp;</p>
+<pre class="western" style="text-align: left">too_big { 
+  print &quot;not small enough&quot; !;
+}!</pre><p align="left">
+If the given code returns one of the values <font face="monospace">TRUE</font>
+or <font face="monospace">FALSE</font>, a compound boolean expression
+can be built up in which each item in the chain is executed only if
+previous ones have evaluated to <font face="monospace">TRUE</font>:</p>
+<pre class="western" style="text-align: left">&lt;true_or_false&gt; {&lt;boolean_expression&gt;}! {&lt;boolean_expression&gt;}! ... {&lt;boolean_expression&gt;}!</pre><p align="left">
+Thus this construct can be used as a conditionally executed
+&quot;and&quot;.<br/>
+The standard environment also includes a
+function &quot;<font face="monospace">invert</font>&quot; that
+returns <font face="monospace">FALSE</font> only if its argument is
+<font face="monospace">TRUE</font> and returns <font face="monospace">FALSE</font>
+otherwise. &nbsp;When combined with the &quot;and&quot; functionality
+above this provides a sufficient basis for the evaluation of any
+boolean expression.<br/>
+It would also be possible to select between
+two (or more) elements of code by using the numeric values 0 and 1 to
+represent a condition in a function that takes the condition and two
+code values as arguments and choses which code value to execute
+depending on the numeric argument. &nbsp;One such definition might
+be:</p>
+<pre class="western" style="text-align: left">if = [condition, if_part, else_part]: { 
+      <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">condition != FALSE {if_part!}!; </font></font>
+      <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">condition == FALSE {else_part!}!;</font></font> 
+}</pre><p align="left">
+which enables code to be written such as</p>
+<pre class="western" style="text-align: left">if (<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">more</font></font> radius 1 !) {
+    print &quot;here already\n&quot; !
+}{
+    print &quot;travelling some way\n&quot; !
+}!</pre><p align="left">
+Such a definition is not required, however, since the standard
+environment in FTL includes an &quot;<font face="Courier New, monospace">if</font>&quot;
+function which takes a <font face="monospace">TRUE</font> or <font face="monospace">FALSE</font>
+value as an argument.</p>
+<h3 class="western" align="left">Switch Statements</h3>
+<p align="left">Given the semantics of <font face="monospace">TRUE</font>
+and <font face="monospace">FALSE</font> it is possible to create a
+switch-like construct such as:</p>
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">switch</font></font> = [val, <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">val</font></font>codevec, default]:{
+         if (inenv valcodevec val!) {valcodevec.(vec)!} {default!}!
+}</pre><p align="left">
+(where &ldquo;<font face="Courier New, monospace">inenv env value!</font>&rdquo;
+is <font face="Courier New, monospace">TRUE</font> when the value is
+bound in <font face="Courier New, monospace">env</font>)  which
+enables code such as this to be written:</p>
+<pre class="western" style="text-align: left">switch n &lt;
+    1 = {echo &quot;n is one&quot;!},
+    2 = {echo &quot;n is two&quot;!},
+    3 = {echo &quot;n is three&quot;!}
+&gt; {echo &quot;n is unknown&quot;!}!;</pre><h3 class="western" align="left">
+<a name="mozTocId937909"></a>For loops</h3>
+<p align="left">Repetitive execution could be provided recursively by
+a function that keeps decrementing its counter by one and applying
+the counter to an argument block of code, e.g.</p>
+<pre class="western" style="text-align: left">forn = [n, code]: {
+         more n 0 ! {
+             forn (<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">sub</font></font> n 1 !) code ! 
+         }!;
+         code n !;
+       }</pre><p align="left">
+which enables code to be written such as</p>
+<pre class="western" style="margin-left: 2.71cm; text-align: left">forn 4 [n]: {
+  print n!; print &quot; squared is &quot;!; print squared n ! ; print &quot;\n&quot;!;
+}!</pre><p align="left">
+which will print out the squares from 0 to 4. 
+</p>
+<p align="left">Such a definition is not required, however, since the
+standard environment in FTL includes an &quot;<font face="Courier New, monospace">for</font>&quot;
+function which takes an environment and a closure value as an
+argument and applies each binding in the environment to the closure
+value.</p>
+<h3 class="western" align="left"><a name="mozTocId737869"></a>Objects
+and their methods</h3>
+<p align="left">A record that combines both internal state and a
+number of methods that interact with that state can be constructed
+using a closure. &nbsp;For example:</p>
+<pre class="western" style="text-align: left">point = [x,y]:{
+    echo &quot;New point&quot;;
+    [   print = []:{
+            echo &quot;&lt;\$x,\$y&gt;&quot;!
+        },
+        distance = []:{
+            sqrt add times x x! times y y!!! 
+        },
+        xcoord = []:{x},
+        ycoord = []:{y},
+        sub = [pt]: {
+            sub x (pt.xcoord!) sub y (pt.ycoord!)!!
+        }
+    ]
+}
+p = point 4 5!;
+p.print!;
+q = point 2 1!;
+(p.sub q!).print!</pre><p align="left">
+would print out &quot;New point&quot;, &quot;&lt;4,5&gt;&quot;, &quot;New
+point&quot; and then &quot;New point&quot;, &quot;&lt;2,4&gt;&quot;.
+&nbsp;There are some points to note</p>
 <ul>
-
-
-
-
-
-
-  <li>The "methods" must be closures, not code objects (hence the syntax "<span style="font-family: monospace;">[]:</span>" preceding the code values), only closures inherit the environment at the point of their definition. &nbsp;If we had used&nbsp;<span style="font-family: monospace;">print = {echo "&lt;\$x,\$y&gt;"}</span> only the code body would be returned by&nbsp;<span style="font-family: monospace;">p.print</span> which would have no particular values of "<span style="font-family: monospace;">x</span>" or "<span style="font-family: monospace;">y</span>" embedded in it.</li>
-
-
-
-
-
-
-  <li>The "object" returned has the arguments, <span style="font-family: monospace;">x</span> and <span style="font-family: monospace;">y</span>, from point bound into it but does not contain them in the record returned: using <span style="font-family: monospace;">p.x</span> and <span style="font-family: monospace;">p.y</span> would be an error because <span style="font-family: monospace;">x</span> and <span style="font-family: monospace;">y</span> are not parts of this record (this is why the methods <span style="font-family: monospace;">xcoord</span> and <span style="font-family: monospace;">ycoord</span> were defined).</li>
-
-
-
-
-
-
-  <li>If there is any initialization for the object to be performed it can be done in a code part to the definition of "<span style="font-family: monospace;">point</span>".</li>
-
-
-
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">The &quot;methods&quot;
+	must be closures, not code objects (hence the syntax &quot;<font face="monospace">[]:</font>&quot;
+	preceding the code values), only closures inherit the environment at
+	the point of their definition. &nbsp;If we had used&nbsp;<font face="monospace">print
+	= {echo &quot;&lt;\$x,\$y&gt;&quot;}</font> only the code body would
+	be returned by&nbsp;<font face="monospace">p.print</font> which
+	would have no particular values of &quot;<font face="monospace">x</font>&quot;
+	or &quot;<font face="monospace">y</font>&quot; embedded in it. 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">The &quot;object&quot;
+	returned has the arguments, <font face="monospace">x</font> and <font face="monospace">y</font>,
+	from point bound into it but does not contain them in the record
+	returned: using <font face="monospace">p.x</font> and <font face="monospace">p.y</font>
+	would be an error because <font face="monospace">x</font> and <font face="monospace">y</font>
+	are not parts of this record (this is why the methods <font face="monospace">xcoord</font>
+	and <font face="monospace">ycoord</font> were defined). 
+	</p>
+	<li><p align="left">If there is any initialization for the object to
+	be performed it can be done in a code part to the definition of
+	&quot;<font face="monospace">point</font>&quot;. 
+	</p>
 </ul>
-
-
-
-<h3>Argument Passing</h3>
-
-
-
-Although not built in to the language, methods of parameter passing can be emulated as follows.<br>
-
-
-
-<h4>Call by value</h4>
-
-
-
-In call by value an expression is evaluated and the resulting value is bound in to the closure invocation.
+<h3 class="western" align="left">Argument Passing</h3>
+<p align="left">Although not built in to the language, methods of
+parameter passing can be emulated as follows.</p>
+<h4 class="western" align="left">Call by value</h4>
+<p align="left">In call by value an expression is evaluated and the
+resulting value is bound in to the closure invocation. 
+</p>
 <ul>
-
-
-
-  <li>example argument syntax: <span style="font-family: monospace;">(plus a b!)</span></li>
-
-
-
-  <li>example argument read in closure body when bound as "x": <span style="font-family: monospace;">x</span></li>
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">example argument
+	syntax: <font face="monospace">(plus a b!)</font> 
+	</p>
+	<li><p align="left">example argument read in closure body when bound
+	as &quot;x&quot;: <font face="monospace">x</font> 
+	</p>
 </ul>
-
-
-
-<h4>Call by name</h4>
-
-
-
-In call by name the expression passed in to the invocation is re-evaluated in the context of the invocation on each use.<br>
-
-
-
+<h4 class="western" align="left">Call by name</h4>
+<p align="left">In call by name the expression passed in to the
+invocation is re-evaluated in the context of the invocation on each
+use.</p>
 <ul>
-
-
-
-  <li>example argument syntax: <span style="font-family: monospace;">{plus a b!}</span></li>
-
-
-
-  <li>example argument read in closure body when bound as "x": <span style="font-family: monospace;">(x!)</span></li>
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">example argument
+	syntax: <font face="monospace">{plus a b!}</font> 
+	</p>
+	<li><p align="left">example argument read in closure body when bound
+	as &quot;x&quot;: <font face="monospace">(x!)</font> 
+	</p>
 </ul>
-
-
-
-<h4>Call by reference - in</h4>
-
-
-
-In call-by-reference "in", the variable passed in to the invocation is read indirectly on on each use.<br>
-
-
-
+<h4 class="western" align="left">Call by reference - in</h4>
+<p align="left">In call-by-reference &quot;in&quot;, the variable
+passed in to the invocation is read indirectly on on each use.</p>
 <ul>
-
-
-
-  <li>example argument syntax:&nbsp;<span style="font-family: monospace;">[]:{a}</span></li>
-
-
-
-  <li>example argument read in closure body when bound as "x": <span style="font-family: monospace;">(x!)</span></li>
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">example argument
+	syntax:&nbsp;<font face="monospace">[]:{a}</font> 
+	</p>
+	<li><p align="left">example argument read in closure body when bound
+	as &quot;x&quot;: <font face="monospace">(x!)</font> 
+	</p>
 </ul>
-
-
-
-<h4>Call by reference in out</h4>
-
-
-
-In call by-reference "in out", the variable passed in to the invocation
-is read indirectly on each use and can also be written to indirectly.
+<h4 class="western" align="left">Call by reference in out</h4>
+<p align="left">In call by-reference &quot;in out&quot;, the variable
+passed in to the invocation is read indirectly on each use and can
+also be written to indirectly. 
+</p>
 <ul>
-
-
-
-  <li>example argument syntax:&nbsp;<span style="font-family: monospace;">[get=[]:{a}, set=[x]:{a=x}]</span></li>
-
-
-
-  <li>example argument read in closure body when bound as "x": <span style="font-family: monospace;">(x.get!)</span></li>
-
-
-
-  <li>example argument write in closure body when bound as "x": <span style="font-family: monospace;">x.set 3!</span></li>
-
-
-
+	<li><p align="left" style="margin-bottom: 0cm">example argument
+	syntax:&nbsp;<font face="monospace">[get=[]:{a}, set=[x]:{a=x}]</font>
+		</p>
+	<li><p align="left" style="margin-bottom: 0cm">example argument read
+	in closure body when bound as &quot;x&quot;: <font face="monospace">(x.get!)</font>
+		</p>
+	<li><p align="left">example argument write in closure body when
+	bound as &quot;x&quot;: <font face="monospace">x.set 3!</font> 
+	</p>
 </ul>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-</div>
-
-
-
-
-
-
-
-
-
-
-</body></html>
+</body>
+</html>
