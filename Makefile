@@ -25,35 +25,7 @@ ndebug=no
 
 # To make commands that run under WSL (but not natively) use
 #          make use_elf=no force_native=no
-
-# default build target
-#all:	ftl$(FTLVER) libs cscope
-all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
-
-help:
-	@echo "Makefile arguments: "
-	@echo "        ftl2=yes/no"
-	@echo "        use_xml=yes/no (default $(use_xml))"
-	@echo "        use_json=yes/no (default $(use_json)"
-	@echo "        use_elf =yes/no (default $(use_elf)"
-	@echo "        elf_lib_type=ELF/GELF (default $(elf_lib_type)"
-	@echo "        force_native=yes/no (default $force_native)"
-	@echo "        ndebug=yes/no default $(ndebug)"
-	@echo
-	@echo "  ftl2         - parse ftl2 (call closures when last arg supplied)"
-	@echo "  use_xml      - include commands for XML parsing"
-	@echo "  use_json     - include commands for JSON parsing"
-	@echo "  use_elf      - include commands for parsing ELF files"
-	@echo "  elf_lib_type - the name of the ELF API to use"
-	@echo "  force_native - (on win WSL) generate WIN32 code not Linux code"
-	@echo "  ndebug       - don't generate debuggable binaries"
-	@echo
-	@echo "Makefile targets: "
-	@echo "        all - makes all buildable objects"
-	@echo "        clean - cleans current build"
-	@echo "        install - make and copy result into installation dir "
-	@echo "        test - run built in tests"
-	@echo "        help - prints this text"
+# (On Ubuntu this may require package gcc-mingw-w64)
 
 
 # OS CUSTOMIZATION
@@ -164,6 +136,36 @@ endif
 
 $(info Building for OSARCH $(OSARCH) using $(CC) (building for $(BUILDARCH)))
 
+# default build target
+#all:	ftl$(FTLVER) libs cscope
+all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
+	@echo Making $^ by default
+
+help:
+	@echo "Makefile arguments: "
+	@echo "        ftl2=yes/no"
+	@echo "        use_xml=yes/no (default $(use_xml))"
+	@echo "        use_json=yes/no (default $(use_json)"
+	@echo "        use_elf =yes/no (default $(use_elf)"
+	@echo "        elf_lib_type=ELF/GELF (default $(elf_lib_type)"
+	@echo "        force_native=yes/no (default $force_native)"
+	@echo "        ndebug=yes/no default $(ndebug)"
+	@echo
+	@echo "  ftl2         - parse ftl2 (call closures when last arg supplied)"
+	@echo "  use_xml      - include commands for XML parsing"
+	@echo "  use_json     - include commands for JSON parsing"
+	@echo "  use_elf      - include commands for parsing ELF files"
+	@echo "  elf_lib_type - the name of the ELF API to use"
+	@echo "  force_native - (on win WSL) generate WIN32 code not Linux code"
+	@echo "  ndebug       - don't generate debuggable binaries"
+	@echo
+	@echo "Makefile targets: "
+	@echo "        all - makes all buildable objects"
+	@echo "        clean - cleans current build"
+	@echo "        install - make and copy result into installation dir "
+	@echo "        test - run built in tests"
+	@echo "        help - prints this text"
+
 DEFINES  := 
 LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF)
 INCLUDES := -I include
@@ -172,6 +174,7 @@ ifeq ($(ndebug),yes)
 endif
 CFLAGS   := $(CFLAGS_CC) -Wall $(CC_OPT_DEBUGSYMS) $(INCLUDES)
 LIBFTL_DEFS := $(DEFINES) $(DEFS_READLINE)
+
 # DYNAMIC FTL ENVIRONMENTS
 
 # FTLEXTS := ftlext-test.so
