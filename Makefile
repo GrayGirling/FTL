@@ -139,7 +139,6 @@ $(info Building for OSARCH $(OSARCH) using $(CC) (building for $(BUILDARCH)))
 # default build target
 #all:	ftl$(FTLVER) libs cscope
 all:	hi$(EXE) ftl$(FTLVER)$(EXE) cscope
-	@echo Making $^ by default
 
 help:
 	@echo "Makefile arguments: "

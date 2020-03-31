@@ -887,6 +887,7 @@ main(int argc, char **argv)
     
     DEBUG_CLI(printf(CODEID ": entered\n"););
     ftl_init();
+    codeid_set(CODEID);
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
 		     &init, &cmd_file, &echo_lines, &do_version, &do_prolog,

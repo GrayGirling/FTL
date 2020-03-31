@@ -442,6 +442,7 @@
 
 #define FORCEDEBUG
 
+// #define DEBUG_HISTORY DO
 // #define DEBUG_GC DO 
 // #define DEBUG_GCU DO
 // #define DEBUG_VALINIT DO 
@@ -471,6 +472,7 @@
 // #define DEBUG_CHOP DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
+#undef DEBUG_HISTORY
 #undef DEBUG_GC
 #undef DEBUG_GCU
 #undef DEBUG_VALINIT
@@ -502,6 +504,9 @@
 
 
 
+#ifndef DEBUG_HISTORY
+#define DEBUG_HISTORY OMIT
+#endif
 #ifndef DEBUG_GC
 #define DEBUG_GC OMIT
 #endif
@@ -1117,6 +1122,9 @@ codeid_set(const char *codeid)
             code_name_uc[i] = toupper(code_name[i]);
 
         code_name_uc[len+1] = '\0';
+
+        OMIT(printf("%s: set, upper case is '%s'\n",
+                    codeid, &code_name_uc[0]););
     }
 }
 
@@ -3654,6 +3662,19 @@ charsource_prompting_new(FILE *consolein, FILE *consoleout, const char *prompt)
 
 
 
+/* History is kept in one of two ways that differ only when the file system
+   is being used by more than one networked machine.
+   When stored globally all machines share the same history.
+   When stored locally each machine has its own history file.
+
+   Global history is used only when the global history file already exists.
+   (Thus it can be "turned on" by renaming a local history file as a global
+   one.)
+   Otherwise local history is used.
+*/
+
+
+
 
 #ifndef USE_READLINE_HISTORY
 #ifdef USE_READLINE
@@ -3701,7 +3722,7 @@ typedef struct
     bool this_is_open;        /* history was found in the local history file */
     bool global_is_open;      /* history was found in the global history file */
 } history_file_t;
-
+/* at most one of this_is_open and global_is_open will be set */
 
 
 
@@ -3725,6 +3746,14 @@ history_open(history_file_t *hist)
                                     strlen(history_instance) +
                                     strlen(READLINE_HISTORY_EXTENSION) + 4);
 
+    hist->global_history = FTL_MALLOC(strlen(hist->this_history) +
+                                      strlen(homedir) +
+                                      strlen(ENV_FTL_HOMEDIR_HOME) +
+                                      strlen(history_home) +
+                                      strlen(READLINE_HOME_DIR_PREFIX) +
+                                      strlen(READLINE_HISTORY_EXTENSION)
+                                      + 3);
+
     hist->this_is_open = FALSE;
     hist->global_is_open = FALSE;
 
@@ -3738,11 +3767,18 @@ history_open(history_file_t *hist)
 
         {   DIR *rldir = opendir(hist->this_history);
 
+            DEBUG_HISTORY(fprintf(stderr, "%smake '%s'\n",
+                                  rldir==NULL? "":"don't ",
+                                  hist->this_history););
             if (rldir == NULL)
             {   if (0 != mkdir(hist->this_history, 0770))
                 {   FTL_FREE(hist->this_history);
                     hist->this_history = NULL;
                 }
+                DEBUG_HISTORY(
+                    else fprintf(stderr, "failed to make '%s' - %s (rc %d)\n",
+                                 hist->this_history, strerror(errno), errno);
+                );
             } else
                 closedir(rldir);
         }
@@ -3751,36 +3787,36 @@ history_open(history_file_t *hist)
 
     if (NULL != hist->this_history) /* dir valid and memory available */
     {
-        /* Set up the actual name. */
+        /* Set up the name of the local history file. */
         sprintf(hist->this_history, "%s%s"OS_FILE_SEP
                                     READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
                                     READLINE_HISTORY_NAME "-%s"
                                     READLINE_HISTORY_EXTENSION,
                 homedir, ENV_FTL_HOMEDIR_HOME, history_home, history_instance);
+    }
+    if (hist->global_history != NULL)
+    {
+        /* Set up the name of the global history file. */
+        sprintf(hist->global_history, "%s%s"OS_FILE_SEP
+                                READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
+                                READLINE_HISTORY_NAME
+                                READLINE_HISTORY_EXTENSION,
+                homedir, ENV_FTL_HOMEDIR_HOME, history_home);
+    }
 
-        hist->this_is_open =
+    if (hist->this_history != NULL && hist->global_history != NULL)
+    {
+        hist->this_is_open = 
 #if USE_READLINE_HISTORY
             (read_history(hist->this_history) == 0);
 #endif
 #if USE_LINENOISE_HISTORY
             (linenoiseHistoryLoad(hist->this_history) == 0);
 #endif
-
-        hist->global_history = FTL_MALLOC(strlen(hist->this_history) +
-                                          strlen(homedir) +
-                                          strlen(ENV_FTL_HOMEDIR_HOME) +
-                                          strlen(history_home) +
-                                          strlen(READLINE_HOME_DIR_PREFIX) +
-                                          strlen(READLINE_HISTORY_EXTENSION)
-                                          + 3);
-
-        if (hist->global_history != NULL)
-        {   sprintf(hist->global_history, "%s%s"OS_FILE_SEP
-                                    READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
-                                    READLINE_HISTORY_NAME
-                                    READLINE_HISTORY_EXTENSION,
-                    homedir, ENV_FTL_HOMEDIR_HOME, history_home);
-        }
+        DEBUG_HISTORY(
+            fprintf(stderr, "history '%s' is%s loaded (rc %d)\n",
+                    hist->this_history==NULL? "NULL": hist->this_history,
+                    hist->this_is_open? "":" not", errno););
 
         if (hist->this_is_open)
             hist->global_is_open = FALSE;
@@ -3793,11 +3829,22 @@ history_open(history_file_t *hist)
 #if USE_LINENOISE_HISTORY
                 (linenoiseHistoryLoad(hist->global_history) == 0);
 #endif
+            DEBUG_HISTORY(
+                fprintf(stderr, "global history '%s' is%s loaded (rc %d)\n",
+                        hist->global_history==NULL? "NULL":hist->global_history,
+                        hist->global_is_open? "":" not", errno););
         }
-
         return TRUE;
     } else
-    {   hist->global_history = NULL;
+    {
+        if (hist->this_history != NULL)
+        {   FTL_FREE(hist->this_history);
+            hist->this_history = NULL;
+        }
+        if (hist->global_history != NULL)
+        {   FTL_FREE(hist->global_history);
+            hist->global_history = NULL;
+        }
         return FALSE;
     }
 }
@@ -3809,41 +3856,51 @@ history_open(history_file_t *hist)
 static void
 history_close(history_file_t *hist)
 {
+    if (hist->global_history != NULL && hist->global_is_open)
+    {
+#if USE_LINENOISE_HISTORY
+        linenoiseHistorySave(hist->global_history);
+#endif
+#if USE_READLINE_HISTORY
+        if (!hist->global_is_open) /* never true */
+            write_history(hist->global_history);
+        else
+        {   if (0 == append_history(READLINE_HISTORY_MAXLEN,
+                                    hist->global_history))
+                history_truncate_file(hist->global_history,
+                                      READLINE_HISTORY_MAXLEN);
+        }
+#endif
+        DEBUG_HISTORY(fprintf(stderr, "%s global history '%s' written "
+                              "(rc %d)\n",
+                              hist->global_is_open? "existing":"new",
+                              hist->global_history, errno););
+        FTL_FREE(hist->global_history);
+        hist->global_history = NULL;
+        hist->global_is_open = FALSE;
+    }
+    else
     if (hist->this_history != NULL)
     {
 #if USE_LINENOISE_HISTORY
          linenoiseHistorySave(hist->this_history);
 #endif
 #if USE_READLINE_HISTORY
-        if (hist->this_is_open)
+        if (!hist->this_is_open)
             write_history(hist->this_history);
         else
-        {   append_history(READLINE_HISTORY_MAXLEN, hist->this_history);
-            history_truncate_file(hist->this_history, READLINE_HISTORY_MAXLEN);
+        {   if (0 == append_history(READLINE_HISTORY_MAXLEN,
+                                    hist->this_history))
+                history_truncate_file(hist->this_history,
+                                      READLINE_HISTORY_MAXLEN);
         }
 #endif
+        DEBUG_HISTORY(fprintf(stderr, "%s history '%s' written (rc %d)\n",
+                              hist->this_is_open? "existing":"new",
+                              hist->this_history, errno););
         FTL_FREE(hist->this_history);
         hist->this_history = NULL;
         hist->this_is_open = FALSE;
-    }
-
-    if (hist->global_history != NULL)
-    {
-#if USE_LINENOISE_HISTORY
-        linenoiseHistorySave(hist->global_history);
-#endif
-#if USE_READLINE_HISTORY
-        if (hist->global_is_open)
-            write_history(hist->global_history);
-        else
-        {   append_history(READLINE_HISTORY_MAXLEN, hist->global_history);
-            history_truncate_file(hist->global_history,
-                                  READLINE_HISTORY_MAXLEN);
-        }
-#endif
-        FTL_FREE(hist->global_history);
-        hist->global_history = NULL;
-        hist->global_is_open = FALSE;
     }
 }
 
@@ -25222,10 +25279,12 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
         if (NULL == inchars)
         {   rc = errno;
             /* errors must be picked up by user - look at return code */
-            OMIT(parser_error(state,
-                             "couldn't open source file \"%s\" to read - "
-                             "%s (rc %d)\n",
-                              &filename[0], strerror(errno), errno););
+            /*GRAY*/DO(parser_error(state,
+                              "couldn't open source file \"%s\" "
+                              "on %spath \"%s\" to read - %s (rc %d)\n",
+                              &filename[0], NULL==path?"unset ":"",
+                              &pathname[0], strerror(errno), errno););
+            /*GRAY*/DO(parser_report(state, "codeid_uc '%s'\n", codeid_uc());); 
         } else
         {   (void)parser_expand_exec_int(state, inchars, NULL, NULL,
                                          /*expect_no_locals*/FALSE,
