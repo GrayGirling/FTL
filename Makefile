@@ -163,6 +163,7 @@ help:
 	@echo "        clean - cleans current build"
 	@echo "        install - make and copy result into installation dir "
 	@echo "        test - run built in tests"
+	@echo "        docs - convert primary docs to markdown (for github)"
 	@echo "        help - prints this text"
 
 DEFINES  := 

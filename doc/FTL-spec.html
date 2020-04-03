@@ -6,7 +6,7 @@
 	<meta name="generator" content="LibreOffice 6.3.5.2 (Windows)"/>
 	<meta name="author" content="Gray Girling"/>
 	<meta name="created" content="00:00:00"/>
-	<meta name="changed" content="2020-03-30T10:03:51.920000000"/>
+	<meta name="changed" content="2020-04-03T12:45:17.795000000"/>
 	<style type="text/css">
 		h2 { border: none; padding: 0cm }
 		h2.cjk { font-family: "NSimSun" }
@@ -489,46 +489,46 @@ and their methods</h3>
 <p align="left">A record that combines both internal state and a
 number of methods that interact with that state can be constructed
 using a closure. &nbsp;For example:</p>
-<pre class="western" style="text-align: left">point = [x,y]:{
-    echo &quot;New point&quot;;
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> = [x,y]:{
+    echo &quot;New point&quot;!;
     [   print = []:{
             echo &quot;&lt;\$x,\$y&gt;&quot;!
         },
-        distance = []:{
-            sqrt add times x x! times y y!!! 
-        },
         xcoord = []:{x},
         ycoord = []:{y},
-        sub = [pt]: {
-            sub x (pt.xcoord!) sub y (pt.ycoord!)!!
+        add = [pt]:{
+            vect (add x (pt.xcoord!)!) (add y (pt.ycoord!)!)!
+        },
+        <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">sub</font></font> = [pt]:{
+            vect (<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">sub</font></font> x (pt.xcoord!)!) (sub y (pt.ycoord!)!)!
         }
     ]
 }
-p = point 4 5!;
+p = <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> 4 5!;
 p.print!;
-q = point 2 1!;
+q = <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> 2 1!;
 (p.sub q!).print!</pre><p align="left">
 would print out &quot;New point&quot;, &quot;&lt;4,5&gt;&quot;, &quot;New
 point&quot; and then &quot;New point&quot;, &quot;&lt;2,4&gt;&quot;.
-&nbsp;There are some points to note</p>
+&nbsp;There are some things to note</p>
 <ul>
 	<li><p align="left" style="margin-bottom: 0cm">The &quot;methods&quot;
 	must be closures, not code objects (hence the syntax &quot;<font face="monospace">[]:</font>&quot;
 	preceding the code values), only closures inherit the environment at
-	the point of their definition. &nbsp;If we had used&nbsp;<font face="monospace">print
-	= {echo &quot;&lt;\$x,\$y&gt;&quot;}</font> only the code body would
-	be returned by&nbsp;<font face="monospace">p.print</font> which
-	would have no particular values of &quot;<font face="monospace">x</font>&quot;
-	or &quot;<font face="monospace">y</font>&quot; embedded in it. 
+	the point of their definition. 
 	</p>
 	<li><p align="left" style="margin-bottom: 0cm">The &quot;object&quot;
 	returned has the arguments, <font face="monospace">x</font> and <font face="monospace">y</font>,
 	from point bound into it but does not contain them in the record
 	returned: using <font face="monospace">p.x</font> and <font face="monospace">p.y</font>
-	would be an error because <font face="monospace">x</font> and <font face="monospace">y</font>
+	would return an error because <font face="monospace">x</font> and <font face="monospace">y</font>
 	are not parts of this record (this is why the methods <font face="monospace">xcoord</font>
 	and <font face="monospace">ycoord</font> were defined). 
 	</p>
+	<li><p align="left" style="margin-bottom: 0cm">(However, because <font face="Monospace">x</font>
+	and <font face="Monospace">y</font> are bound into the methods it is
+	possible to use <font face="Monospace">p.add.x</font> and <font face="Monospace">p.add.y</font>
+	for example!)</p>
 	<li><p align="left">If there is any initialization for the object to
 	be performed it can be done in a code part to the definition of
 	&quot;<font face="monospace">point</font>&quot;. 
@@ -543,7 +543,8 @@ resulting value is bound in to the closure invocation.
 </p>
 <ul>
 	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax: <font face="monospace">(plus a b!)</font> 
+	syntax: <font face="monospace">(</font><font face="monospace">add</font><font face="monospace">
+	a b!)</font> 
 	</p>
 	<li><p align="left">example argument read in closure body when bound
 	as &quot;x&quot;: <font face="monospace">x</font> 
@@ -555,7 +556,8 @@ invocation is re-evaluated in the context of the invocation on each
 use.</p>
 <ul>
 	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax: <font face="monospace">{plus a b!}</font> 
+	syntax: <font face="monospace">{</font><font face="monospace">add</font><font face="monospace">
+	a b!}</font> 
 	</p>
 	<li><p align="left">example argument read in closure body when bound
 	as &quot;x&quot;: <font face="monospace">(x!)</font> 
@@ -588,5 +590,9 @@ also be written to indirectly.
 	bound as &quot;x&quot;: <font face="monospace">x.set 3!</font> 
 	</p>
 </ul>
+<p align="left"><br/>
+<br/>
+
+</p>
 </body>
 </html>

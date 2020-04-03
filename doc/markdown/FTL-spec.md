@@ -634,41 +634,41 @@ interact with that state can be constructed using a closure.  For
 example:
 
 ``` western
-point = [x,y]:{
-    echo "New point";
+vect = [x,y]:{
+    echo "New point"!;
     [   print = []:{
             echo "<\$x,\$y>"!
         },
-        distance = []:{
-            sqrt add times x x! times y y!!! 
-        },
         xcoord = []:{x},
         ycoord = []:{y},
-        sub = [pt]: {
-            sub x (pt.xcoord!) sub y (pt.ycoord!)!!
+        add = [pt]:{
+            vect (add x (pt.xcoord!)!) (add y (pt.ycoord!)!)!
+        },
+        sub = [pt]:{
+            vect (sub x (pt.xcoord!)!) (sub y (pt.ycoord!)!)!
         }
     ]
 }
-p = point 4 5!;
+p = vect 4 5!;
 p.print!;
-q = point 2 1!;
+q = vect 2 1!;
 (p.sub q!).print!
 ```
 
 would print out "New point", "\<4,5\>", "New point" and then "New
-point", "\<2,4\>".  There are some points to note
+point", "\<2,4\>".  There are some things to note
 
   - The "methods" must be closures, not code objects (hence the syntax
     "\[\]:" preceding the code values), only closures inherit the
-    environment at the point of their definition.  If we had used print
-    = {echo "\<\\$x,\\$y\>"} only the code body would be returned
-    by p.print which would have no particular values of "x" or "y"
-    embedded in it.
+    environment at the point of their definition.
 
   - The "object" returned has the arguments, x and y, from point bound
     into it but does not contain them in the record returned: using p.x
-    and p.y would be an error because x and y are not parts of this
+    and p.y would return an error because x and y are not parts of this
     record (this is why the methods xcoord and ycoord were defined).
+
+  - (However, because x and y are bound into the methods it is possible
+    to use p.add.x and p.add.y for example\!)
 
   - If there is any initialization for the object to be performed it can
     be done in a code part to the definition of "point".
@@ -683,7 +683,7 @@ be emulated as follows.
 In call by value an expression is evaluated and the resulting value is
 bound in to the closure invocation.
 
-  - example argument syntax: (plus a b\!)
+  - example argument syntax: (add a b\!)
 
   - example argument read in closure body when bound as "x": x
 
@@ -692,7 +692,7 @@ bound in to the closure invocation.
 In call by name the expression passed in to the invocation is
 re-evaluated in the context of the invocation on each use.
 
-  - example argument syntax: {plus a b\!}
+  - example argument syntax: {add a b\!}
 
   - example argument read in closure body when bound as "x": (x\!)
 
