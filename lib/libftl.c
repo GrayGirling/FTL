@@ -3734,45 +3734,36 @@ history_open(history_file_t *hist)
     const char *history_instance = "local";
     char hostname[255];
 
+#if USE_READLINE_HISTORY
+    using_history();
+#endif
     hostname[0] = '\0';
     if (0 == gethostname(hostname, 255))
         history_instance = &hostname[0];
 
-    hist->this_history = FTL_MALLOC(strlen(homedir) +
-                                    strlen(ENV_FTL_HOMEDIR_HOME) +
-                                    strlen(history_home) +
-                                    strlen(READLINE_HOME_DIR_PREFIX) +
-                                    strlen(READLINE_HISTORY_NAME) +
-                                    strlen(history_instance) +
-                                    strlen(READLINE_HISTORY_EXTENSION) + 4);
-
-    hist->global_history = FTL_MALLOC(strlen(hist->this_history) +
-                                      strlen(homedir) +
-                                      strlen(ENV_FTL_HOMEDIR_HOME) +
-                                      strlen(history_home) +
-                                      strlen(READLINE_HOME_DIR_PREFIX) +
-                                      strlen(READLINE_HISTORY_EXTENSION)
-                                      + 3);
-
+    hist->this_history = NULL;
+    hist->global_history = NULL;
     hist->this_is_open = FALSE;
     hist->global_is_open = FALSE;
-
 #ifdef HAS_OPENDIR
     if (NULL != hist->this_history)
     {
         /* Check directory exists, or try to create it */
-        sprintf(hist->this_history, "%s%s"OS_FILE_SEP
-                                    READLINE_HOME_DIR_PREFIX "%s",
-                homedir, ENV_FTL_HOMEDIR_HOME, history_home);
+        char *rldirname = &hostname[0]; /* temporarily */
 
-        {   DIR *rldir = opendir(hist->this_history);
+        if (strlen(homedir)+strlen(ENV_FTL_HOMEDIR_HOME)+
+            strlen(OS_FILE_SEP)+strlen(READLINE_HOME_DIR_PREFIX)+
+            strlen(history_home) < sizeof(hostname))
+        {   DIR *rldir;
 
+            sprintf(rldirname, "%s%s" OS_FILE_SEP READLINE_HOME_DIR_PREFIX "%s",
+                    homedir, ENV_FTL_HOMEDIR_HOME, history_home);
+            rldir = opendir(rldirname);
             DEBUG_HISTORY(fprintf(stderr, "%smake '%s'\n",
-                                  rldir==NULL? "":"don't ",
-                                  hist->this_history););
+                                  rldir==NULL? "":"don't ", rldirname););
             if (rldir == NULL)
-            {   if (0 != mkdir(hist->this_history, 0770))
-                {   FTL_FREE(hist->this_history);
+            {   if (0 != mkdir(rldirname, 0770))
+                {   FTL_FREE(rldirname);
                     hist->this_history = NULL;
                 }
                 DEBUG_HISTORY(
@@ -3782,27 +3773,48 @@ history_open(history_file_t *hist)
             } else
                 closedir(rldir);
         }
+        DEBUG_HISTORY(
+            else fprintf(stderr,
+                         "can't check redline directory - filename too long\n");
+        );
     }
 #endif
+
+    hist->this_history = FTL_MALLOC(strlen(homedir) +
+                                    strlen(ENV_FTL_HOMEDIR_HOME) +
+                                    strlen(history_home) +
+                                    strlen(READLINE_HOME_DIR_PREFIX) +
+                                    strlen(READLINE_HISTORY_NAME) +
+                                    strlen(history_instance) +
+                                    strlen(READLINE_HISTORY_EXTENSION) + 4);
 
     if (NULL != hist->this_history) /* dir valid and memory available */
     {
         /* Set up the name of the local history file. */
         sprintf(hist->this_history, "%s%s"OS_FILE_SEP
-                                    READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
-                                    READLINE_HISTORY_NAME "-%s"
-                                    READLINE_HISTORY_EXTENSION,
+                READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
+                READLINE_HISTORY_NAME "-%s"
+                READLINE_HISTORY_EXTENSION,
                 homedir, ENV_FTL_HOMEDIR_HOME, history_home, history_instance);
     }
+
+    hist->global_history = FTL_MALLOC(strlen(hist->this_history) +
+                                      strlen(homedir) +
+                                      strlen(ENV_FTL_HOMEDIR_HOME) +
+                                      strlen(history_home) +
+                                      strlen(READLINE_HOME_DIR_PREFIX) +
+                                      strlen(READLINE_HISTORY_EXTENSION)
+                                      + 3);
     if (hist->global_history != NULL)
     {
         /* Set up the name of the global history file. */
         sprintf(hist->global_history, "%s%s"OS_FILE_SEP
-                                READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
-                                READLINE_HISTORY_NAME
-                                READLINE_HISTORY_EXTENSION,
+                READLINE_HOME_DIR_PREFIX "%s" OS_FILE_SEP
+                READLINE_HISTORY_NAME
+                READLINE_HISTORY_EXTENSION,
                 homedir, ENV_FTL_HOMEDIR_HOME, history_home);
     }
+
 
     if (hist->this_history != NULL && hist->global_history != NULL)
     {
@@ -3906,8 +3918,15 @@ history_close(history_file_t *hist)
 
 
 
+#if USE_READLINE_HISTORY
+static void history_add(const char *line)
+{   (void)add_history(line);
+}
+#endif
+
+
 #if USE_LINENOISE_HISTORY
-static void add_history(const char *line)
+static void history_add(const char *line)
 {   (void)linenoiseHistoryAdd(line);
 }
 #endif
@@ -3919,7 +3938,7 @@ static void add_history(const char *line)
 typedef void *history_file_t ;
 #define history_open(histfile) (TRUE)
 #define history_close(histfile)
-#define add_history(line)
+#define history_add(line)
 
 
 #endif /* USE_READLINE_HISTORY */
@@ -3987,7 +4006,8 @@ charsource_readline_rdch(charsource_t *base_source)
         if (source->prompt_needed)
         {   char *nextline;
 
-            DEBUG_CONSOLE(DPRINTF("calling readline\n");)
+            DEBUG_CONSOLE(DPRINTF("calling readline - prompt '%s'\n",
+                                  source->prompt);)
 #ifdef USE_READLINE
             nextline = readline(source->prompt);
 #endif
@@ -4027,7 +4047,10 @@ charsource_readline_rdch(charsource_t *base_source)
                 {   ch='\n';
                     source->prompt_needed = TRUE;
                 } else
-                    add_history(nextline);
+                {
+                    DEBUG_HISTORY(DPRINTF("add history line\n");)
+                    history_add(nextline);
+                }
                 DEBUG_CONSOLE(DPRINTF("first ch: '%c'\n", ch);)
             } else
             {   charsource_string_close(base_source);
@@ -25279,12 +25302,11 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
         if (NULL == inchars)
         {   rc = errno;
             /* errors must be picked up by user - look at return code */
-            /*GRAY*/DO(parser_error(state,
+            OMIT(parser_error(state,
                               "couldn't open source file \"%s\" "
                               "on %spath \"%s\" to read - %s (rc %d)\n",
                               &filename[0], NULL==path?"unset ":"",
                               &pathname[0], strerror(errno), errno););
-            /*GRAY*/DO(parser_report(state, "codeid_uc '%s'\n", codeid_uc());); 
         } else
         {   (void)parser_expand_exec_int(state, inchars, NULL, NULL,
                                          /*expect_no_locals*/FALSE,
