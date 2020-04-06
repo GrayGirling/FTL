@@ -187,10 +187,11 @@ ifeq ($(ftl2),yes)
 LIBFTL_DEFS += -DFTL_AUTORUN
 FTLVER := 2
 endif
-LIBFTL_OBJS := libftl$(FTLVER)$(OBJ) filenames$(OBJ) libdyn$(OBJ) $(OBJS_READLINE)
+LIBFTL_OBJS := libftl$(FTLVER)$(OBJ) filenames$(OBJ) libdyn$(OBJ)  $(OBJS_READLINE)
 
+FTL := ./ftl
 FTL_DEFS :=
-FTL_OBJS := ftl$(OBJ) $(LIBFTL_OBJS)
+FTL_OBJS := ftl$(OBJ) $(LIBFTL_OBJS) 
 FTL_LIBS := $(LIBS)
 
 ifeq ($(ftl2),yes)
@@ -236,6 +237,9 @@ install-hi: hi$(EXE)
 %$(OBJ): %.c
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
+tools/%.str: tools/%.ftl
+	$(FTL) -np -q -- io filetostring $< > $@
+
 libftl$(FTLVER)$(OBJ): libftl.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBFTL_DEFS) $(LIBFTL_INCS) -c -o $@ $<
 
@@ -251,7 +255,7 @@ filenames$(OBJ): filenames.c
 penv$(OBJ): penv.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(PENV_DEFS) $(PENV_INCS) -c -o $@ $<
 
-ftl$(OBJ): ftl.c
+ftl$(OBJ): ftl.c tools/ftl_fns.str
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(FTL_DEFS) $(FTL_INCS) -c -o $@ $<
 
 hi$(OBJ): hi.c
@@ -267,7 +271,7 @@ libdyn.c: libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
 
-ftl$(FTLVER)$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile
+ftl$(FTLVER)$(EXE): $(FTL_OBJS) ftl.h ftl_internal.h Makefile 
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(FTL_OBJS) $(FTL_LIBS)
 
 penv$(FTLVER)$(EXE): $(PENV_OBJS) ftl.h ftl_internal.h Makefile

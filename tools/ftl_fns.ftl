@@ -10,8 +10,52 @@
 #        FTL_PROLOG=tools/ftl_fns.ftl ./ftl
 #
 
+set codeid "ftl"
+
 set printf io.fprintf io.out
 set errorf io.fprintf io.err
+set printf_hb[hbf,fmt,vals]:{.hb=int_fmt_hexbits hbf!;printf fmt vals!;int_fmt_hexbits hb!;}
+set printfd printf_hb (-1)
+set printfx printf_hb (0)
+set printx[val]:{printfx "%v\n"<val>!;}
+set print[val]:{printfd "%v\n"<val>!;}
+
+#-----------------------------------------------------------------------------
+# script paths
+#-----------------------------------------------------------------------------
+
+set basename[path]:{
+   .pel = split sys.fs.sep path!;
+   .elcount = len pel!;
+   if (elcount gt 0) { pel.(elcount-1) } { "" }!
+}
+
+set dirname[path]:{
+   .pel = split sys.fs.sep path!;
+   .elcount = len pel!;
+   if (elcount gt 1) {
+      pel.(elcount-1)=NULL; join sys.fs.sep pel!
+   } {
+      sys.fs.thisdir
+   }!
+}
+
+set path_startwith[path,dir]:{
+   .plen = len path!;
+   if plen == 0 { dir } { join sys.shell.pathsep <dir, path>! }!
+}
+
+set path_addstart[pathenv,dir]:{
+   .path = if (inenv sys.env pathenv!) {sys.env.(pathenv)}{""}!;
+   sys.env.(pathenv) = path_startwith path dir!;
+   # printf "env %s now '%s'\n"<pathenv,sys.env.(pathenv)>!;
+}
+
+if (sys.fs.home != NULL) {
+   path_addstart "FTL_PATH" (join sys.fs.sep <sys.fs.home, "."+(codeid)>!)!;
+}{}
+
+######################
 
 set op_errors ""
 

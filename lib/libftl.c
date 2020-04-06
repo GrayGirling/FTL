@@ -9468,7 +9468,7 @@ dir_string_get(dir_t *dir, const char *name)
 
 
 
-/*! Use a constant string (with given length) to index a directory
+/*! Use a constant string literal (with given length) to index a directory
  */
 extern const value_t *
 dir_stringl_get(dir_t *dir, const char *name, size_t namelen)
@@ -9529,6 +9529,174 @@ dir_count(dir_t *dir)
 #define dir_env_end_set(_dir, _end) (_dir)->env_end = _end
 
 
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Lists                                                            *
+ *          =====                                                            *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+/* This is a list type that makes no assumptions about the thing it is a list
+   of.  In particular it does not require the list content to have a reserved
+   "next" field.
+*/
+
+
+
+/*! function used to delete things in a list during list_delete
+ */ 
+typedef void list_thing_delete_fn_t(void *thing);
+
+
+/*! function used to enumerate things in a list during list_enum
+ *      !param arg   - argument passed in to list_enum
+ *      !param thing - the thing the list element contained
+ *  enumerations continue until the value returned is not NULL
+ *  (if the enumeration stops because of a non-NULL return this value
+ *   will be returned as the result of list_enum)
+ */
+typedef void *list_thing_enum_fn_t(void *arg, void *thing);
+
+
+typedef struct list_element_s
+{   struct list_element_s *link;
+    void *thing;
+} list_element_t;
+
+
+
+
+typedef struct
+{   list_element_t *first;
+    list_element_t **ref_last;
+} list_t;
+
+
+
+
+static void list_init(list_t *list)
+{   list->first = NULL;
+    list->ref_last = &list->first;
+}
+
+
+
+static void list_delete(list_t *list, list_thing_delete_fn_t *delete_fn)
+{   list_element_t *thing = list->first;
+
+    while (PTRVALID(thing))
+    {   list_element_t *doomed = thing;
+        thing = thing->link;
+        if (delete_fn != NULL)
+            (*delete_fn)(doomed->thing);
+        FTL_FREE(doomed);
+    }
+
+    list_init(list);
+}
+
+
+
+static bool list_add_start(list_t *list, void *thing)
+{   list_element_t *element = malloc(sizeof(list_element_t));
+    if (element != NULL)
+    {   element->link = list->first;
+        element->thing = thing;
+        if (list->ref_last == &list->first)
+            list->ref_last = &element->link;
+        list->first = element;
+        return true;
+    }
+    else
+        return false;
+}
+
+
+
+
+static bool list_element_start(list_t *list, void **out_thing)
+{   list_element_t *element = list->first;
+    if (element != NULL)
+    {   *out_thing = element->thing;
+        return true;
+    }
+    else
+    {   *out_thing = NULL;
+        return false;
+    }
+}
+
+
+
+
+#if 0 //unused
+static bool list_add_end(list_t *list, void *thing)
+{   list_element_t *element = malloc(sizeof(list_element_t));
+    if (element != NULL)
+    {   element->link = NULL;
+        element->thing = thing;
+        *list->ref_last = element;
+        list->ref_last = &element->link;
+        return true;
+    }
+    else
+        return false;
+}
+#endif
+
+
+
+#if 0 //unused
+static bool list_element_end(list_t *list, void **out_thing)
+{   list_element_t *element = *list->ref_last;
+    if (element != NULL)
+    {   *out_thing = element->thing;
+        return true;
+    }
+    else
+    {   *out_thing = NULL;
+        return false;
+    }
+}
+#endif
+
+
+
+
+static bool list_remove_start(list_t *list, void **out_thing)
+{   list_element_t *first = list->first;
+    if (first != NULL)
+    {   list->first = first->link;
+        if (list->first == NULL)
+            list->ref_last = &list->first;
+        *out_thing = first->thing;
+        first->link = NULL;
+        FTL_FREE(first);
+        return true;
+    }
+    else
+        return false;
+}
+
+
+
+static void *list_enum(list_t *list,
+                       list_thing_enum_fn_t *enum_fn, void *enum_arg)
+{   void *rc = NULL;
+    list_element_t *element = list->first;
+    while (element != NULL && rc == NULL)
+    {   rc = (*enum_fn)(enum_arg, element->thing);
+        element = element->link;
+    }
+    return rc;
+}
 
 
 
@@ -13725,8 +13893,8 @@ dir_regkeyval_new(key_t root, bool writeable,
 
 
 struct dir_stack_s
-{   dir_t dir;
-    dir_t *stack;
+{   dir_t dir;          /* directory representing stack */
+    dir_t *stack;       /* the stack of directories */
 } /* dir_stack_t */;
 
 
@@ -13775,6 +13943,22 @@ dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
                          codeid(), newdir);)
         *pos = dir_value(newdir);
         value_unlocal(dir_value(newdir));
+        return TRUE;
+    } else
+        return FALSE;
+}
+
+
+
+
+
+
+
+static bool
+dir_stack_delete_at_pos(dir_stack_pos_t pos)
+{   if (PTRVALID(pos))
+    {   DEBUG_VALLINK(DPRINTF("%p: stack stack delete here\n", *pos));
+        *pos = (*pos)->link;
         return TRUE;
     } else
         return FALSE;
@@ -15299,6 +15483,7 @@ struct value_coroutine_s
     dir_stack_t *env;           /* stack of enclosing directories defining the
                                    current environment in which values should
                                    be looked up */
+    list_t left_envs;           /* stack of environments left on "enter" */
     dir_t *root;                /* a directory containing main namespace */
     dir_t *opdefs;              /* operator definitions in force */
     suspend_fn_t *sleep;        /* function used to sleep for n ms */
@@ -15329,6 +15514,7 @@ type_t type_coroutine = &type_coroutine_val;
 static void
 value_coroutine_delete(value_t *value)
 {   parser_state_t *state = (parser_state_t *)value;
+    list_delete(&state->left_envs, /*delete_fn*/NULL);
     /* close source down */
     if (PTRVALID(state))
         FTL_FREE(state);
@@ -15337,11 +15523,27 @@ value_coroutine_delete(value_t *value)
 
 
 
+static void *list_value_enum_mark(void *arg, void *thing)
+{   int heap_version = (int)(ptrdiff_t)arg;
+    value_t *val = (value_t *)thing;
+    value_mark_version(val, heap_version);
+    return NULL; /* enumerate all */
+}
+
+
+
+static void valuelist_mark_version(list_t *list, int heap_version)
+{    list_enum(list, &list_value_enum_mark, (void *)(ptrdiff_t)heap_version);
+}
+
+
+
 
 static void
 value_coroutine_markver(const value_t *value, int heap_version)
 {   parser_state_t *state = (parser_state_t *)value;
     value_mark_version(dir_stack_value(state->env), heap_version);
+    valuelist_mark_version(&state->left_envs, heap_version);
     value_mark_version(dir_value(state->root), heap_version);
     value_mark_version(dir_value(state->opdefs), heap_version);
 }
@@ -15401,6 +15603,7 @@ value_coroutine_init(parser_state_t *state, dir_stack_t *env, dir_t *root,
         value_init(&state->value, type_coroutine, on_heap);
     linesource_init(&state->source);
     state->env = env;
+    list_init(&state->left_envs);
     state->echo_log = NULL;
     state->echo_fmt = NULL;
     state->root = root;
@@ -15553,6 +15756,12 @@ extern bool /* ok */
 parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
                        dir_t *newdir, bool outer_visible)
 {   return dir_stack_push_at_pos(pos, newdir, outer_visible);
+}
+
+
+extern bool /* ok */
+parser_env_delete_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos)
+{   return dir_stack_delete_at_pos(pos);
 }
 
 
@@ -22282,7 +22491,20 @@ cli(parser_state_t *state, const char *init_cmds, const char *rcfile)
 
 
 
-/* This function may cause a garbage collection */
+/*! Execute argv as delimiter or option separated ftl commands
+ *
+ *  The argv provided is updated and provides the remaining tokens.
+ *    @param state     - current parser state
+ *    @param code_name - name of the utility
+ *    @param execpath  - file directory path from which to take FTL sources
+ *    @param argv      - 1st sym in an array of symbols
+ *    @param argn      - number of syms in array
+ *    @param out_ends_with_delim - TRUE when last parsed item is the delimiter
+ *
+ *  Otherwise command sequences between commas are parsed.
+ *
+ *  This function may cause a garbage collection
+ */
 extern bool
 argv_cli_ending(parser_state_t *state, const char *code_name,
                 const char *execpath, const char **argv, int argc,
@@ -24481,7 +24703,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     mod_add_val(fscmds, "sep", value_string_new_measured(sep));
     mod_add_val(fscmds, "nowhere", value_cstring_new_measured(OS_FS_NOWHERE));
     mod_add_val(fscmds, "thisdir", value_cstring_new_measured(OS_FS_DIR_HERE));
-    mod_add_val(fscmds, "userdir", value_string_new_measured(homedir));
+    mod_add_val(fscmds, "home", value_string_new_measured(homedir));
     mod_add_val(fscmds, "rcfile", value_string_new_measured(rcfile_name));
     FTL_FREE((void *)homedir);
     mod_add_val(fscmds, "casematch", OS_FS_CASE_EQ? value_true: value_false);
@@ -28035,6 +28257,15 @@ fn_lock(const value_t *this_fn, parser_state_t *state)
 /*! Push a new envronment on the stack that will be used when new variables
  *  are defined.  Make previous environments "invisible" if \c env_end is
  *  FALSE
+ *
+ *  Before operation called:  <env>::<env>
+ *  In this function (start): <env>::<env>::<argenv>
+ *                                        <-
+ *                                         +------ calling pos
+ *  In this function (end):   <env>::<env>::<new>::<argenv>
+ *                                        <-
+ *                                         +------ calling pos
+ *  After operation returns:  <env>::<env>::<new>
  */
 static const value_t *
 parser_enter_dir(const value_t *this_fn, parser_state_t *state,
@@ -28044,11 +28275,14 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state,
     dir_t *env;
 
     if (value_as_dir(dir, &env))
-    {   dir_stack_pos_t pos = parser_env_calling_pos(state);
+    {   dir_stack_pos_t calling_pos = parser_env_calling_pos(state);
+        const value_t *calling_dirval = *calling_pos;
 
         /* insert the directory above our return position so that it is
            still there when we return */
-        parser_env_push_at_pos(state, pos, env, outer_visible);
+        parser_env_push_at_pos(state, calling_pos, env, outer_visible);
+        list_add_start(&state->left_envs, (void *)calling_dirval);
+        /* (to check against any attempt to leave) */
     } else
         parser_report_help(state, this_fn);
 
@@ -28060,6 +28294,62 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state,
 
 
 
+/*! Remove an added envronment from the stack that was used for new variables.
+ *
+ *  Before operation called:  <env>::<env>::<new>
+ *  In this function (start): <env>::<env>::<new>::<argenv>
+ *                                        <-     <-
+ *                                         |      +------ calling pos
+ *                                         +------------- leave pos
+ *  In this function (end):   <env>::<env>::<argenv>
+ *                                        <-
+ *                                         +------ leave pos
+ *  After operation returns:  <env>::<env>
+ *
+ *  Returns the environment that was deleted from the stack.
+ */
+static const value_t *
+parser_leave_dir(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *val = &value_null;
+
+    dir_stack_pos_t calling_pos = parser_env_calling_pos(state);
+    dir_stack_pos_t leave_pos =
+        dir_stack_pos_enclosing(parser_env_stack(state),
+                                dir_at_stack_pos(calling_pos));
+    const value_t *leave_envval = leave_pos == NULL? NULL: *leave_pos;
+    const value_t *leave_dirval = calling_pos == NULL? NULL: *calling_pos;
+    const value_t *enter_dirval = NULL;
+
+    /* remove the directory above our calling position so that it is
+       no longer there when we return */
+    /* BUT don't do this unless it's the position we remembered as our
+       last leave environment */ 
+    if (list_element_start(&state->left_envs, (void **)&enter_dirval) &&
+        enter_dirval != NULL && enter_dirval == leave_envval)
+    {
+        const value_t *lost_calling_env = NULL;
+        list_remove_start(&state->left_envs, (void **)&lost_calling_env);
+        /* remove record of entry */
+        parser_env_delete_at_pos(state, calling_pos);
+        /* leave_dirval should be lost now */
+        val = leave_dirval;
+    }
+    else {
+        parser_error(state, "unmatched leave and enter calls - not leaving\n");
+    }
+
+    return val;
+}
+
+
+
+
+
+
+
+
+/*! enters the argument environment without hiding the previous one */
 static const value_t *
 fn_enter(const value_t *this_fn, parser_state_t *state)
 {   return parser_enter_dir(this_fn, state, /*outer_visible*/FALSE);
@@ -28069,7 +28359,7 @@ fn_enter(const value_t *this_fn, parser_state_t *state)
 
 
 
-
+/*! enters the argument environment hiding the previous one */
 static const value_t *
 fn_restrict(const value_t *this_fn, parser_state_t *state)
 {   return parser_enter_dir(this_fn, state, /*outer_visible*/TRUE);
@@ -28078,28 +28368,23 @@ fn_restrict(const value_t *this_fn, parser_state_t *state)
 
 
 
+/*! returns the environment discarded */
+static const value_t *
+fn_leaving(const value_t *this_fn, parser_state_t *state)
+{   return parser_leave_dir(this_fn, state);
+}
 
-#if 0
-/* won't work because calling environment remembers the return position
-   independentely of the state
- */
+
+
+
+/*! returns no value - just removes previously entered environment */
 static const value_t *
 fn_leave(const value_t *this_fn, parser_state_t *state)
-{   dir_stack_pos_t calling = parser_env_calling_pos(state);
-    dir_stack_pos_t outer = dir_stack_pos_enclosing(parser_env_stack(state),
-                                                    dir_at_stack_pos(calling));
-
-    if (NULL == outer)
-        parser_error(state, "can't leave last environment\n");
-    else
-        /* we lose "leave"'s invocation environment ... when we return from
-           "leave" this means that the normal return will return from an
-           extra level of the stack */
-        parser_env_return(state, calling);
-
+{   parser_leave_dir(this_fn, state);
     return &value_null;
 }
-#endif
+
+
 
 
 
@@ -28658,11 +28943,12 @@ cmds_generic_dir(parser_state_t *state, dir_t *cmds)
     mod_addfnscope(cmds, "restrict",
               "<env> - restrict further commands to those in <env>",
               &fn_restrict, 1, scope);
-#if 0
     mod_addfn(cmds, "leave",
               "- exit the environment last entered or restricted",
               &fn_leave, 0);
-#endif
+    mod_addfn(cmds, "leaving",
+              "- exit the environment last entered or restricted & return it",
+              &fn_leaving, 0);
     mod_addfn(cmds, "domain",
               "<env> - generate vector of names in <env>",
               &fn_domain, 1);
