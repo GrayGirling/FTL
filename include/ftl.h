@@ -1419,6 +1419,9 @@ extern dir_t *
 parser_env_copy(parser_state_t *parser_state);
 
 extern dir_t *
+parser_env_copy_pos(parser_state_t *parser_state, dir_stack_pos_t pos);
+
+extern dir_t *
 parser_opdefs(const parser_state_t *parser_state);
 
 extern const value_t *
@@ -1438,6 +1441,10 @@ parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
 /* Restore environment stack back to previous (outer) level */
 extern void
 parser_env_return(parser_state_t *parser_state, dir_stack_pos_t pos);
+
+/* The first position on the environment stack (for locals) */
+extern dir_stack_pos_t
+parser_env_locals_pos(const parser_state_t *parser_state);
 
 /* The environment stack position when the current function was called */
 extern dir_stack_pos_t
@@ -1911,22 +1918,22 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
     
 #define parser_expand_exec(state, source, cmd_str, rc_file_id, no_locals)     \
         parser_expand_exec_int(state, source, cmd_str, rc_file_id, no_locals, \
-                               FALSE)
+                               /*interactive*/FALSE)
 
 #define parser_expand_string_exec(state, cstring, stringlen, no_locals)       \
         parser_expand_exec(state,                                             \
-               charsource_cstring_new(#cstring, cstring,          \
+               charsource_cstring_new(#cstring, cstring,                      \
                                                   stringlen),                 \
-                           NULL, NULL, no_locals)
+                           /*cmd_str*/NULL, /*rc_file_id*/NULL, no_locals)
 
 #define parser_expand_file_exec(state, filename, no_locals)                   \
         parser_expand_exec(state, charsource_file_new(filename),              \
-                           NULL, NULL, no_locals)
+                           /*cmd_str*/NULL, /*rc_file_id*/NULL, no_locals)
 
 #define parser_expand_file_path_exec(state, path, filename, no_locals)        \
         parser_expand_exec(state, charsource_file_path_new(path, filename,    \
                                                            strlen(filename)), \
-                           NULL, NULL, no_locals)
+                           /*cmd_str*/NULL, /*rc_file_id*/NULL, no_locals)
 
 
 /*! Find charsource for an initialization file based on code name.

@@ -377,8 +377,7 @@ genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
 
 
 typedef const value_t *
-ftl_scan_value_fn(const char **ref_line, parser_state_t *state,
-                  const value_t *arg);
+ftl_scan_value_fn(const char **ref_line, parser_state_t *state, void *arg);
 
 /*! Generic ftl function that updates the parse state provided at argument
  *  'argstart'+1 and generates an FTL value from the prefix which
@@ -389,8 +388,7 @@ ftl_scan_value_fn(const char **ref_line, parser_state_t *state,
  */
 extern const value_t *
 genfn_scan(const value_t *this_fn, parser_state_t *state,
-           int argstart, ftl_scan_value_fn *fnparse,
-           const value_t *arg);
+           int argstart, ftl_scan_value_fn *fnparse, void *arg);
 
     
 /*          Printing					                     */

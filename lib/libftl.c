@@ -33,7 +33,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    Mar 2019
+** date    Apr 2020
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -206,7 +206,6 @@
 /* #define USE_FTL_XML */
 /* #define USE_READLINE */
 /* #define USE_LINENOISE */
-#define EXIT_ON_CTRL_C
 
 #ifdef FTL_AUTORUN
 #define VERSION_MAJ 2
@@ -214,7 +213,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 23
+#define VERSION_MIN 24
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -242,7 +241,11 @@
 
 /*#define FTL_BOOL_ISINT*/
 
-#define TRAP_SIGNAL_TERMINATE 0
+#define FTL_TRAP_EXCEPTIONS 1
+/* throw an FTL exception when Ctrl-C is typed */
+#define FTL_TRAP_SIGNAL_TERMINATE 0
+/* throw an FTL exception when SIGTERM exception is detected */
+
 #define FTL_ERROR_TRAIL_LINES 4
 
 #ifdef _WIN32
@@ -312,6 +315,11 @@
 #define OP_FN         "fn"
 #define OP_ASSOC      "assoc"
 
+#define LHV_FN_GET        "_get"  /* name of extra function to return @x val */
+#define PARSE_BASE_RET_ID "_base" /* for user-provided base function ID */
+
+#define DIR_STACK_DEPTH_REPORT_LIMIT 100
+
 #define PRINTSTACK_MAX 32
 #define PATHNAME_MAX 1024 /* max characters in a full file name */
 
@@ -324,12 +332,13 @@
 #endif
 
 #define FTL_LINESOURCE_NAME_MAX 64
-#define FTL_ID_MAX              64
+#define FTL_ID_MAX              128
 #define FTL_CMDNAME_MAX         FTL_ID_MAX
 #define FTL_PRINTF_MAX          4096
 #define FTL_SYSENV_VAL_MAX      4096
 #define FTL_STRING_MAX          4096
 #define FTL_ARGNAMES_CACHED     8
+
 
 #define HAS_TOWUPPER    /* C99 function */
 #define HAS_TOWLOWER    /* C99 function */
@@ -460,7 +469,7 @@
 // #define DEBUG_ENV DO 
 // #define DEBUG_MOD DO
 // #define DEBUG_SOCK DO 
-// #define DEBUG_OP DO 
+// #define DEBUG_OP DO
 // #define DEBUG_RCFILE DO
 // #define DEBUG_EXECV DO
 // #define DEBUG_MODEXEC DO 
@@ -470,6 +479,8 @@
 // #define DEBUG_FILEPATH DO
 // #define DEBUG_SOCKET DO
 // #define DEBUG_CHOP DO
+// #define DEBUG_OPTERM DO
+// #define DEBUG_ENTER DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_HISTORY
@@ -500,6 +511,8 @@
 #undef DEBUG_FILEPATH
 #undef DEBUG_SOCKET
 #undef DEBUG_CHOP
+#undef DEBUG_OPTERM
+#undef DEBUG_ENTER
 #endif
 
 
@@ -585,8 +598,14 @@
 #ifndef DEBUG_SOCKET
 #define DEBUG_SOCKET OMIT
 #endif
-#ifndef DEBUG_CHOPP
+#ifndef DEBUG_CHOP
 #define DEBUG_CHOP OMIT
+#endif
+#ifndef DEBUG_OPTERM
+#define DEBUG_OPTERM OMIT
+#endif
+#ifndef DEBUG_ENTER
+#define DEBUG_ENTER OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -4944,7 +4963,8 @@ parse_type_id(const char **ref_line, type_t *out_type)
 
 
 
-
+/*! TRUE when two types are equal
+ */
 STATIC_INLINE bool
 type_equal(type_t kind1, type_t kind2)
 {   return kind1 == kind2 || kind1->id == kind2->id;
@@ -5114,7 +5134,8 @@ value_islocal(value_t *val)
 
 
 
-
+/*! Return the type a value has
+ */
 STATIC_INLINE type_t
 value_type(const value_t *val)
 {   return val->kind;
@@ -5125,6 +5146,8 @@ value_type(const value_t *val)
 
 
 
+/*! Return the name of the type a value has
+ */
 extern const char *
 value_type_name(const value_t *val)
 {   if (NULL == val)
@@ -5139,6 +5162,8 @@ value_type_name(const value_t *val)
 
 
 
+/*! TRUE when the type of a value is the one specified
+ */
 extern bool
 value_type_equal(const value_t *val, type_t kind)
 {   return PTRVALID(val) && type_equal(val->kind, kind);
@@ -5148,6 +5173,8 @@ value_type_equal(const value_t *val, type_t kind)
 
 
 
+/*! Check that the type of a value is the one specified (giving an error if not)
+ */
 extern bool
 value_istype(const value_t *val, type_t kind)
 {   if (NULL == val)
@@ -6724,11 +6751,17 @@ value_string_get_fn_t(const value_stringbase_t *value,
                       const char **out_buf, size_t *out_len);
 
 
+typedef bool
+value_string_cut_fn_t(const value_stringbase_t *value,
+                      size_t offset, size_t len);
+
+
 
 
 struct value_stringbase_s
 {   value_t value;               /* string used as a value */
     value_string_get_fn_t *get;  /* function to find string base and len */
+    value_string_cut_fn_t *cut;  /* optional function to reduce to substring */
 } /* value_stringbase_t */;
 
 
@@ -6752,6 +6785,20 @@ value_stringbase_get(const value_stringbase_t *value,
 
 
 
+STATIC_INLINE bool
+value_stringbase_cut(const value_stringbase_t *value,
+                     size_t offset, size_t len)
+{   if (value->cut == NULL)
+        return FALSE;
+    else
+        return (*value->cut)(value, offset, len);
+}
+
+
+
+
+
+
 extern bool
 value_string_get(const value_t *value, const char **out_buf, size_t *out_len)
 {   bool ok = FALSE;
@@ -6768,6 +6815,23 @@ value_string_get(const value_t *value, const char **out_buf, size_t *out_len)
     return ok;
 }
 
+
+
+
+
+/*! Cut the string down to a substring, if possible */
+static bool
+value_string_trycut(const value_t *value, size_t offset, size_t len)
+{   bool ok = FALSE;
+
+    if (value_istype(value, type_string))
+    {   const value_stringbase_t *str = (const value_stringbase_t *)value;
+        ok = value_stringbase_cut(str, offset,  len);
+    }
+    /* else type error */
+
+    return ok;
+}
 
 
 
@@ -7038,6 +7102,7 @@ value_cstring_init(value_string_t *str, const char *string, size_t len,
 {   str->string = string;
     str->len = len;
     str->base.get = &value_string_get_fn;
+    str->base.cut = NULL;
     return value_init(&str->base.value, &type_cstringlit_val, on_heap);
 }
 
@@ -7081,6 +7146,7 @@ value_string_init(value_string_t *str, char *string, size_t len, bool on_heap)
     str->string = string;
     str->len = len;
     str->base.get = &value_string_get_fn;
+    str->base.cut = NULL;
     return value_init(&str->base.value, &type_stringlit_val, on_heap);
 }
 
@@ -7286,11 +7352,41 @@ value_substring_get_fn(const value_stringbase_t *value,
             *out_len = str->len;
         else
         {   *out_len = refsize - offset;
-            ok = FALSE;
         }
     } else
     {   *out_buf = refstr+refsize;
         *out_len = 0;
+        OMIT(DPRINTF("%s: substring get failed offset (%d) > size (%d)\n",
+                     codeid(), (int)offset, (int)refsize););
+        ok = FALSE;
+    }
+    return ok;
+}
+
+
+
+
+
+
+
+
+static bool
+value_substring_cut_fn(const value_stringbase_t *value,
+                       size_t offset, size_t len)
+{   value_substring_t *str = (value_substring_t *)value;
+    bool ok = TRUE;
+
+    if (offset <= str->len)
+    {   size_t oldlen = str->len - offset;
+        str->offset += offset;
+        if (len <= oldlen)
+        {   str->len = len;
+        } else
+        {   str->len = 0;
+        }
+    } else
+    {   str->offset += str->len;
+        str->len = 0;
         ok = FALSE;
     }
     return ok;
@@ -7325,6 +7421,7 @@ value_substring_init(value_substring_t *str, value_stringbase_t *refstr,
     str->offset = offset;
     str->len    = len;
     str->base.get = &value_substring_get_fn;
+    str->base.cut = &value_substring_cut_fn;
     initval = value_init(value_stringbase_value(&str->base),
                          &type_substring_val, on_heap);
     value_unlocal(value_stringbase_value(refstr));
@@ -7360,6 +7457,22 @@ value_substring_new(const value_t *string, size_t offset, size_t len)
     }
     return newstr;
 }
+
+
+
+
+
+/*! Cut a string down to a substring
+ */
+static bool
+value_string_cut(const value_t **ref_value, size_t offset, size_t len)
+{   bool ok = value_string_trycut(*ref_value, offset, len);
+    if (!ok)
+        *ref_value = value_substring_new(*ref_value, offset, len);
+    return ok;
+}
+
+
 
 
 
@@ -9041,7 +9154,8 @@ values_stream_init(void)
 
 
 
-
+/*! Given a dir_t return it as a basic value_t
+ */
 extern value_t *
 (dir_value)(dir_t *dir)
 {   return &dir->value;
@@ -9170,7 +9284,8 @@ value_dir_bind_print_name(dir_t *dir, const value_t *name,
 
 
 
-/* used for debugging */
+/*! Print the domain in a directory, but not the range - used for debugging
+ */
 static int
 dir_print_names(outchar_t *out, const value_t *root, const value_t *value)
 {   dir_bind_print_arg_t pr;
@@ -9589,11 +9704,11 @@ static void list_init(list_t *list)
 
 
 static void list_delete(list_t *list, list_thing_delete_fn_t *delete_fn)
-{   list_element_t *thing = list->first;
+{   list_element_t *element = list->first;
 
-    while (PTRVALID(thing))
-    {   list_element_t *doomed = thing;
-        thing = thing->link;
+    while (PTRVALID(element))
+    {   list_element_t *doomed = element;
+        element = element->link;
         if (delete_fn != NULL)
             (*delete_fn)(doomed->thing);
         FTL_FREE(doomed);
@@ -9603,7 +9718,8 @@ static void list_delete(list_t *list, list_thing_delete_fn_t *delete_fn)
 }
 
 
-
+/* Push a new thing on to the start of the list
+ */
 static bool list_add_start(list_t *list, void *thing)
 {   list_element_t *element = malloc(sizeof(list_element_t));
     if (element != NULL)
@@ -9620,7 +9736,8 @@ static bool list_add_start(list_t *list, void *thing)
 
 
 
-
+/* Return the thing in the first element of the list
+ */
 static bool list_element_start(list_t *list, void **out_thing)
 {   list_element_t *element = list->first;
     if (element != NULL)
@@ -9669,7 +9786,8 @@ static bool list_element_end(list_t *list, void **out_thing)
 
 
 
-
+/*! Remove the first thing in the list
+ */
 static bool list_remove_start(list_t *list, void **out_thing)
 {   list_element_t *first = list->first;
     if (first != NULL)
@@ -9684,6 +9802,57 @@ static bool list_remove_start(list_t *list, void **out_thing)
     else
         return false;
 }
+
+
+
+
+/*! Locate the item containing something, searching from the start to end
+ */
+static list_element_t *list_find_first(list_t *list, void *thing)
+{   list_element_t *element = list->first;
+
+    while (PTRVALID(element) && element->thing != thing)
+    {   element = element->link;
+    }
+
+    return element;
+}
+
+
+
+
+/*! Remove elements from the start until one containing thing is found.
+ *  Don't remove anything if thing isn't found
+ */
+static bool list_remove_start_until(list_t *list, void *new_start_thing,
+                                    list_thing_delete_fn_t *delete_fn)
+{   list_element_t *element = list_find_first(list, new_start_thing);
+    DEBUG_ENTER(DPRINTF("%s: seek start thing %p %s\n",
+                        codeid(), new_start_thing,
+                        element == NULL?"FAILED":"OK"););
+    if (element != NULL)
+    {   element = list->first;
+        /* So it is in the list somewhere... */
+        while (PTRVALID(element) && element->thing != new_start_thing)
+        {   void *lost_thing = NULL;
+            list_remove_start(list, &lost_thing);
+            DEBUG_ENTER(DPRINTF("%s: remove %sexcess enter record\n",
+                                codeid(), lost_thing == NULL?"NULL ":""););
+            if (lost_thing != NULL && delete_fn != NULL)
+                (*delete_fn)(lost_thing);
+            element = list->first;
+        }
+        
+        return TRUE;
+    }
+    else
+    {   DEBUG_ENTER(DPRINTF("%s: current leave/enter record missing\n",
+                            codeid()););
+        return FALSE;
+    }
+}
+
+
 
 
 
@@ -13880,6 +14049,7 @@ dir_regkeyval_new(key_t root, bool writeable,
 
 
 
+/* typedef value_t **dir_stack_pos_t; */
 
 
 
@@ -13992,11 +14162,11 @@ dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end)
 
 
 
-
-extern dir_stack_pos_t
-dir_stack_last_pos(dir_stack_t *dir)
-{   if (NULL != dir && NULL != dir->stack)
-        return &dir->stack->value.link;
+/*! Pointer to the first directory position in a stack */
+static dir_stack_pos_t
+dir_stack_top_pos(dir_stack_t *dir)
+{   if (NULL != dir)
+        return (void*)&dir->stack;
     else
         return NULL;
 }
@@ -14005,10 +14175,11 @@ dir_stack_last_pos(dir_stack_t *dir)
 
 
 
-static dir_stack_pos_t
-dir_stack_top_pos(dir_stack_t *dir)
-{   if (NULL != dir)
-        return (void*)&dir->stack;
+/*! Pointer to the second directory position in a stack */
+extern dir_stack_pos_t
+dir_stack_last_pos(dir_stack_t *dir)
+{   if (NULL != dir && NULL != dir->stack)
+        return &dir->stack->value.link;
     else
         return NULL;
 }
@@ -14036,6 +14207,21 @@ dir_at_stack_pos(dir_stack_pos_t dir_pos)
     else
         return NULL;
 }
+
+
+#if 0
+static void
+dir_at_stack_pos_set(dir_stack_pos_t pos, dir_t *dir)
+{  if (DIR_STACK_POS_BAD != pos)
+        *pos = dir_value(dir);
+}
+#endif
+
+
+
+
+
+
 
 
 
@@ -14315,6 +14501,8 @@ dir_stack_copyinit(dir_stack_t *dirstack, dir_stack_t *old)
 
 
 
+/*! Make a new dir stack with the same stack of directories as another
+ */
 extern dir_stack_t *
 dir_stack_copy(dir_stack_t *old)
 {   dir_stack_t *dirstack = (dir_stack_t *)FTL_MALLOC(sizeof(dir_stack_t));
@@ -14322,6 +14510,26 @@ dir_stack_copy(dir_stack_t *old)
     if (NULL != dirstack)
     {   dir_stack_init(dirstack, &type_dir_stack_val, /*on_heap*/TRUE);
         dir_stack_copyinit(dirstack, old);
+    }
+    return dirstack;
+}
+
+
+
+
+
+/*! Make a new dir stack containing the single directory referred to by a pos
+ *  (That directory becomes the base directory of a new stack)
+ */
+extern dir_stack_t *
+dir_stack_copy_pos(dir_stack_pos_t pos)
+{   dir_stack_t *dirstack = (dir_stack_t *)FTL_MALLOC(sizeof(dir_stack_t));
+
+    if (NULL != dirstack)
+    {   dir_stack_init(dirstack, &type_dir_stack_val, /*on_heap*/TRUE);
+        if (NULL != dirstack && *pos != NULL &&
+            value_type_equal(*pos, type_dir))
+            dirstack->stack = (dir_t *)*pos;
     }
     return dirstack;
 }
@@ -15736,6 +15944,12 @@ parser_env_copy(parser_state_t *parser_state)
 }
 
 extern dir_t *
+parser_env_copy_pos(parser_state_t *parser_state, dir_stack_pos_t pos)
+{   dir_stack_t *newstack = dir_stack_copy_pos(pos);
+    return dir_stack_dir(newstack);
+}
+
+extern dir_t *
 parser_opdefs(const parser_state_t *parser_state)
 {   return (parser_state)->opdefs;
 }
@@ -15768,6 +15982,12 @@ parser_env_delete_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos)
 extern void
 parser_env_return(parser_state_t *parser_state, dir_stack_pos_t pos)
 {   dir_stack_return((parser_state)->env, pos);
+}
+
+
+extern dir_stack_pos_t
+parser_env_locals_pos(const parser_state_t *parser_state)
+{   return dir_stack_top_pos((parser_state)->env);
 }
 
 
@@ -16375,6 +16595,7 @@ parse_id(const char **ref_line, char *buf, size_t len)
 {   const char *start = *ref_line;
     const char *line = start;
     char ch = *line;
+    OMIT(const char *name = buf;);
 
 #if BUILTIN_ARG_CH1 == '_'
     if (ch=='_' || isalnum((unsigned char)ch))
@@ -16413,7 +16634,8 @@ parse_id(const char **ref_line, char *buf, size_t len)
     {   *buf = '\0';
 
         if (line != start)
-        {   *ref_line = line;
+        {   OMIT(DPRINTF("ID '%s' [%d]\n", name, (int)(line-(*ref_line))););
+            *ref_line = line;
             return TRUE;
         } else
             return FALSE;
@@ -17000,13 +17222,14 @@ typedef struct
 typedef struct op_state_s op_state_t;
 
 typedef bool
-parse_arg_fn_t(const char **ref_line, op_state_t *ops,
-               const value_t **out_val);
+parse_base_fn_t(const char **ref_line, op_state_t *ops,
+                const value_t **out_val);
 
 struct op_state_s
 {   parser_state_t *state;
     dir_t *opdefs;
-    parse_arg_fn_t *parse_arg;
+    parse_base_fn_t *parse_base_fn;
+    void *parse_base_arg;
 } /* op_state_t */;
 
 
@@ -17127,7 +17350,8 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
 
     if (!op_defs_get(ops, prec, &opdefs))
     {   DEBUG_OP(DPRINTF("%s: lowest precidence - parse base\n", codeid()););
-        ok = (*ops->parse_arg)(ref_line, ops, out_newterm);
+        ok = (*ops->parse_base_fn)(ref_line, ops, out_newterm);
+        DEBUG_OP(DPRINTF("%s: base ok\n", codeid()););
     } else
     if (parse_op(&line, ops, opdefs, &op) && assoc_prefix(op.assoc) &&
         parse_space(&line))
@@ -17161,16 +17385,23 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
                         codeid(), prec););
         if (parse_op_expr(ref_line, ops, prec+1, out_newterm) &&
             parse_space(ref_line))
-        {   bool complete = FALSE;
+        {   bool complete;
             bool first = TRUE;
 
             ok = TRUE;
             line = *ref_line;
+            complete = (line[0] == '\0');
 
-            DEBUG_OP(VALUE_SHOW_ST("left val: ", ops->state, *out_newterm);)
-            DEBUG_OP(DPRINTF("%s: prec %d got low prec left - "
-                            "now parse ...%s\n",
-                            codeid(), prec, line););
+            DEBUG_OP(
+                if (complete)
+                    DPRINTF("%s: prec %d got low prec left - complete\n",
+                            codeid(), prec);
+                else 
+                {   VALUE_SHOW_ST("left val: ", ops->state, *out_newterm);
+                    DPRINTF("%s: prec %d got low prec left - now parse ...%s\n",
+                            codeid(), prec, line);
+                }
+            );
 
             while (ok && !complete && parse_op(&line, ops, opdefs, &op) &&
                    parse_space(&line))
@@ -17239,17 +17470,18 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
 
 
 
-/*! Parse for operators using parse_arg to parse the lowest level of
+/*! Parse for operators using parse_base to parse the lowest level of
  *  precidence */
 static bool
 parse_opterm(const char **ref_line, parser_state_t *state,
-             parse_arg_fn_t *parse_arg, dir_t *opdefs,
-             const value_t **out_term)
+             parse_base_fn_t *parse_base_fn, void *parse_base_arg,
+             dir_t *opdefs, const value_t **out_term)
 {   /* <oparg> <op> <oparg> .... decoded correctly for precidence */
     op_state_t ops;
-    ops.state = state;
+    ops.state  = state;
     ops.opdefs = opdefs;
-    ops.parse_arg = parse_arg;
+    ops.parse_base_fn  = parse_base_fn;
+    ops.parse_base_arg = parse_base_arg;
     DEBUG_OP(DIR_SHOW("op defs: ", opdefs););
     return parse_op_expr(ref_line, &ops, /*prec*/0, out_term);
 }
@@ -17266,13 +17498,17 @@ parse_op_base(const char **ref_line, op_state_t *ops, const value_t **out_val)
 {   bool ok;
 
     if (parse_key(ref_line, "(") && parse_space(ref_line))
-        ok = parse_opterm(ref_line, ops->state, ops->parse_arg,
-                          ops->opdefs, out_val) &&
-             parse_space(ref_line) &&
-             parse_key_always(ref_line, ops->state, ")");
+    {   DEBUG_OPTERM(DPRINTF("%s: parse op brackets\n", codeid()););
+        ok = parse_opterm(ref_line, ops->state,
+                     ops->parse_base_fn, ops->parse_base_arg,
+                     ops->opdefs, out_val) &&
+        parse_space(ref_line) &&
+        parse_key_always(ref_line, ops->state, ")");
+    }
     else
+    {   DEBUG_OPTERM(DPRINTF("%s: parse standard op\n", codeid()););
         ok = parse_base(ref_line, ops->state, out_val);
-
+    }
     return ok;
 }
 
@@ -17470,6 +17706,13 @@ values_cmd_init(void)
 
 
 
+/* Function values hold both an indication of an executable value and a
+   help string along with the number of arguments it requires
+*/
+
+
+
+
 typedef struct value_func_s value_func_t;
 
 
@@ -17533,11 +17776,11 @@ value_func_print(outchar_t *out, const value_t *root, const value_t *value,
 STATIC_INLINE value_t *
 value_func_init(value_func_t *func, type_t func_type,
                 func_fn_t *exec, const char *help,
-                int args, void *implicit, bool on_heap)
+                int args, void *implicit_args, bool on_heap)
 {   func->exec = exec;
     func->help = help;
     func->args = args;
-    func->implicit = implicit;
+    func->implicit = implicit_args;
     return value_init(&func->value, func_type, on_heap);
 }
 
@@ -17659,9 +17902,12 @@ value_func_lhv_markver(const value_t *value, int heap_version)
 
 
 
-
+/*! Internal command used only by value_func_lhv_t values
+ *  @param has_infodir indicates whether an extra environment has been pushed
+ */
 static const value_t *
-fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
+genfn_lhv_setval(const value_t *this_fn, parser_state_t *state,
+                 bool has_infodir)
 {   const value_t *val = parser_builtin_arg(state, 1);
     value_func_lhv_t *func;
     const value_t *codeval = NULL;
@@ -17672,17 +17918,20 @@ fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
     (void)value_closure_get(this_fn, &codeval, &dir, &unbound);
     OMIT(DIR_SHOW_ST("pre-return dir of @fn: ", state, dir);)
 
+    /* value_closure_get always returns a value_env_t * as dir */
     stack = value_env_dir_stack((value_env_t *)dir);
     func = (value_func_lhv_t *)codeval;
     /* return to the calling envrionment */
     dir_stack_return(stack, dir_stack_last_pos(stack)); /* argument */
-    dir_stack_return(stack, dir_stack_last_pos(stack)); /* infodir */
+    if (has_infodir)
+        dir_stack_return(stack, dir_stack_last_pos(stack)); /* infodir */
     OMIT(DIR_SHOW_ST("return dir of @fn: ", state, dir);
          printf("at %p\n", dir_stack_top(stack));
          printf("top is %p\n", dir_stack_top(parser_env_stack(state)));)
 
     if (NULL != dir)
-    {   if (!dir_set(dir_stack_top(stack), func->lv_name, val))
+    {   dir_t *locals = dir_stack_top(stack);
+        if (!dir_set(locals, func->lv_name, val))
         {   parser_error(state, "failed to set value of ");
             parser_value_print(state, func->lv_name);
             fprintf(stderr, "'\n");
@@ -17694,16 +17943,32 @@ fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
 
 
 
+static const value_t *
+fn_lhv_setval_infodir(const value_t *this_fn, parser_state_t *state)
+{   return genfn_lhv_setval(this_fn, state, /*has_infodir*/true);
+}
+
+
+
+
+static const value_t *
+fn_lhv_setval(const value_t *this_fn, parser_state_t *state)
+{   return genfn_lhv_setval(this_fn, state, /*has_infodir*/false);
+}
+
+
+
+
+
 
 STATIC_INLINE value_t *
 value_func_lhv_init(value_func_lhv_t *func, const value_t *lv_name,
-                    bool on_heap)
-{   value_t *initval;
+                    bool has_infodir, bool on_heap)
+{   func_fn_t *exec = has_infodir? &fn_lhv_setval_infodir: &fn_lhv_setval;
+    value_t *initval = value_func_init(&func->fn, &type_func_lhv_val, exec,
+                                       /*help*/"- assign value to name",
+                                       /*args*/1, /*implicit*/NULL, on_heap);
     func->lv_name = lv_name;
-    func->fn.exec = &fn_lhv_setval;
-    func->fn.help = "- assign value to name";
-    func->fn.args = 1;
-    initval = value_init(&func->fn.value, &type_func_lhv_val, on_heap);
     value_unlocal(lv_name);
     return initval;
 }
@@ -17712,15 +17977,65 @@ value_func_lhv_init(value_func_lhv_t *func, const value_t *lv_name,
 
 
 extern value_t *
-value_func_lhv_new(const value_t *lv_name)
+value_func_lhv_new(const value_t *lv_name, bool has_infodir)
 {   value_func_lhv_t *func = (value_func_lhv_t *)
                              FTL_MALLOC(sizeof(value_func_lhv_t));
 
     if (NULL != func)
-        return value_func_lhv_init(func, lv_name, /*on_heap*/TRUE);
+        return value_func_lhv_init(func, lv_name, has_infodir, /*on_heap*/TRUE);
     else
         return NULL;
 }
+
+
+
+
+
+/*! Create a closure with a new value_func_lhv_t in it which sets the value
+ *  \c id in the closure's environment.
+ *  The closure has the directory \c parent has the main part of its
+ *  environment.
+ *  If \c get_fn is non-NULL incorporate a function that will retrieve the
+ *  value of the value_func_lhv_t object with that name.
+ *  The function returns either NULL (memory problem) or the closure value.
+ */
+static const value_t *
+value_func_lhv_assignment(const value_t *parent, const value_t *id,
+                          const char *get_fn_name, parser_state_t *state)
+{
+    const value_t *lhvfn =
+        value_func_lhv_new(id, /*has_infodir*/get_fn_name != NULL);
+
+    if (NULL != lhvfn && value_type_equal(parent, type_dir))
+    {   static const char *arg = BUILTIN_ARG"1";
+        value_t *closure = value_closure_new(lhvfn, (value_env_t *)NULL);
+        value_env_t *env = value_env_new();
+        DEBUG_LNO(printf("%s: new code lhv at line %d\n",
+                         codeid(), parser_lineno(state));); 
+        value_env_pushdir(env, (dir_t *)parent, /*env_end*/FALSE);
+        (void)value_closure_pushdir(closure, (dir_t *)parent, /*env_end*/FALSE);
+        if (get_fn_name != NULL)
+        {
+            dir_t *infodir = dir_id_new();
+            value_t *code = value_code_new(id, "<lhv>", parser_lineno(state));
+            value_t *get_fn = value_closure_new(code, env);
+            if (get_fn != NULL && code != NULL)
+            {   dir_string_set(infodir, get_fn_name, get_fn);
+                (void)value_closure_pushdir(closure, infodir, /*env_end*/FALSE);
+            }
+        }
+        OMIT(DIR_SHOW_ST("@parent: ", state, parent);
+             printf("at %p\n", parent););
+        (void)value_closure_pushunbound(closure, /*pos*/NULL,
+                                        value_cstring_new_measured(arg));
+        lhvfn = closure;
+    }
+
+    return lhvfn;
+}
+
+
+
 
 
 
@@ -18487,6 +18802,15 @@ value_mod_cmd_create(const value_t *helpstrval, value_t *closure, int args)
 
 
 
+/*! Add a new callable value into the current environment
+ *    @param dir       - directory where the function will be defined
+ *    @param name      - value_string_t for the name to give the function
+ *    @param help      - optional help text
+ *    @param cmd       - the callable value
+ *    @param scope     - optional environment to push into the calling
+ *                       environment
+ *    @returns         - the closure value created & set into the directory
+ */
 static value_t *
 mod_add_cmd(dir_t *dir, const char *name, const char *help, value_t *cmd,
             dir_stack_t *scope)
@@ -18497,7 +18821,7 @@ mod_add_cmd(dir_t *dir, const char *name, const char *help, value_t *cmd,
                 codeid(), value_type_name(cmd), name);
     else
     {   int args = value_type_equal(cmd, type_func)?
-                   value_func_args((value_func_t *)cmd): 1;
+                   value_func_args((value_func_t *)cmd): /*type_cmd*/1;
         value_t *closure = value_closure_fn_new(cmd, value_env_new(),
                                                 FTL_LIB_AUTORUN_DEFAULT);
 
@@ -18562,7 +18886,8 @@ mod_add_op(dir_t *opdefs, op_prec_t prec, op_assoc_t assoc, const char *opname,
 
 
 
-
+/*! Add a named value to a directory
+ */
 extern value_t *
 mod_add(dir_t *dir, const char *name, const char *help, cmd_fn_t *exec)
 {   return mod_add_cmd(dir, name, help,
@@ -18574,7 +18899,9 @@ mod_add(dir_t *dir, const char *name, const char *help, cmd_fn_t *exec)
 
 
 
-
+/* Add a function to a directory with name, help value and number of function
+   arguments to expect
+*/
 extern value_t *
 mod_addfn(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
           int args)
@@ -18587,7 +18914,9 @@ mod_addfn(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
 
 
 
-
+/* Add a function to a directory with name, help value and number of function
+   arguments to expect, together with an implicit private argument
+*/
 extern value_t *
 mod_addfn_imp(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
               int args, void *implicit_args)
@@ -19513,9 +19842,8 @@ dir_dot_lookup_name(dir_t *dir, const value_t *name)
  *
  *  This function may cause a garbage collection
  */
-/**/extern bool
-parse_index_path(const char **ref_line, parser_state_t *state,
-                 dir_t *indexed,
+extern bool
+parse_index_path(const char **ref_line, parser_state_t *state, dir_t *indexed,
                  dir_t **out_parent, const value_t **out_id)
 {   
     bool ok;
@@ -20072,46 +20400,25 @@ parse_index_value(const char **ref_line, parser_state_t *state,
 
 
 
-
-
 /* Parse left hand value of index path in indexed object
-   we have parsed @<indexed>. - we now need to parse [<index>.]*<index> 
-   (where parent = <indexed>.[<indexed>.]*)
+   We have parsed @ - we now need to parse [<index>.]*<index> 
+   
    This function may cause a garbage collection 
 */
 static bool
-parse_index_lhvalue(const char **ref_line, parser_state_t *state,
-                    dir_t *indexed, const value_t **out_val)
+parse_indexed_lhvalue(const char **ref_line, parser_state_t *state,
+                      dir_t *indexed, const value_t **out_val)
 {
-    dir_t *parent;
+    dir_t *parent; /* 'indexed' indexed by the initial [<index>.]* section */
     const value_t *id;
-    bool ok = FALSE;
+    bool ok = false;
 
     if (parse_index_path(ref_line, state, indexed, &parent, &id))
-    {   /* create a binding with a new value_func_lhv_t in it */
-        value_t *lhvfn = value_func_lhv_new(id);
-        if (NULL != lhvfn)
-        {   const char *argname = BUILTIN_ARG"1";
-            value_t *closure = value_closure_new(lhvfn, (value_env_t *)NULL);
-            value_t *name = value_string_new_measured("_get");
-            dir_t *infodir = dir_id_new();
-            value_env_t *env = value_env_new();
-            value_t *code = value_code_new(id, "<lhv>", parser_lineno(state));
-            value_t *get;
-            DEBUG_LNO(printf("%s: new code lhv at line %d\n",
-                             codeid(), parser_lineno(state));); 
-            value_env_pushdir(env, parent, /*env_end*/FALSE);
-            get = value_closure_new(code, env);
-            *out_val = &value_null;
-            dir_set(infodir, name, get);
-            (void)value_closure_pushdir(closure, parent, /*env_end*/FALSE);
-            (void)value_closure_pushdir(closure, infodir, /*env_end*/FALSE);
-            OMIT(DIR_SHOW_ST("@parent: ", state, parent);
-                   printf("at %p\n", parent);)
-            (void)value_closure_pushunbound(closure, NULL,
-                                            value_string_new_measured(argname));
-            *out_val = closure;
-            ok = TRUE;
+    {   const value_t *assign_fn =
+            value_func_lhv_assignment(dir_value(parent), id, LHV_FN_GET, state);
+        if (assign_fn != NULL)
+        {   *out_val = assign_fn;
+            ok = true;
         }
     }
     return ok;
@@ -20143,10 +20450,12 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
     is_local = parse_dot(ref_line);
     if (is_local)
     {   need_index = TRUE;
-    } else if ((is_lhv = parse_key(ref_line, "@")))
+    } else
+    if ((is_lhv = parse_key(ref_line, "@")))
         /* can't take lhval of local - can't copy top directory for later */
-        ok = parse_index_lhvalue(ref_line, state, parser_env_copy(state),
-                                 out_val);
+        ok = parse_indexed_lhvalue(ref_line, state,
+                                   /*parent*/parser_env_copy(state),
+                                   out_val);
     else
     {   ok = parse_closure(ref_line, state, /*autorun*/false, out_val) &&
              parse_space(ref_line);
@@ -20166,9 +20475,19 @@ parse_retrieval(const char **ref_line, parser_state_t *state,
         if (ok)
         {   if (is_lhv)
             {   OMIT(printf("%s: ..>%s\n", codeid(), *ref_line);
-                DIR_SHOW_ST("env: ", state, env);)
-                /*ok = parse_index_value(ref_line, state, env, out_val);*/
-                ok = parse_index_lhvalue(ref_line, state, env, out_val);
+                     DIR_SHOW_ST("env: ", state, env););
+                dir_stack_pos_t locals_pos = parser_env_locals_pos(state);
+                dir_t *locals_dir = dir_at_stack_pos(locals_pos);
+                /* We don't want the whole stack. In fact all we really need
+                   is a stack with only the top directory on it. If we include
+                   the whole stack assignments will be made to names that
+                   already exist in the environment */
+                
+                // TODO: Look at the value of domain ([]:{.n=8;parse.stack!}!).0
+                // before you try to make this work.
+
+                ok = parse_indexed_lhvalue(ref_line, state,
+                                           locals_dir, out_val);
             } else
                 ok = parse_index_value(ref_line, state, env, out_val);
         } else
@@ -20217,7 +20536,8 @@ parse_operator_expr(const char **ref_line, parser_state_t *state,
 {   /* parse based on defined operator definitions */
     bool ok;
     DEBUG_TRACE(DPRINTF("(op expr: '%s'\n", *ref_line););
-    ok = parse_opterm(ref_line, state, &parse_retrieval_base,
+    ok = parse_opterm(ref_line, state,
+                      &parse_retrieval_base, /*parse_retrieval_base arg*/NULL,
                       state->opdefs, out_val);
     DEBUG_TRACE(DPRINTF(")op expr %s: '%s'\n", ok?"OK":"FAIL", *ref_line);)
     return ok;
@@ -20366,6 +20686,11 @@ invoke(const value_t *code, parser_state_t *state)
             if (NULL != codeval)
             {   if (value_type_equal(codeval, type_code))
                 {   dir_stack_pos_t pos;
+                    dir_stack_pos_t left_env_top = NULL;
+                    dir_stack_pos_t final_left_env_top = NULL;
+
+                    list_element_start(&state->left_envs,
+                                       (void *)&left_env_top);
 
                     DEBUG_MOD(DPRINTF("%s: invoke - code closure\n", codeid());)
                     value_code_buf(codeval, &buf, &len);
@@ -20387,6 +20712,22 @@ invoke(const value_t *code, parser_state_t *state)
                     }
                     linesource_pop(parser_linesource(state));
                     parser_env_return(state, pos);
+                    list_element_start(&state->left_envs,
+                                       (void *)&final_left_env_top);
+                    if (final_left_env_top != left_env_top)
+                    {   /* the function must have used 'enter' with no 'leave'*/
+                        DEBUG_ENTER(DPRINTF("%s: invoke exit "
+                                            "unballanced enter/leave\n",
+                                            codeid()););
+                        if (!list_remove_start_until(&state->left_envs,
+                                                     left_env_top, /*del*/NULL))
+                        {   parser_error(state, "can't find original "
+                                         "enter/leave environment after "
+                                         "invocation\n");
+                        }
+                    } DEBUG_ENTER(
+                        else DPRINTF("%s: invoke exit ballanced enter/leave\n",
+                                     codeid()););
                 } else
                 if (value_type_equal(codeval, type_cmd))
                 {   /* execute command */
@@ -20963,6 +21304,8 @@ dir_copy(dir_t *dir)
 
 
 
+
+
 /*! make an environment from the function arguments, add 'name' field
  *   and throw the result
  *   This function may cause a garbage collection
@@ -21064,10 +21407,10 @@ cmds_generic_exception(parser_state_t *state, dir_t *cmds)
 #define DEBUG_SIGNAL OMIT
 
 
-static bool exiting = FALSE;
+static bool exiting = FALSE;  /* throwing an exception */
 static parser_state_t *global_int_state = NULL;
 
-#ifdef EXIT_ON_CTRL_C
+#if FTL_TRAP_EXCEPTIONS
 
 static bool throw_signal(parser_state_t *state, int signal)
 {
@@ -21083,7 +21426,8 @@ static bool throw_signal(parser_state_t *state, int signal)
 
     if (signal_exception != NULL) {
         /*parser_throw(state, signal_exception);*/
-        OMIT(fprintf(stderr, "%s: throwing FTL signal\n", codeid()););
+        DEBUG_SIGNAL(fprintf(stderr, "%s: throwing FTL signal %d\n",
+                             codeid(), signal););
         (void)invoke(signal_exception, state); /* shouldn't normally return */
         return TRUE;
     } else
@@ -21157,7 +21501,6 @@ static bool handler_init(interrupt_state_t *ref_old_handler,
 static void handler_end(interrupt_state_t *ref_old_handler,
                         int signo)
 {
-    
     DEBUG_SIGNAL(interrupt_handler_fn *newi;
          fprintf(stderr, "%s: installing interrupt returned to %p\n",
                  codeid(), ref_old_handler->handler);
@@ -21187,7 +21530,7 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 }
 
 
-#if TRAP_SIGNAL_TERMINATE
+#if FTL_TRAP_SIGNAL_TERMINATE
 static bool terminate_handler_init(interrupt_state_t *ref_old_handler,
                                    parser_state_t *int_state)
 {   return handler_init(ref_old_handler, int_state, SIGTERM,
@@ -21198,7 +21541,7 @@ static bool terminate_handler_init(interrupt_state_t *ref_old_handler,
 static void terminate_handler_end(interrupt_state_t *ref_old_handler)
 {   handler_end(ref_old_handler, SIGTERM);
 }
-#endif /* TRAP_SIGNAL_TERMINATE */
+#endif /* FTL_TRAP_SIGNAL_TERMINATE */
 
 
 static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
@@ -21226,12 +21569,39 @@ typedef struct {
     parser_state_t *displaced_state;
 } interrupt_state_t;
 
-
+/*! handle the TERMINATE signal
+ *
+ *  Options for swCtrlType:
+ *     CTRL_C_EVENT        -- ctrl-C 
+ *     CTRL_BREAK_EVENT    -- CTRL+BREAK
+ *     CTRL_CLOSE_EVENT    -- containing console closing
+ *     CTRL_LOGOFF_EVENT   -- user logging off
+ *     CTRL_SHUTDOWN_EVENT -- system shutdown
+ *
+ *  Returns TRUE if the signal was handled, FALSE otherwise.
+ */
 BOOL WINAPI interrupt_handler(DWORD dwCtrlType)
 {
-    if (global_int_state == NULL || !throw_signal(global_int_state, 2))
-        exiting = TRUE;
-    return TRUE/*handled*/;
+    BOOL handled = FALSE;
+    
+    DEBUG_SIGNAL(fprintf(stderr, "%s: windows exception %d\n",
+                         codeid(), (int)dwCtrlType););
+    if (dwCtrlType == CTRL_C_EVENT)
+    {
+        if (global_int_state == NULL)
+        {
+            DEBUG_SIGNAL(fprintf(stderr, "%s: no global interrupt state\n",
+                                 codeid()););
+            handled = TRUE;
+            exiting = TRUE;
+        }
+        else if (!throw_signal(global_int_state, 2))
+        {
+            handled = TRUE;
+            exiting = TRUE;
+        }
+    }
+    return handled;
 }
 
 
@@ -21251,15 +21621,15 @@ static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
 
     ok = SetConsoleCtrlHandler(&interrupt_handler, /*Add*/TRUE);
 
-    OMIT(fprintf(stderr, "%s: installing interrupt handler %p\n",
-                 codeid(), &interrupt_handler););
+    DEBUG_SIGNAL(fprintf(stderr, "%s: installing interrupt handler %p\n",
+                         codeid(), &interrupt_handler););
 
     if (ref_old_handler != NULL) {
-        ref_old_handler->handler = NULL; /*not used in windows */
         ref_old_handler->displaced_state = global_int_state;
+        ref_old_handler->handler = NULL; /*not used in windows */
     }
 
-    if (ok)
+    if (!ok)
         return FALSE;
     else {
         global_int_state = int_state;
@@ -21281,7 +21651,7 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 }
 
 
-#if TRAP_SIGNAL_TERMINATE
+#if FTL_TRAP_SIGNAL_TERMINATE
 static bool interrupt_handler_init(interrupt_state_t *ref_old_handler,
                                    parser_state_t *int_state)
 {   BOOL ok = false; //TODO: unimplemented
@@ -21292,7 +21662,7 @@ static void interrupt_handler_end(interrupt_state_t *ref_old_handler)
 {
     return; //TODO: unimplemented
 }
-#endif /* TRAP_SIGNAL_TERMINATE */
+#endif /* FTL_TRAP_SIGNAL_TERMINATE */
 
 
 static bool badmaths_handler_init(interrupt_state_t *ref_old_handler,
@@ -21309,7 +21679,7 @@ static void badmaths_handler_end(interrupt_state_t *ref_old_handler)
 #endif /* _WIN32 */
 
 
-#else /* EXIT_ON_CTRL_C not defined */
+#else /* no FTL_TRAP_EXCEPTIONS */
 
 
 /* no interrupt handling */
@@ -21331,11 +21701,11 @@ typedef struct {
 #define badmaths_handler_end(ref_old_handler)
 
 
-#if TRAP_SIGNAL_TERMINATE
+#if FTL_TRAP_SIGNAL_TERMINATE
 #define terminate_handler_init(ref_old_handler, state) \
         ((void)(ref_old_handler),TRUE)
 #define terminate_handler_end(ref_old_handler)
-#endif /* TRAP_SIGNAL_TERMINATE */
+#endif /* FTL_TRAP_SIGNAL_TERMINATE */
 
 
 #if 0
@@ -21345,8 +21715,7 @@ static bool cause_sigint(void)
 #endif
 
 
-
-#endif /* EXIT_ON_CTRL_C */
+#endif /* FTL_TRAP_EXCEPTIONS */
 
 
 
@@ -23197,7 +23566,6 @@ fn_env(const value_t *this_fn, parser_state_t *state)
 
 
 
-
 static const value_t *
 fn_stack(const value_t *this_fn, parser_state_t *state)
 {   dir_t *vec = dir_vec_new();
@@ -23209,7 +23577,7 @@ fn_stack(const value_t *this_fn, parser_state_t *state)
 
     stack = parser_env_stack(state);
     pos = dir_stack_top_pos(stack);
-    while (n < 100 && pos != NULL)
+    while (n < DIR_STACK_DEPTH_REPORT_LIMIT && pos != NULL)
     {   dir_t *subdir = dir_at_stack_pos(pos);
         if (NULL != subdir)
             dir_int_set(vec, n++, dir_value(subdir));
@@ -23518,21 +23886,29 @@ genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
             if (ok)
             {   val = value_true;
                 /* update string argument vector */
-                OMIT(
-                    printf("%s: new %p[%d] -> %p[%d]\n",
-                           codeid(), strbase, len, line,
-                           len - (line-strbase)););
-                dir_set(vec, value_zero,
-                        value_string_new(line, len - (line-strbase)));
+                OMIT(printf("%s: new %p[%d] -> %p[%d]\n",
+                            codeid(), strbase, len, line,
+                            len - (line-strbase)););
+                /* update dstr in place if possible - to lose initial prefix*/
+                value_string_cut(&dstr, line-strbase, len - (line-strbase));
+                dir_set(vec, value_zero, dstr);
                 /* old value will be garbage collected */
             } else
                 val = value_false;
 
             /* dstr will be garbage collected if it is not str */
         } else
+        {   DEBUG_OPTERM(
+                if (str==NULL)
+                    DPRINTF("%s: vector.0 - no result\n", codeid());
+                else
+                    DPRINTF("%s: vector.0 - not string - %s\n",
+                            codeid(), value_type_name(str));
+            );
             parser_error(state, "vector must have a string (not a %s) "
-                         "named 0\n",
+                         "numbered 0\n",
                          value_type_name(str));
+        }
     }
     return val;
 }
@@ -23575,8 +23951,7 @@ fn_scan_space(const value_t *this_fn, parser_state_t *state)
  */
 extern const value_t *
 genfn_scan(const value_t *this_fn, parser_state_t *state,
-           int argstart, ftl_scan_value_fn *fnparse,
-           const value_t *arg)
+           int argstart, ftl_scan_value_fn *fnparse, void *arg)
 {   const value_t *setres = parser_builtin_arg(state, argstart+0);
     const value_t *strvec = parser_builtin_arg(state, argstart+1);
     const value_t *val = &value_null;
@@ -23595,9 +23970,10 @@ genfn_scan(const value_t *this_fn, parser_state_t *state,
             if (NULL != newval)
             {   val = value_true;
 
-                dir_set(vec, value_zero,
-                        value_string_new(line, len - (line-strbase)));
-                /* old value will be garbage collected */
+                /* update dstr in place if possible - to lose initial prefix*/
+                value_string_cut(&dstr, line-strbase, len - (line-strbase));
+                dir_set(vec, value_zero, dstr);
+                /* if updated, the old val of dstr will be garbage collected */
 
                 if (setres != &value_null) {
                     setres = substitute(setres,
@@ -23640,7 +24016,7 @@ fnparse_key(const char **ref_line, parser_state_t *state, const value_t *arg)
 
 static const value_t *
 fn_scan_key(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan(this_fn, state, 1, &fnparse_key, NULL);
+{   return genfn_scan(this_fn, state, 1, &fnparse_key, /*arg*/NULL);
 }
 #endif
 
@@ -23648,7 +24024,7 @@ fn_scan_key(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_match(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_match(const char **ref_line, parser_state_t *state, void *arg)
 {   dir_t *prefixes = (dir_t *)arg;
     const value_t *choice = NULL;
     if (parse_oneof(ref_line, state, prefixes, &choice)) {
@@ -23675,7 +24051,7 @@ fn_scan_match(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_ending(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_ending(const char **ref_line, parser_state_t *state, void *arg)
 {   dir_t *delimiters = (dir_t *)arg;
     const value_t *choice = NULL;
     if (parse_one_ending(ref_line, state, delimiters, &choice)) {
@@ -23718,7 +24094,7 @@ fn_scan_ops(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_int(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_int(const char **ref_line, parser_state_t *state, void *arg)
 {   number_t n;
     if (parse_int(ref_line, &n))
         return value_int_new(n);
@@ -23739,7 +24115,7 @@ fn_scan_int(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_hex(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_hex(const char **ref_line, parser_state_t *state, void *arg)
 {   unumber_t n;
     if (parse_hex(ref_line, &n))
         return value_int_new(n);
@@ -23761,7 +24137,7 @@ fn_scan_hex(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_intval(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_intval(const char **ref_line, parser_state_t *state, void *arg)
 {   number_t n;
     if (parse_int_val(ref_line, &n))
         return value_int_new(n);
@@ -23782,9 +24158,9 @@ fn_scan_intval(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_hexw(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_hexw(const char **ref_line, parser_state_t *state, void *arg)
 {   unumber_t n;
-    unsigned width = (unsigned)value_int_number(arg);
+    unsigned width = (unsigned)value_int_number((const value_t *)arg);
     if (parse_hex_width(ref_line, width, &n))
         return value_int_new(n);
     else
@@ -23798,7 +24174,7 @@ static const value_t *
 fn_scan_hexw(const value_t *this_fn, parser_state_t *state)
 {   const value_t *widthval = parser_builtin_arg(state, 1);
     if (value_istype(widthval, type_int))
-        return genfn_scan(this_fn, state, 2, &fnparse_hexw, widthval);
+        return genfn_scan(this_fn, state, 2, &fnparse_hexw, (void *)widthval);
     else
         return &value_null;
 }
@@ -23808,11 +24184,9 @@ fn_scan_hexw(const value_t *this_fn, parser_state_t *state)
 
 
 
-
-
 static const value_t *
-fnparse_id(const char **ref_line, parser_state_t *state, const value_t *arg)
-{   char buf[128];
+fnparse_id(const char **ref_line, parser_state_t *state, void *arg)
+{   char buf[FTL_ID_MAX];
     if (parse_id(ref_line, buf, sizeof(buf)))
         return value_string_new_measured(buf);
     else
@@ -23835,8 +24209,7 @@ fn_scan_id(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_string(const char **ref_line, parser_state_t *state,
-               const value_t *arg)
+fnparse_string(const char **ref_line, parser_state_t *state, void *arg)
 {   char buf[4096];
     /*< TODO: find a way to discover size before allocating string storage */
     size_t slen;
@@ -23859,8 +24232,7 @@ fn_scan_string(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_code(const char **ref_line, parser_state_t *state,
-               const value_t *arg)
+fnparse_code(const char **ref_line, parser_state_t *state, void *arg)
 {   const value_t *strval;
     const char *srcpos;
     int srcline;
@@ -23887,8 +24259,7 @@ fn_scan_code(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_value(const char **ref_line, parser_state_t *state,
-              const value_t *arg)
+fnparse_value(const char **ref_line, parser_state_t *state, void *arg)
 {   const value_t *out_val = NULL;
     bool is_env;
 
@@ -23912,8 +24283,7 @@ fn_scan_value(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_itemstr(const char **ref_line, parser_state_t *state,
-                const value_t *arg)
+fnparse_itemstr(const char **ref_line, parser_state_t *state, void *arg)
 {   char buf[128];
     if (parse_itemstr(ref_line, buf, sizeof(buf)))
         return value_string_new_measured(buf);
@@ -23937,7 +24307,7 @@ fn_scan_itemstr(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_item(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_item(const char **ref_line, parser_state_t *state, void *arg)
 {   const char *delimsbase = NULL;
     size_t delimslen = 0;
     char buf[128];
@@ -23956,7 +24326,7 @@ static const value_t *
 fn_scan_item(const value_t *this_fn, parser_state_t *state)
 {   const value_t *delims = parser_builtin_arg(state, 1);
     if (delims == &value_null || value_istype(delims, type_string))
-        return genfn_scan(this_fn, state, 2, &fnparse_item, delims);
+        return genfn_scan(this_fn, state, 2, &fnparse_item, (void *)delims);
     else
         return &value_null;
 }
@@ -23973,16 +24343,20 @@ fn_opeval(const value_t *this_fn, parser_state_t *state)
     const value_t *opdefvals = parser_builtin_arg(state, 1);
     const value_t *codeval = parser_builtin_arg(state, 2);
     const value_t *val = &value_null;
+    bool is_string = value_type_equal(codeval, type_string);
 
     if (value_istype(opdefvals, type_dir) &&
-        value_istype(codeval, type_code))
+        (is_string || value_istype(codeval, type_code)))
     {   dir_t *opdefs = (dir_t *)opdefvals;
         const char *code;
         size_t codelen;
 
-        if (value_code_buf(codeval, &code, &codelen))
+        if (is_string? value_string_get(codeval, &code, &codelen):
+                       value_code_buf(codeval, &code, &codelen))
         {   const value_t *newval;
-            if (parse_opterm(&code, state, &parse_op_base, opdefs, &newval) &&
+            if (parse_opterm(&code, state,
+                             &parse_op_base, /*parse_op_base arg*/NULL,
+                             opdefs, &newval) &&
                 parse_space(&code) && parse_empty(&code))
 
                 val = newval;
@@ -23997,6 +24371,199 @@ fn_opeval(const value_t *this_fn, parser_state_t *state)
 }
 
 
+
+
+typedef struct {
+    const value_t *base_scan_fnval;
+    const value_t *assign_fn; /* function to return value to parent.id */
+    dir_t *pobj_dir;  /* pre-made vector for print object */
+    dir_t *return_dir;
+    const value_t *return_name;
+} parse_op_using_closure_arg_t;
+
+
+
+
+static bool
+parse_op_using_closure(const char **ref_line, op_state_t *ops,
+                       const value_t **out_val)
+{   bool base_parsed_ok = false;
+
+    if (parse_key(ref_line, "(") && parse_space(ref_line))
+    {   DEBUG_OPTERM(DPRINTF("%s: parse op brackets with FTL\n", codeid()););
+        base_parsed_ok =
+            parse_opterm(ref_line, ops->state,
+                         ops->parse_base_fn, ops->parse_base_arg,
+                         ops->opdefs, out_val) &&
+            parse_space(ref_line) &&
+            parse_key_always(ref_line, ops->state, ")");
+    }
+    else
+    {   const char *line = *ref_line;
+        size_t linelen = strlen(*ref_line);
+        parse_op_using_closure_arg_t *ftl_arg =
+            (parse_op_using_closure_arg_t *)ops->parse_base_arg;
+        const value_t *ftl_parse_arg = ftl_arg->base_scan_fnval;
+        const value_t *assign_fn = ftl_arg->assign_fn;
+        dir_t *pobj_dir          = ftl_arg->pobj_dir;
+        /* this is a parse function that expects two arguments:
+         *  1) a closure with one argument called with the parse result
+         *  2) a parse object (updated vector containing string)
+         */
+        value_string_t ref_line_str; /* stacked value */
+        const value_t *line_strval;
+        const value_t *code;         /* ftl_parse_arg assign_fn pobj */
+
+        DEBUG_OPTERM(DPRINTF("%s: parse base with FTL closure\n", codeid()););
+        /* Try to create the parse object cheaply - put it on the stack */
+        /* WARNING: if the parse function keeps a pointer to the parse object
+         *          it will become invalid and could cause a crash if used
+         *          after this call
+         */
+        value_cstring_init(&ref_line_str, line, linelen, /*on_heap*/false);
+        /* pobj_dir.0 will be updated to new position in parse string */
+        line_strval = value_string_value(&ref_line_str);
+        dir_set(pobj_dir, value_zero, line_strval);
+
+        /* assign_fn writes the result to return_dir.return_name */
+        code = substitute(ftl_parse_arg, assign_fn, ops->state,
+                          /*unstrict*/FALSE);
+        if (PTRVALID(code)) {
+            code = substitute(code, dir_value(pobj_dir), ops->state,
+                              /*unstrict*/FALSE);
+            if (PTRVALID(code)) {
+                const value_t *good;
+                DEBUG_OP(DPRINTF("%s: parse base invoking FTL closure\n",
+                                 codeid()););
+                good = invoke(code, ops->state);
+                base_parsed_ok = PTRVALID(good) && value_istype_bool(good) &&
+                                 good != value_false;
+            }
+        }
+        if (base_parsed_ok)
+        {   /* callback function should have delivered a result into id */
+            const char *parsestr = NULL;
+            size_t parsestrlen = 0;
+            const value_t *strnew = dir_get(pobj_dir, value_zero);
+
+            if (value_string_get(strnew, &parsestr, &parsestrlen))
+            {
+                if (strnew == line_strval)
+                {   *ref_line = parsestr;
+                } else
+                {   /* hopefully the new string length will tell us how
+                       much of the original string has been altered */
+                    DEBUG_OPTERM(
+                        DPRINTF("%s: base parse has changed ref string\n",
+                                codeid()););
+                    *ref_line += linelen-parsestrlen;
+                    /* Should we check that this is possible or that the
+                       rest-of-line is still the same?
+                    */
+                }
+                DEBUG_OPTERM(
+                    DPRINTF("%s: parsed %d chars to ...%s\n",
+                            codeid(), (int)(*ref_line - line),
+                            *ref_line););
+            } DEBUG_OPTERM(else
+                     DPRINTF("%s: base parse error - not a string?\n",
+                             codeid());
+              );
+            OMIT(DIR_SHOW("\n** return: ", ftl_arg->return_dir););
+
+            *out_val = dir_get(ftl_arg->return_dir, ftl_arg->return_name);
+
+        }
+        DEBUG_OP(else DPRINTF("%s: FTL parse base failed\n", codeid());)
+    }
+    return base_parsed_ok;
+}
+
+
+
+
+
+typedef struct {
+    dir_t *opdefs;                  /* operator definitions */
+    parse_base_fn_t *parse_base_fn; /* parsing function */
+    void *parse_base_arg;           /* argument for parsing function */
+} fnparse_opterm_arg_t;
+
+
+
+
+static const value_t *
+fnparse_opterm(const char **ref_line, parser_state_t *state, void *arg)
+{   fnparse_opterm_arg_t *opterm_arg = (fnparse_opterm_arg_t *)arg;
+    dir_t *opdefs = opterm_arg->opdefs;
+    parse_base_fn_t *parse_base_fn = opterm_arg->parse_base_fn;
+    void *parse_base_arg = opterm_arg->parse_base_arg;
+    const value_t *newval;
+
+    if (parse_opterm(ref_line, state, parse_base_fn, parse_base_arg,
+                     opdefs, &newval))
+    {   return newval;
+    }
+    else
+    {   parser_error_longstring(state, *ref_line,
+                                "operation term not found, trailing text -");
+        return NULL;
+    }
+}
+
+
+
+
+static const value_t *
+fn_scan_opterm(const value_t *this_fn, parser_state_t *state)
+{   const value_t *opdirval = parser_builtin_arg(state, 1);
+    const value_t *basescanfnval = parser_builtin_arg(state, 2);
+
+    if (value_istype(opdirval, type_dir) &&
+        (basescanfnval == &value_null ||
+         value_istype(basescanfnval, type_closure)))
+    {
+        fnparse_opterm_arg_t arg;
+        
+        arg.opdefs = (dir_t *)opdirval;
+        
+        if (basescanfnval == NULL || basescanfnval == &value_null)
+        {   arg.parse_base_fn = &parse_op_base;
+            arg.parse_base_arg = NULL; /*not used*/
+            return genfn_scan(this_fn, state, 3, &fnparse_opterm, (void *)&arg);
+        }
+        else
+        {   parse_op_using_closure_arg_t ftl_arg;
+            dir_vec_t pobj_vec;
+            dir_id_t return_id_dir;
+            value_string_t return_id_str;
+
+            dir_vec_init(&pobj_vec);
+            dir_id_init(&return_id_dir, &type_dir_id_val, /*on_heap*/FALSE);
+
+            ftl_arg.base_scan_fnval = basescanfnval;
+            ftl_arg.pobj_dir    = dir_vec_dir(&pobj_vec);
+            ftl_arg.return_dir  = dir_id_dir(&return_id_dir);
+            ftl_arg.return_name =
+                value_cstring_init(&return_id_str,
+                                   PARSE_BASE_RET_ID, strlen(PARSE_BASE_RET_ID),
+                                   /*on_heap*/FALSE);;
+            /* There must be a cheaper way to do this! */
+            ftl_arg.assign_fn =
+                value_func_lhv_assignment(dir_value(ftl_arg.return_dir),
+                                          ftl_arg.return_name,
+                                          /*get_fn*/NULL/*not required*/,
+                                          state);
+            arg.parse_base_fn = &parse_op_using_closure;
+            arg.parse_base_arg = (void *)&ftl_arg;
+            return genfn_scan(this_fn, state, 3, &fnparse_opterm, (void *)&arg);
+        }
+    }
+    else
+    {   parser_report_help(state, this_fn);
+        return &value_null;
+    }
+}
 
 
 
@@ -24170,7 +24737,10 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
               "<dir> <@val> <parseobj> - parse up to delimiter named in dir in "
               "<parseobj> giving matching value",
               &fn_scan_ending, 3);
-
+    mod_addfn(pcmds, "scanopterm",
+              "<opdefs> <scanfn> <@val> <parseobj> - parse term using "
+              "<opdefs> & base <scanfn>",
+              &fn_scan_opterm, 4);
     mod_addfn(pcmds, "opset",
               "<opdefs> <prec> <assoc> <name> <function> - define an operator "
               "in opdefs",

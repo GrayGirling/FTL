@@ -259,8 +259,7 @@ parse_json_value(const char **ref_line, parser_state_t *state,
 
 
 static const value_t *
-fnparse_json_value(const char **ref_line, parser_state_t *state,
-                   const value_t *arg)
+fnparse_json_value(const char **ref_line, parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;
@@ -272,8 +271,7 @@ fnparse_json_value(const char **ref_line, parser_state_t *state,
 
 
 static const value_t *
-fnparse_json_object(const char **ref_line, parser_state_t *state,
-                    const value_t *arg)
+fnparse_json_object(const char **ref_line, parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;

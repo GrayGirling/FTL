@@ -190,6 +190,19 @@ from an expression
 where, for example, an expression returning an integer or a string is
 converted to a symbol before use.
 
+When symbols are needed for the local environment it is possible to use
+these syntaxes with no closure. That is, the following are replaced by
+the value of a symbol in the current environment:
+
+``` western
+'.' <value>
+
+'.' '(' <expression> ')'
+```
+
+  
+  
+
 ### <span id="mozTocId495578"></span>Integers
 
 Although it would theoretically be possible to create an environment
@@ -337,7 +350,6 @@ part of the syntax for an expression:
            <identifier> |
            <vector> |
            <type_literal>
-           
 <code> ::= '{' <expression_list> '}'
 <expression_list> ::= <expression> (';' <expression>)* [';']
 <id_environment> ::= '[' [<binding_list> | <binding_list> ',' <unbound_list> | <unbound_list>] ']' 
@@ -469,8 +481,8 @@ it were executed.  If its value were printed it would be
 
 (Note: in the implementation, there is no primitive that will print the
 value in this format. Printing the value as “\[\]:{mul n n \!}”, where
-only unbound variables are shown, is more convenient because of the size
-of the environment associated with a typical binding.)
+only unbound variables are shown, is more convenient because of the
+large size of the environment associated with a typical binding.)
 
 whereas printing the expression
 
@@ -616,7 +628,7 @@ which enables code to be written such as
 
 ``` western
 forn 4 [n]: {
-  print n!; print " squared is "!; print squared n ! ; print "\n"!;
+    print n!; print " squared is "!; print (squared n!) ! ; print "\n"!;
 }!
 ```
 
@@ -627,7 +639,70 @@ environment in FTL includes an "for" function which takes an environment
 and a closure value as an argument and applies each binding in the
 environment to the closure value.
 
-### <span id="mozTocId737869"></span>Objects and their methods
+### <span id="mozTocId737869"></span>Local Variables
+
+A code value may need to make use of additional variables that are local
+to the body of the code. If there were an external symbol named ‘answer’
+this function would have the side-effect of updating it.
+
+``` western
+empty = [string]: {
+    answer = FALSE;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}
+```
+
+Local variables allow new variable instances to be used so that they are
+not confused with existing ones.
+
+This technique adds the local variables to the closure environment and
+gives it an initial value:
+
+``` western
+empty = [answer=NULL, string]: {
+    answer = FALSE;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}
+```
+
+It has the benefit/disbenefit of making the value of ‘answer’ part of
+empty’s state (accessible as "empty.answer"). Note that the line "answer
+= FALSE" can not be replaced by the initialization in the closure’s
+environment. After every invocation "empty.answer" will take the value
+last assigned to it.
+
+This technique executes a code sub-block as a separate closure which has
+access to the new variable set its environment:
+
+``` western
+empty = [string]: {
+    [answer = FALSE]:{
+        (len string!) == 0 {answer = TRUE}!;
+        answer}!
+}
+```
+
+It has the benefit/disbenefit of hiding the value of "answer" from the
+user of "empty".
+
+The standard FTL library includes two functions "enter" and "leave"
+which place a new environment on the top of the stack and (optionally)
+remove it, respectively. The use of "enter" on its own is effectively
+equivalent to the code above:
+
+``` western
+empty = [string]: {
+    enter [answer = FALSE]!;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}
+```
+
+It behaves the same way that the sub-block closure has above.
+
+### Objects and their Methods
 
 A record that combines both internal state and a number of methods that
 interact with that state can be constructed using a closure.  For
@@ -648,7 +723,7 @@ vect = [x,y]:{
             vect (sub x (pt.xcoord!)!) (sub y (pt.ycoord!)!)!
         }
     ]
-}
+};
 p = vect 4 5!;
 p.print!;
 q = vect 2 1!;
@@ -683,35 +758,75 @@ be emulated as follows.
 In call by value an expression is evaluated and the resulting value is
 bound in to the closure invocation.
 
-  - example argument syntax: (add a b\!)
+  - example actual argument syntax: in(add a b\!)
 
-  - example argument read in closure body when bound as "x": x
+  - example formal argument read in closure body when bound as "x": x
 
 #### Call by name
 
 In call by name the expression passed in to the invocation is
 re-evaluated in the context of the invocation on each use.
 
-  - example argument syntax: {add a b\!}
+  - Example actual argument syntax: {add a b\!}
 
-  - example argument read in closure body when bound as "x": (x\!)
+  - example formal argument read in closure body when bound as "x":
+    (x\!)
 
-#### Call by reference - in
+#### Call by reference – in – function technique
 
 In call-by-reference "in", the variable passed in to the invocation is
 read indirectly on on each use.
 
-  - example argument syntax: \[\]:{a}
+  - Example actual argument syntax: \[\]:{a}
 
-  - example argument read in closure body when bound as "x": (x\!)
+  - example formal argument read in closure body when bound as "x":
+    (x\!)
 
-#### Call by reference in out
+#### Call by reference – in out – object technique
 
 In call by-reference "in out", the variable passed in to the invocation
 is read indirectly on each use and can also be written to indirectly.
 
-  - example argument syntax: \[get=\[\]:{a}, set=\[x\]:{a=x}\]
+  - example actual argument syntax: \[get=\[\]:{a}, set=\[x\]:{a=x}\]
 
-  - example argument read in closure body when bound as "x": (x.get\!)
+  - example formal argument read in closure body when bound as "x":
+    (x.get\!)
 
-  - example argument write in closure body when bound as "x": x.set 3\!
+  - example formal argument write in closure body when bound as "x":
+    x.set 3\!
+
+#### Call by reference – **vector** technique
+
+In call-by-reference "in out", the variable passed in to the invocation
+is read and written as the only element in a vector.
+
+  - example actual argument syntax: \<a\>
+
+  - example formal argument read in closure body when bound as "x": x.0
+
+  - example formal argument write in closure body when bound as "x": x.0
+
+  
+
+### With Statement
+
+Some languages have syntax which allows a block of code to be entered in
+which the fields in a specific record to be accessed directly by name
+(instead of using \<record\>.\<name\> for example). This can be provided
+in the same way that locals are dealt with (see above).
+
+This technique executes a code sub-block as a separate closure which has
+access to the new variable set its environment:
+
+``` western
+item_bill = [purchase]: {
+    purchase:{
+        total = items * unit_cost
+    }!
+};
+item1 = [name="Cheese", total=NULL, items=3, unit_cost=200];
+item_bill item1!;
+print item1!;
+```
+
+would print out "\[name="Cheese",total=600,items=3,unit\_cost=200\]".

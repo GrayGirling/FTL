@@ -20,11 +20,14 @@ ndebug=no
 #          /mnt/c/TEMP/hi.exe
 #       (Native binaries have to execute from a Windows file system)
 #       Warning running windows binaries from the bash command line separates
-#          output sent to stdout and to stderr - so errors are reported very late
+#          output sent to stdout and to stderr - so errors are reported very
+#          late
 #          Advice: Run native programs in a native shell, not a *nix one
 
 # To make commands that run under WSL (but not natively) use
 #          make use_elf=no force_native=no
+# To make commands under WSL that run natively under windows use
+#          make use_elf=no force_native=yes
 # (On Ubuntu this may require package gcc-mingw-w64)
 
 

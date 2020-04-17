@@ -257,11 +257,10 @@ directory used to store the new name in is the one most recently pushed,
 independently of whether it is locked or not (so creating a new
 name-value pair when the last pushed directory is locked will fail).    
   
-The empty directory name as a parent specifies the most recently pushed
-directory explicity.  This notation can be used to create local names in
-the environment that will not then refer to incidental external
-definitions.  Thus ".*name*" will refer to a local variable *name* even
-if an external value exists with the same name.
+The empty directory name as a parent specifies the entire environment.
+ This notation can be used to create variable names using the FTL
+indexing notation (see below).  Thus ".*name*" will refer to the same
+variable that  *name* does.
 
 ### FTL Indexing
 
@@ -358,6 +357,35 @@ FALSE
 \> inenv ids.\[x="i", y="b"\] "y"
 
 TRUE
+
+### FTL Local Variables
+
+A directory can be used as a set of local variable names using the enter
+built in function (see below); or a closure with local variables as its
+arguments can be used. For example a function to check whether a string
+is empty that uses a local variable "enter" could be written like this:
+
+> set is\_empty \[string\]: {
+
+>     \[answer = FALSE\]:{
+
+>         (len string\!) == 0 {answer = TRUE}\!;
+
+>         answer}\!
+
+> }
+
+or using "enter":
+
+> set is\_empty \[string\]: {
+
+>     enter \[answer = FALSE\]\!;
+
+>     (len string\!) == 0 {answer = TRUE}\!;
+
+>     answer
+
+> }
 
 ### FTL References
 
@@ -632,13 +660,14 @@ following categories.
       - enter \<env\> - add commands from \<env\> to current environment
       - inenv \<env\> \<name\> - returns 0 unless string \<name\> is in
         \<env\>
+      - leave - exit the environment last entered or restricted 
+      - leaving - exit the environment last entered or restricted &
+        return it
       - len \[\<env\>|\<closure\>|\<string\>\] - number of elements in
         object
       - lock \<env\> - prevent new names being added to \<env\>
       - new \<env\> - copy all \<env\> values
       - range \<env\> - generate vector of values in \<env\> 
-      - zip \<dom\> \<range\> - generate environment with given domain
-        and range taken from \<range\>
       - restrict \<env\> - restrict further commands to those in \<env\>
         
       - select \<binding\> \<env\> - subset of \<env\> for which
@@ -649,6 +678,8 @@ following categories.
       - sortdom \<env\> - sorted vector of names in \<env\> 
       - sortdomby \<cmpfn\> \<env\> - sorted vector of names in \<env\>
         using \<cmpfn\> 
+      - zip \<dom\> \<range\> - generate environment with given domain
+        and range taken from \<range\>
 
   - Closures
     
@@ -803,17 +834,18 @@ following categories.
         \<width\> chars from parse object, update string 
       - parse scanmatch \<dir\> \<@val\> \<parseobj\> - parse prefix in
         dir from parse object giving matching value
+      - scantomatch \<dir\> \<@val\> \<parseobj\> - parse up to
+        delimiter named in dir in \<parseobj\> giving matching value
+      - scanopterm \<opdefs\> \<scanfn\> \<@val\> \<parseobj\> - parse
+        term using \<opdefs\> & base \<scanfn\>
       - parse scanstr \<@string\> \<parseobj\> - parse item until
         delimiter, update string
       - parse scanid \<@string\> \<parseobj\> - parse identifier, update
         string
-      - parse scanitemstr \<@string\> \<parseobj\> - parse item or
+      - parse scanitemstr \<@string\> \<parseobj\> - parse item or
         string, update string
       - parse scanitem \<delims\> \<@string\> \<parseobj\> - parse item
         until delimiter, update string 
-      - parse scanmatch \<dir\> \<@val\> \<parseobj\> - parse prefix in
-        dir from string in parse object giving matching value, update
-        string 
       - parse source - name of the source of chars at start of the last
         line 
 
@@ -1942,8 +1974,8 @@ As with other commands the line is subject to $-expansion first.</td>
 <td>Description</td>
 <td>This command pushes its argument directory env onto the current environment stack thus bringing all the names defined in the directory into scope.<br />
 Since the commands parse.local and help are active only on the top directory in the current environment the command has a direct effect on them.<br />
-Note that the environment entered during the execution of a block goes out of scope at the end of the block, together with any pushed directories.<br />
-See also: restrict</td>
+Note that (unless left explicitly using leave or leaving) the environment entered during the execution of a block goes out of scope at the end of the block, together with any pushed directories.<br />
+See also: restrict, leave, leaving</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
@@ -1960,11 +1992,37 @@ See also: restrict</td>
 <p>["_help"="- prints command information"]::&lt;func:0x8053dfc,0&gt;</p>
 <p>&gt; eval help</p>
 <p>["_help"="- prints command information"]::&lt;func:0x8053dfc,0&gt;</p>
+<p>&gt;</p>
 <p>&gt; set f [rec]:{ x="original"; enter rec!; echo x!; }</p>
 <p>&gt; f [x="new"]</p>
 <p>new</p>
 <p>&gt; f [y="new"]</p>
-<p>original</p></td>
+<p>original</p>
+<p>&gt;</p>
+<p>&gt; eval ans</p>
+<p>42</p>
+<p>&gt; set f1[]:{ans=80;ans}</p>
+<p>&gt; f1</p>
+<p>80</p>
+<p>&gt; eval ans</p>
+<p>80</p>
+<p>&gt; set f1[]:{enter [ans=9]!;ans}</p>
+<p>&gt; f1</p>
+<p>9</p>
+<p>&gt; eval ans</p>
+<p>80</p>
+<p>&gt;</p>
+<p>&gt; set item_bill[purchase]: {</p>
+<p>    enter purchase!;</p>
+<p>        total = items * unit_cost;</p>
+<p>    leave!;</p>
+<p>    purchase.total</p>
+<p>};</p>
+<p>&gt; set item1 [name="Cheese", total=NULL, items=3, unit_cost=200]</p>
+<p>&gt; item_bill item1</p>
+<p>600</p>
+<p>&gt; print item1</p>
+<p>[name="Cheese",total=600,items=3,unit_cost=200]</p></td>
 </tr>
 </tbody>
 </table>
@@ -3205,6 +3263,116 @@ See also: joinchr and split. </td>
 <p>"line1\0line2"</p>
 <p>&gt; join NULL &lt;0x41, " line", 0x320, "made from", 32, "bytes"&gt;</p>
 <p>"A line made from bytes"</p></td>
+</tr>
+</tbody>
+</table>
+
+### **leave**
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>leave</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>No argument</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>This command pops the last argument directory pushed using either enter or restrict onto the current environment stack thus removing all the names in their directories from scope.<br />
+Since the commands parse.local and help are active only on the top directory in the current environment the command has a direct effect on them.<br />
+Note that (unless left explicitly using leave) the environment entered during the execution of a block goes out of scope at the end of the block, together with any pushed directories.<br />
+See also: enter, restrict, leaving</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>NULL</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; enter [h=help, e=echo, ans=42]</p>
+<p>&gt; help</p>
+<p>ans - int value</p>
+<p>e &lt;whole line&gt; - prints the line out</p>
+<p>h - prints command information</p>
+<p>&gt; eval h</p>
+<p>["_help"="- prints command information"]::&lt;func:0x8053dfc,0&gt;</p>
+<p>&gt; eval help</p>
+<p>["_help"="- prints command information"]::&lt;func:0x8053dfc,0&gt;</p>
+<p>&gt;</p>
+<p>&gt; set f [rec]:{ x="original"; enter rec!; echo x!; }</p>
+<p>&gt; f [x="new"]</p>
+<p>new</p>
+<p>&gt; f [y="new"]</p>
+<p>original</p>
+<p>&gt;</p>
+<p>&gt; eval ans</p>
+<p>42</p>
+<p>&gt; set f1[]:{ans=80;ans}</p>
+<p>&gt; f1</p>
+<p>80</p>
+<p>&gt; eval ans</p>
+<p>80</p>
+<p>&gt; set f1[]:{enter [ans=9]!;ans}</p>
+<p>&gt; f1</p>
+<p>9</p>
+<p>&gt; eval ans</p>
+<p>80</p>
+<p>&gt;</p>
+<p>&gt; set item_bill[purchase]: {</p>
+<p>    enter purchase!;</p>
+<p>        total = items * unit_cost;</p>
+<p>    leave!;</p>
+<p>    purchase.total</p>
+<p>};</p>
+<p>&gt; set item1 [name="Cheese", total=NULL, items=3, unit_cost=200]</p>
+<p>&gt; item_bill item1</p>
+<p>600</p>
+<p>&gt; print item1</p>
+<p>[name="Cheese",total=600,items=3,unit_cost=200]</p></td>
+</tr>
+</tbody>
+</table>
+
+### **leaving**
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>leaving</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>No argument</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>This command pops the last argument directory pushed using either enter or restrict onto the current environment stack thus removing all the names in their directories from scope. It then returns the environment removed in that way. (i.e. it is identical to leave except it returns the environment just left).<br />
+Since the commands parse.local and help are active only on the top directory in the current environment the command has a direct effect on them.<br />
+Note that (unless left explicitly using leave or leaving) the environment entered during the execution of a block goes out of scope at the end of the block, together with any pushed directories.<br />
+See also: enter, leave, restrict</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>&lt;env:clodir&gt;</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; enter []</p>
+<p>&gt; set this 8</p>
+<p>&gt; leaving</p>
+<p>[this=8]</p></td>
 </tr>
 </tbody>
 </table>
@@ -5102,17 +5270,23 @@ See also: domain</td>
 Since the commands parse.local and help are active only on the top directory in the current environment the command has a direct effect on them.<br />
 Note that the environment entered during the execution of a block goes out of scope at the end of the block, together with any pushed directories.  This will mean that the original environment will become available again once the block incorporating the restrict has exited.<br />
 This function can be used to reduce the complexity of the syntax available subsequently.  It can be particularly useful as an argument to parse.exec in order to constrain a file's syntax.  Note, however, that including any functions with one or more arguments among those allowed may enable the current environment to be altered (using the &lt;name&gt; = &lt;value&gt; FTL syntax) - this may be overcome by defining commands to replace the functions using the cmd function.  The lock function may be of use if this is a problem.<br />
-See also: enter, lock, cmd, parse.exec</td>
+See also: enter, leave, lock, cmd, parse.exec</td>
 </tr>
 <tr class="even">
 <td>Example</td>
-<td><p>&gt; restrict [h=help, e=echo, ans=42]</p>
+<td><p>&gt; restrict [h=help, e=echo, x=leave, ans=42]</p>
 <p>&gt; h</p>
-<p>ans - int value</p>
+<p>h [all] [&lt;cmd&gt;] - prints information about commands</p>
 <p>e &lt;whole line&gt; - prints the line out</p>
-<p>h - prints command information</p>
+<p>x - exit the environment last entered or restricted</p>
 <p>&gt; eval h           # we don't have an 'eval' command any more</p>
-<p>ftl $*console*:25: unknown command 'eval h'</p>
+<p>ftl $*console*:+27 in</p>
+<p>ftl $*console*:28: unknown command 'eval h'</p>
+<p>&gt; x</p>
+<p>&gt; eval h           # we have eval again, but not 'eval'</p>
+<p>ftl $*console*:+29 in</p>
+<p>ftl $*console*:30: undefined symbol 'h'</p>
+<p>ftl $*console*:+29: failed to evaluate expression</p>
 <p>% cat &gt; /tmp/2</p>
 <p>e simple</p>
 <p>e script</p>

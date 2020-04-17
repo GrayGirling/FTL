@@ -1,7 +1,7 @@
 
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
- * Copyright (c) 2013-2018, Gray Girling
+ * Copyright (c) 2013-2020, Gray Girling
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -178,6 +178,49 @@
 
 
 
+
+
+/*****************************************************************************
+ *                                                                           *
+ *            Operating System Dependencies                                  *
+ *                                                                           *
+ *****************************************************************************/
+
+
+/*****************************************************************************
+ *          Operating System Identification                                  *
+ *****************************************************************************/
+
+
+#define SYSOS_WINDOWS 1
+#define SYSOS_LINUX   2
+#define SYSOS_MACOSX  3
+
+#if defined(_WIN32)
+#define SYSOS SYSOS_WINDOWS
+#elif defined(__APPLE__)
+#define SYSOS SYSOS_MACOSX
+#else
+#define SYSOS SYSOS_LINUX
+#endif /* _WIN32 */
+
+#if SYSOS == SYSOS_LINUX
+#include <sys/types.h>
+#include <unistd.h>
+#include <signal.h>
+#endif
+
+#if SYSOS == SYSOS_LINUX || SYSOS == SYSOS_MACOSX
+#include <sys/time.h>
+#endif
+
+#if SYSOS == SYSOS_MACOSX
+#include <mach-o/dyld.h>
+#endif
+
+#if SYSOS == SYSOS_WINDOWS
+#include <windows.h>
+#endif
 
 
 
@@ -480,7 +523,6 @@ cmds_ftl_end(parser_state_t *state)
 
 
 #endif
-
 
 
 
@@ -815,8 +857,9 @@ static int /*rc*/ read_prolog(parser_state_t *state,
                   codeid(), prolog_file, sourceid);
         else
         {
-            if (NULL == parser_expand_exec(state, fin, NULL, NULL,
-                                            /*no_locals*/TRUE))
+            if (NULL == parser_expand_exec(state, fin,
+                                           /*cmd_str*/NULL, /*rc_file_id*/NULL, 
+                                           /*no_locals*/TRUE))
             {  fprintf(stderr,
                        "%s: attempted execution of file \"%s\" for %s failed\n",
                        codeid(), prolog_file, sourceid);
@@ -833,8 +876,9 @@ static int /*rc*/ read_prolog(parser_state_t *state,
             printf("%s: couldn't open text prolog\n", codeid());
         else
         {
-            if (NULL == parser_expand_exec(state, prolog, NULL, NULL,
-                                            /*no_locals*/TRUE))
+            if (NULL == parser_expand_exec(state, prolog, 
+                                           /*cmd_str*/NULL, /*rc_file_id*/NULL, 
+                                           /*no_locals*/TRUE))
             {  fprintf(stderr, "%s: attempted execution of "
                        "text prolog '%s' failed\n", codeid(), sourceid);
                exit_rc = EXIT_BAD_PRLGSTR;
@@ -965,8 +1009,8 @@ main(int argc, char **argv)
 
                     if (rcstream != NULL) {
                         if (NULL == parser_expand_exec(state, rcstream,
-                                                       /*no cmd string*/NULL,
-                                                       /*no rcfile*/NULL,
+                                                       /*cmd string*/NULL,
+                                                       /*rcfile*/NULL,
                                                        /*no_locals*/TRUE))
                         {   fprintf(stderr, "%s: attempted execution of "
                                     "init file for \"%s\" failed\n",
@@ -993,8 +1037,8 @@ main(int argc, char **argv)
                             exit_rc = EXIT_BAD_CMDFILE;
                         } else
                         if (NULL == parser_expand_exec(state, fin,
-                                                       /*no cmd string*/NULL,
-                                                       /*no rcfile*/NULL,
+                                                       /*cmd string*/NULL,
+                                                       /*rcfile*/NULL,
                                                        /*no_locals*/TRUE))
                         {   fprintf(stderr, "%s: attempted execution of "
                                     "file \"%s\" failed\n",
@@ -1007,16 +1051,7 @@ main(int argc, char **argv)
                         wbool insist_console = false;
 
                         if (do_console && !quiet)
-                        {   int ftlmaj, ftlmin, ftldebug;
-                            ftl_version(&ftlmaj, &ftlmin, &ftldebug);
-                            printf("%s: v%s:%d.%d%s\n",
-                                   codeid(), VERSION, ftlmaj, ftlmin,
-#ifdef NDEBUG
-                                   ""
-#else
-                                   " (debug)"
-#endif
-                                  );
+                        {   show_version(codeid());
                         }
 
                         if (do_args)
@@ -1046,7 +1081,7 @@ main(int argc, char **argv)
                                 const value_t *cmd_response;
                                 DEBUG_CLI(printf(CODEID
                                                  " calling '%s' function\n",
-                                          FTL_CMDNAME_NOCLI););
+                                                 FTL_CMDNAME_NOCLI););
                                 cmd_response = invoke(code, state);
                                 allow_console = cmd_response != value_false;
                                 do_console = do_console & allow_console;

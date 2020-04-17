@@ -768,8 +768,7 @@ parse_xml_tag_body(const char **ref_line, char *buf, size_t len,
  *  and the arguments from the parse
  */
 static const value_t *
-fnparse_xml_itemfn(const char **ref_line, parser_state_t *state,
-                  const value_t *arg)
+fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
 {   dir_t *xmlobj = (dir_t *)arg;
     const value_t *parsefn = NULL; /* to be a fn to parse the next item */
     const char *line = *ref_line;
@@ -954,7 +953,7 @@ fn_scan_xml_itemfn(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_xml_name(const char **ref_line, parser_state_t *state, const value_t *arg)
+fnparse_xml_name(const char **ref_line, parser_state_t *state, void *arg)
 {   char buf[128];
     if (parse_xml_name(ref_line, buf, sizeof(buf)))
         return value_string_new_measured(buf);

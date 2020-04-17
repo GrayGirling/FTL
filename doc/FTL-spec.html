@@ -6,7 +6,9 @@
 	<meta name="generator" content="LibreOffice 6.3.5.2 (Windows)"/>
 	<meta name="author" content="Gray Girling"/>
 	<meta name="created" content="00:00:00"/>
-	<meta name="changed" content="2020-04-03T12:45:17.795000000"/>
+	<meta name="changed" content="2020-04-17T23:32:32.155000000"/>
+	<meta name="created" content="00:00:00">
+	<meta name="created" content="00:00:00">
 	<style type="text/css">
 		h2 { border: none; padding: 0cm }
 		h2.cjk { font-family: "NSimSun" }
@@ -17,14 +19,16 @@
 		h3.ctl { font-family: "Lucida Sans" }
 		h4.cjk { font-family: "NSimSun" }
 		h4.ctl { font-family: "Lucida Sans" }
+		h1.cjk { font-family: "NSimSun" }
+		h1.ctl { font-family: "Lucida Sans" }
 	</style>
 </head>
-<body lang="en-GB" dir="ltr"><h1 align="center">FTL</h1>
+<body lang="en-GB" dir="ltr"><h1 class="western" align="center">FTL</h1>
 <h2 class="western" align="left">Language Design</h2>
 <p align="left">The cornerstone construct in FTL is a closure, which
 can be specified using the following syntax (which will be extended
 below)</p>
-<pre class="western" style="text-align: left">&lt;closure&gt;<span lang="zxx"> :</span>:= '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
+<pre class="western" style="text-align: left">&lt;closure&gt; <span lang="zxx">:</span>:= '[' &lt;symbol&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
 where &lt;code&gt; is a normal expression that evaluates to a code
 value, which could be a literal value such as</p>
 <pre class="western" style="text-align: left">&lt;code&gt; ::= '{' &lt;code-item&gt;* '}'</pre><p align="left">
@@ -63,7 +67,7 @@ conceptually a closure value is composed of three parts</p>
 <p align="left">As a generalization of the simple &lt;closure&gt;
 syntax above the part of the syntax before '<font face="monospace">::</font>'
 </p>
-<pre class="western" style="margin-left: 2.71cm; text-align: left">'[' &lt;symbol&gt; ']'</pre><p align="left">
+<pre class="western" style="margin-left: 4.71cm; text-align: left">'[' &lt;symbol&gt; ']'</pre><p align="left">
 is treated as a literal environment that may be generalized to an
 &lt;environment-expression&gt; - the '<font face="monospace">::</font>'
 being an operator that binds an environment to some code, or - more
@@ -85,7 +89,7 @@ the environment in &lt;environment-expression&gt;.<br/>
 <br/>
 Thus
 the full syntax for a closure expression is:</p>
-<pre class="western" style="margin-left: 2.71cm; text-align: left">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre><p align="left">
+<pre class="western" style="margin-left: 4.71cm; text-align: left">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre><p align="left">
 where either expression may involve literals, brackets, substitution,
 invocation etc. &nbsp;One option for an &lt;environment-expression&gt;
 is a &lt;closure&gt;, which, when used in this way refers only to the
@@ -145,7 +149,7 @@ Bound Values in Closures</h3>
 environment) can be replaced by</p>
 <pre class="western" style="text-align: left">&lt;closure&gt; '.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">value</font></font>&gt;</pre><p align="left">
 Currently &lt;value&gt;s are constrained to be either integers or
-strings.  For the sake of convenience strings can be provided as
+strings. For the sake of convenience strings can be provided as
 symbols (with no associated quotes) if they have the syntax of an
 identifier.</p>
 <p align="left">In addition the following syntax can be used to
@@ -153,6 +157,17 @@ create a symbol value from an expression</p>
 <pre class="western" style="text-align: left">'&lt;closure&gt; '.' '(' &lt;expression&gt; ')'</pre><p align="left">
 where, for example, an expression returning an integer or a string is
 converted to a symbol before use. 
+</p>
+<p align="left">When symbols are needed for the local environment it
+is possible to use these syntaxes with no closure. That is, the
+following are replaced by the value of a symbol in the current
+environment:</p>
+<pre class="western" style="text-align: left">'.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">value</font></font>&gt;
+
+'.' '(' &lt;expression&gt; ')'</pre><p align="left">
+<br/>
+<br/>
+
 </p>
 <h3 class="western" align="left"><a name="mozTocId495578"></a>Integers</h3>
 <p align="left">Although it would theoretically be possible to create
@@ -257,7 +272,6 @@ as part of the syntax for an expression:
            &lt;identifier&gt; |
            &lt;vector&gt; |
            &lt;type_literal&gt;
-           
 &lt;code&gt; ::= '{' &lt;expression_list&gt; '}'
 &lt;expression_list&gt; ::= &lt;expression&gt; (';' &lt;expression&gt;)* [';']
 &lt;id_environment&gt; ::= '[' [&lt;binding_list&gt; | &lt;binding_list&gt; ',' &lt;unbound_list&gt; | &lt;unbound_list&gt;] ']' 
@@ -364,7 +378,7 @@ expressions the cost of execution can be significantly decreased.
 </p>
 <h2 class="western" align="left"><a name="mozTocId878738"></a>Techniques</h2>
 <p align="left">This section illustrates the expressive power of the
-language so far introduced.  In particular it shows how many
+language so far introduced. In particular it shows how many
 constructs present in other languages can be emulated.</p>
 <h3 class="western" align="left"><a name="mozTocId431017"></a>Function
 calls</h3>
@@ -382,10 +396,10 @@ simply returns the code in the binding that would evaluate 5 times 5
 if it were executed. &nbsp;If its value were printed it would be</p>
 <pre class="western" style="text-align: left">[n=5]: {<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">mul</font></font> n n !}</pre><p align="left">
 (Note: in the implementation, there is no primitive that will print
-the value in this format.  Printing the value as &ldquo;[]:{mul n n
+the value in this format. Printing the value as &ldquo;[]:{mul n n
 !}&rdquo;, where only unbound variables are shown, is more convenient
-because of the size of the environment associated with a typical
-binding.)</p>
+because of the large size of the environment associated with a
+typical binding.)</p>
 <p align="left">whereas printing the expression</p>
 <pre class="western" style="text-align: left">square 5 !</pre><p align="left">
 would produce the answer</p>
@@ -456,7 +470,7 @@ switch-like construct such as:</p>
 }</pre><p align="left">
 (where &ldquo;<font face="Courier New, monospace">inenv env value!</font>&rdquo;
 is <font face="Courier New, monospace">TRUE</font> when the value is
-bound in <font face="Courier New, monospace">env</font>)  which
+bound in <font face="Courier New, monospace">env</font>) which
 enables code such as this to be written:</p>
 <pre class="western" style="text-align: left">switch n &lt;
     1 = {echo &quot;n is one&quot;!},
@@ -474,8 +488,8 @@ the counter to an argument block of code, e.g.</p>
          code n !;
        }</pre><p align="left">
 which enables code to be written such as</p>
-<pre class="western" style="margin-left: 2.71cm; text-align: left">forn 4 [n]: {
-  print n!; print &quot; squared is &quot;!; print squared n ! ; print &quot;\n&quot;!;
+<pre class="western" style="text-align: left">forn 4 [n]: {
+    print n!; print &quot; squared is &quot;!; print (squared n!) ! ; print &quot;\n&quot;!;
 }!</pre><p align="left">
 which will print out the squares from 0 to 4. 
 </p>
@@ -484,8 +498,54 @@ standard environment in FTL includes an &quot;<font face="Courier New, monospace
 function which takes an environment and a closure value as an
 argument and applies each binding in the environment to the closure
 value.</p>
-<h3 class="western" align="left"><a name="mozTocId737869"></a>Objects
-and their methods</h3>
+<h3 class="western" align="left"><a name="mozTocId737869"></a>Local
+Variables</h3>
+<p align="left">A code value may need to make use of additional
+variables that are local to the body of the code. If there were an
+external symbol named &lsquo;answer&rsquo; this function would have
+the side-effect of updating it.</p>
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">empty</font></font> = [<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">string</font></font>]: {
+    answer = FALSE;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}</pre><p>
+Local variables allow new variable instances to be used so that they
+are not confused with existing ones. 
+</p>
+<p>This technique adds the local variables to the closure environment
+and gives it an initial value:</p>
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">empty</font></font> = [answer=<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">NULL</font></font>, <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">string</font></font>]: {
+    answer = FALSE;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}</pre><p>
+It has the benefit/disbenefit of making the value of &lsquo;answer&rsquo;
+part of empty&rsquo;s state (accessible as &quot;<font face="Courier New, monospace">empty.answer</font>&quot;).
+Note that the line &quot;<font face="Courier New, monospace">answer =
+FALSE</font>&quot; can not be replaced by the initialization in the
+closure&rsquo;s environment. After every invocation &quot;<font face="Courier New, monospace">empty.answer</font>&quot;
+will take the value last assigned to it.</p>
+<p>This technique executes a code sub-block as a separate closure
+which has access to the new variable set its environment:</p>
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">empty</font></font> = [<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">string</font></font>]: {
+    [answer = FALSE]:{
+        (len string!) == 0 {answer = TRUE}!;
+        answer}!
+}</pre><p>
+It has the benefit/disbenefit of hiding the value of &quot;<font face="Courier New, monospace">answer</font>&quot;
+from the user of &quot;<font face="Courier New, monospace">empty</font>&quot;.</p>
+<p>The standard FTL library includes two functions &quot;<font face="Courier New, monospace">enter</font>&quot;
+and &quot;<font face="Courier New, monospace">leave</font>&quot;
+which place a new environment on the top of the stack and
+(optionally) remove it, respectively. The use of &quot;<font face="Courier New, monospace">enter</font>&quot;
+on its own is effectively equivalent to the code above:</p>
+<pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">empty</font></font> = [<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">string</font></font>]: {
+    enter [answer = FALSE]!;
+    (len string!) == 0 {answer = TRUE}!;
+    answer
+}</pre><p>
+It behaves the same way that the sub-block closure has above.</p>
+<h3 class="western" align="left">Objects and their Methods</h3>
 <p align="left">A record that combines both internal state and a
 number of methods that interact with that state can be constructed
 using a closure. &nbsp;For example:</p>
@@ -503,7 +563,7 @@ using a closure. &nbsp;For example:</p>
             vect (<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">sub</font></font> x (pt.xcoord!)!) (sub y (pt.ycoord!)!)!
         }
     ]
-}
+};
 p = <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> 4 5!;
 p.print!;
 q = <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> 2 1!;
@@ -542,12 +602,12 @@ parameter passing can be emulated as follows.</p>
 resulting value is bound in to the closure invocation. 
 </p>
 <ul>
-	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax: <font face="monospace">(</font><font face="monospace">add</font><font face="monospace">
-	a b!)</font> 
+	<li><p align="left" style="margin-bottom: 0cm">example actual
+	argument syntax: in<font face="monospace">(add</font> <font face="monospace">a
+	b!)</font> 
 	</p>
-	<li><p align="left">example argument read in closure body when bound
-	as &quot;x&quot;: <font face="monospace">x</font> 
+	<li><p align="left">example formal argument read in closure body
+	when bound as &quot;x&quot;: <font face="monospace">x</font> 
 	</p>
 </ul>
 <h4 class="western" align="left">Call by name</h4>
@@ -555,41 +615,78 @@ resulting value is bound in to the closure invocation.
 invocation is re-evaluated in the context of the invocation on each
 use.</p>
 <ul>
-	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax: <font face="monospace">{</font><font face="monospace">add</font><font face="monospace">
-	a b!}</font> 
+	<li><p align="left" style="margin-bottom: 0cm">Example actual
+	argument syntax: <font face="monospace">{add</font> <font face="monospace">a
+	b!}</font> 
 	</p>
-	<li><p align="left">example argument read in closure body when bound
-	as &quot;x&quot;: <font face="monospace">(x!)</font> 
+	<li><p align="left">example formal argument read in closure body
+	when bound as &quot;x&quot;: <font face="monospace">(x!)</font> 
 	</p>
 </ul>
-<h4 class="western" align="left">Call by reference - in</h4>
+<h4 class="western" align="left">Call by reference &ndash; in &ndash;
+function technique</h4>
 <p align="left">In call-by-reference &quot;in&quot;, the variable
 passed in to the invocation is read indirectly on on each use.</p>
 <ul>
-	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax:&nbsp;<font face="monospace">[]:{a}</font> 
+	<li><p align="left" style="margin-bottom: 0cm">Example actual
+	argument syntax:&nbsp;<font face="monospace">[]:{a}</font> 
 	</p>
-	<li><p align="left">example argument read in closure body when bound
-	as &quot;x&quot;: <font face="monospace">(x!)</font> 
+	<li><p align="left">example formal argument read in closure body
+	when bound as &quot;x&quot;: <font face="monospace">(x!)</font> 
 	</p>
 </ul>
-<h4 class="western" align="left">Call by reference in out</h4>
+<h4 class="western" align="left">Call by reference &ndash; in out &ndash;
+object technique</h4>
 <p align="left">In call by-reference &quot;in out&quot;, the variable
 passed in to the invocation is read indirectly on each use and can
 also be written to indirectly. 
 </p>
 <ul>
-	<li><p align="left" style="margin-bottom: 0cm">example argument
-	syntax:&nbsp;<font face="monospace">[get=[]:{a}, set=[x]:{a=x}]</font>
+	<li><p align="left" style="margin-bottom: 0cm">example actual
+	argument syntax:&nbsp;<font face="monospace">[get=[]:{a},
+	set=[x]:{a=x}]</font> 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">example formal
+	argument read in closure body when bound as &quot;x&quot;: <font face="monospace">(x.get!)</font>
 		</p>
-	<li><p align="left" style="margin-bottom: 0cm">example argument read
-	in closure body when bound as &quot;x&quot;: <font face="monospace">(x.get!)</font>
-		</p>
-	<li><p align="left">example argument write in closure body when
-	bound as &quot;x&quot;: <font face="monospace">x.set 3!</font> 
+	<li><p align="left">example formal argument write in closure body
+	when bound as &quot;x&quot;: <font face="monospace">x.set 3!</font> 
 	</p>
 </ul>
+<h4 class="western" align="left">Call by reference &ndash; <font face="Liberation Serif, serif"><font size="3" style="font-size: 12pt"><b>vector</b></font></font>
+technique</h4>
+<p align="left">In call-by-reference &quot;in out&quot;, the variable
+passed in to the invocation is read and written as the only element
+in a vector.</p>
+<ul>
+	<li><p align="left" style="margin-bottom: 0cm">example actual
+	argument syntax:&nbsp;<font face="monospace">&lt;a&gt;</font> 
+	</p>
+	<li><p align="left" style="margin-bottom: 0cm">example formal
+	argument read in closure body when bound as &quot;x&quot;: <font face="monospace">x.0</font></p>
+	<li><p align="left" style="margin-bottom: 0cm">example formal
+	argument write in closure body when bound as &quot;x&quot;: <font face="monospace">x.0</font></p>
+</ul>
+<p align="left" style="margin-bottom: 0cm"><br/>
+
+</p>
+<h3 class="western" align="left">With Statement</h3>
+<p align="left">Some languages have syntax which allows a block of
+code to be entered in which the fields in a specific record to be
+accessed directly by name (instead of using &lt;record&gt;.&lt;name&gt;
+for example). This can be provided in the same way that locals are
+dealt with (see above).</p>
+<p>This technique executes a code sub-block as a separate closure
+which has access to the new variable set its environment:</p>
+<pre class="western">item_bill = [purchase]: {
+    purchase:{
+        total = items * unit_cost
+    }!
+};
+item1 = [name=&quot;Cheese&quot;, total=NULL, items=3, unit_cost=200];
+item_bill item1!;
+print item1!;</pre><p align="left">
+would print out &quot;[name=&quot;Cheese&quot;,total=600,items=3,unit_cost=200]&quot;.</p>
 <p align="left"><br/>
 <br/>
 
