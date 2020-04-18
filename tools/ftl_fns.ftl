@@ -55,6 +55,9 @@ if (sys.fs.home != NULL) {
    path_addstart "FTL_PATH" (join sys.fs.sep <sys.fs.home, "."+(codeid)>!)!;
 }{}
 
+path_addstart "FTL_PATH" sys.fs.thisdir
+
+
 ######################
 
 set op_errors ""
