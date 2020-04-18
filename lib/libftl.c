@@ -242,9 +242,12 @@
 /*#define FTL_BOOL_ISINT*/
 
 #define FTL_TRAP_EXCEPTIONS 1
-/* throw an FTL exception when Ctrl-C is typed */
+/*< throw an FTL exception when Ctrl-C is typed */
 #define FTL_TRAP_SIGNAL_TERMINATE 0
-/* throw an FTL exception when SIGTERM exception is detected */
+/*< throw an FTL exception when SIGTERM exception is detected */
+#define FTL_MACRO_BRACED_EXPAND FALSE
+/*< expand $ in braced ({ ... }) areas of text */
+
 
 #define FTL_ERROR_TRAIL_LINES 4
 
@@ -16333,27 +16336,34 @@ parser_collect(parser_state_t *state)
 
 
 
-/* Deal with backslash line continuation and '$' variable expansion
- * output the resulting line to \c out
+/* Copy charsource to outchar_t destination dealing with '$' variable
+ * expansion.
+ * Optionally omit expansion in braces ({ and }).
+ *
  * This function may cause a garbage collection
  */
-extern outchar_t *
-parser_expand(parser_state_t *state, outchar_t *out,
-              const char *phrase, size_t len)
-{   instack_t inpile;
+static outchar_t *
+parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
+                           charsource_t *inmain, bool omit_braced)
+{
+    instack_t inpile;
     instack_t *in = instack_init(&inpile);
-    charsource_string_t instring;
-    charsource_t *inmain = charsource_string_init(&instring, /*delete*/NULL,
-                                                  "<expanded_line>",
-                                                  phrase, len);
     int ch;
     int lastch = EOF;
+    int brace_depth = 0;
 
-    DEBUG_EXPD(printf("expanding '%s'[%d]\n", phrase, len);)
     instack_push(in, inmain);
 
     while (EOF != (ch = instack_getc(in)))
-    {   if (ch == '\\' && lastch == '\\')
+    {   if (ch == '{')
+            brace_depth++;
+        else if (ch == '}')
+            brace_depth--;
+        if (omit_braced && brace_depth > 0)
+        {   /* not looking for $ expansion in this bit */
+            outchar_putc(out, ch);
+        } else
+        if (ch == '\\' && lastch == '\\')
         {   outchar_putc(out, ch);
             ch = EOF; /* this is just to make lastch EOF next time round -
                          so it does not affect the interpretation of $ */
@@ -16363,7 +16373,7 @@ parser_expand(parser_state_t *state, outchar_t *out,
             {   /* parse $$ - escape for just '$' */
                 outchar_putc(out, ch);
             } else
-            {   char macname[FTL_ID_MAX+3];
+            {   char macname[FTL_ID_MAX+3]; /*'macro' name*/
                 char *mac = &macname[0];
                 const char *mac_r = &macname[0];
                 size_t len = sizeof(macname);
@@ -16460,6 +16470,40 @@ parser_expand(parser_state_t *state, outchar_t *out,
 }
 
 
+
+
+
+
+/* Copy string to outchar_t destination dealing with '$' variable expansion 
+ *
+ * This function may cause a garbage collection
+ */
+static outchar_t *
+parser_macro_expand_string(parser_state_t *state, outchar_t *out,
+                           const char *phrase, size_t len, bool omit_braced)
+{   charsource_string_t instring;
+    charsource_t *inmain = charsource_string_init(&instring, /*delete*/NULL,
+                                                  "<expanded_line>",
+                                                  phrase, len);
+    DEBUG_EXPD(printf("expanding '%s'[%d]\n", phrase, len););
+    return parser_macro_expand_stream(state, out, inmain, omit_braced);
+}
+
+
+
+
+
+
+/* Deal with '$' variable expansion and write the resulting line to \c out
+ * This function may cause a garbage collection
+ */
+extern outchar_t *
+parser_expand(parser_state_t *state, outchar_t *out,
+              const char *phrase, size_t len)
+{
+    return parser_macro_expand_string(state, out, phrase, len,
+                                      !FTL_MACRO_BRACED_EXPAND);
+}
 
 
 
@@ -22740,8 +22784,8 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
             DEBUG_LNO(DPRINTF("%s: post-line at %s:%d - pre-expand\n",
                               codeid(), parser_source(state),
                               parser_lineno(state)););
-
-            /* expand \ and $ in buffer writing to expandsink and get buffer */
+            OMIT(DPRINTF("%s: got line '%.*s'\n", codeid(),(int)len, phrase););
+            /* expand macros in buffer writing to expandsink and get buffer */
             parser_expand(state, expandsink, phrase, len);
             charsink_string_buf(expandsink, &phrase, &len);
             charsink_string_close(linesink);
