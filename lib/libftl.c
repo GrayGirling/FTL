@@ -9745,10 +9745,15 @@ static bool list_element_start(list_t *list, void **out_thing)
 {   list_element_t *element = list->first;
     if (element != NULL)
     {   *out_thing = element->thing;
+        DEBUG_ENTER(
+            if (*out_thing == NULL)
+                DPRINTF("%s: first list element is NULL\n", codeid());
+        );
         return true;
     }
     else
     {   *out_thing = NULL;
+        DEBUG_ENTER(DPRINTF("%s: list is empty\n", codeid()););
         return false;
     }
 }
@@ -9824,8 +9829,8 @@ static list_element_t *list_find_first(list_t *list, void *thing)
 
 
 
-/*! Remove elements from the start until one containing thing is found.
- *  Don't remove anything if thing isn't found
+/*! Remove elements from the start until one containing new_start_thing is
+ *  found.  Don't remove anything if thing isn't found
  */
 static bool list_remove_start_until(list_t *list, void *new_start_thing,
                                     list_thing_delete_fn_t *delete_fn)
@@ -20733,8 +20738,8 @@ invoke(const value_t *code, parser_state_t *state)
                     dir_stack_pos_t left_env_top = NULL;
                     dir_stack_pos_t final_left_env_top = NULL;
 
-                    list_element_start(&state->left_envs,
-                                       (void *)&left_env_top);
+                    bool has_outer = list_element_start(&state->left_envs,
+                                                        (void *)&left_env_top);
 
                     DEBUG_MOD(DPRINTF("%s: invoke - code closure\n", codeid());)
                     value_code_buf(codeval, &buf, &len);
@@ -20756,15 +20761,24 @@ invoke(const value_t *code, parser_state_t *state)
                     }
                     linesource_pop(parser_linesource(state));
                     parser_env_return(state, pos);
-                    list_element_start(&state->left_envs,
-                                       (void *)&final_left_env_top);
-                    if (final_left_env_top != left_env_top)
+                    if (has_outer !=
+                            list_element_start(&state->left_envs,
+                                               (void *)&final_left_env_top) ||
+                        final_left_env_top != left_env_top)
                     {   /* the function must have used 'enter' with no 'leave'*/
+                        bool returned_ok = true;
                         DEBUG_ENTER(DPRINTF("%s: invoke exit "
                                             "unballanced enter/leave\n",
                                             codeid()););
-                        if (!list_remove_start_until(&state->left_envs,
-                                                     left_env_top, /*del*/NULL))
+                        if (has_outer)
+                            returned_ok =
+                                list_remove_start_until(&state->left_envs,
+                                                        left_env_top,
+                                                        /*del*/NULL);
+                        else
+                            list_delete(&state->left_envs,/*del*/NULL);
+
+                        if (!returned_ok)
                         {   parser_error(state, "can't find original "
                                          "enter/leave environment after "
                                          "invocation\n");
