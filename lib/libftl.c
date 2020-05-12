@@ -213,7 +213,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 24
+#define VERSION_MIN 25
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -484,6 +484,7 @@
 // #define DEBUG_CHOP DO
 // #define DEBUG_OPTERM DO
 // #define DEBUG_ENTER DO
+// #define DEBUG_LHV DO
 
 #if defined(NDEBUG) && !defined(FORCEDEBUG)
 #undef DEBUG_HISTORY
@@ -516,6 +517,7 @@
 #undef DEBUG_CHOP
 #undef DEBUG_OPTERM
 #undef DEBUG_ENTER
+#undef DEBUG_LHV
 #endif
 
 
@@ -609,6 +611,9 @@
 #endif
 #ifndef DEBUG_ENTER
 #define DEBUG_ENTER OMIT
+#endif
+#ifndef DEBUG_LHV
+#define DEBUG_LHV OMIT
 #endif
 
 /* #define DPRINTF ci_log */
@@ -7623,6 +7628,9 @@ value_code_compare(const value_t *v1, const value_t *v2)
 
 
 
+/*! Initialize a code object with text from \c string defined at \c sourcename
+ *  line number lineno
+ */
 static value_t *
 value_code_init(value_code_t *code, const value_t *string,
                 const char *sourcename, int lineno, bool on_heap)
@@ -7642,15 +7650,22 @@ value_code_init(value_code_t *code, const value_t *string,
 
 
 
+/*! Create a code object with text from \c string defined at \c sourcename
+ *  line number lineno
+ */
 extern value_t *
 value_code_new(const value_t *string, const char *sourcename, int lineno)
 {   value_code_t *code = NULL;
 
-    if (value_istype(string, type_string))
+    if (value_type_equal(string, type_string))
     {   code = (value_code_t *)FTL_MALLOC(sizeof(value_code_t));
         if (NULL != code)
             value_code_init(code, string, sourcename, lineno, /*on_heap*/TRUE);
     }
+    else
+        fprintf(stderr, "%s: new code object should be "
+                "made from a string - not %s\n",
+                codeid(), value_type_name(string));
     return code==NULL? NULL: &code->value;
 }
 
@@ -15635,7 +15650,10 @@ values_closure_init(void)
 
 
 
-
+/*! Assuming a value has some representation as a directory, return the
+ *  directory it refers to
+ *  Return TRUE iff successful
+ */
 extern bool
 value_to_dir(const value_t *val, dir_t **out_dir)
 {   if (value_type_equal(val, type_dir))
@@ -17928,7 +17946,7 @@ value_func_lhv_print(outchar_t *out, const value_t *root,
     if (PTRVALID(value) && value_istype(value, type_func))
     {   value_func_lhv_t *lhv_func = (value_func_lhv_t *)value;
         /*value_func_t *func = &lhv_func->fn;*/
-        n += outchar_printf(out, "{");
+        n += outchar_printf(out, "{.");
         n += value_print_detail(out, root, lhv_func->lv_name, detailed);
         n += outchar_printf(out, "="BUILTIN_ARG"1}");
     }
@@ -17965,7 +17983,7 @@ genfn_lhv_setval(const value_t *this_fn, parser_state_t *state,
     dir_stack_t *stack;
 
     (void)value_closure_get(this_fn, &codeval, &dir, &unbound);
-    OMIT(DIR_SHOW_ST("pre-return dir of @fn: ", state, dir);)
+    OMIT(DIR_SHOW_ST("pre-return dir of @fn: ", state, dir););
 
     /* value_closure_get always returns a value_env_t * as dir */
     stack = value_env_dir_stack((value_env_t *)dir);
@@ -17976,10 +17994,11 @@ genfn_lhv_setval(const value_t *this_fn, parser_state_t *state,
         dir_stack_return(stack, dir_stack_last_pos(stack)); /* infodir */
     OMIT(DIR_SHOW_ST("return dir of @fn: ", state, dir);
          printf("at %p\n", dir_stack_top(stack));
-         printf("top is %p\n", dir_stack_top(parser_env_stack(state)));)
+         printf("top is %p\n", dir_stack_top(parser_env_stack(state))););
 
     if (NULL != dir)
     {   dir_t *locals = dir_stack_top(stack);
+        OMIT(VALUE_SHOW_ST("defining @fn as local: ", state, func->lv_name););
         if (!dir_set(locals, func->lv_name, val))
         {   parser_error(state, "failed to set value of ");
             parser_value_print(state, func->lv_name);
@@ -18055,6 +18074,7 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
     const value_t *lhvfn =
         value_func_lhv_new(id, /*has_infodir*/get_fn_name != NULL);
 
+    DEBUG_LHV(printf("%s: new lhv function created\n", codeid()););
     if (NULL != lhvfn && value_type_equal(parent, type_dir))
     {   static const char *arg = BUILTIN_ARG"1";
         value_t *closure = value_closure_new(lhvfn, (value_env_t *)NULL);
@@ -18064,17 +18084,39 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
         value_env_pushdir(env, (dir_t *)parent, /*env_end*/FALSE);
         (void)value_closure_pushdir(closure, (dir_t *)parent, /*env_end*/FALSE);
         if (get_fn_name != NULL)
-        {
+        {   /* make a function that returns the field "id" called get_fn_name */
             dir_t *infodir = dir_id_new();
-            value_t *code = value_code_new(id, "<lhv>", parser_lineno(state));
-            value_t *get_fn = value_closure_new(code, env);
+            value_t *code;
+            value_t *get_fn;
+
+            /* making a code block containing {.<id>} */
+            value_t *codestr;
+            const char *codestr_buf = NULL;
+            size_t codestr_size = 0;
+            charsink_string_t stream;
+            charsink_t *sink = charsink_string_init(&stream);
+            charsink_putc(sink, '.');
+            value_print_detail(sink, dir_value(parser_root(state)), id,
+                               /*detailed*/FALSE);
+            charsink_string_buf(sink, &codestr_buf, &codestr_size);
+            codestr = value_string_new(codestr_buf, codestr_size);
+            charsink_string_close(sink);
+            
+            OMIT(printf("%s: creating closure for id\n", codeid());
+               VALUE_SHOW_ST("ID dir closure: ", state, codestr);
+            );
+            
+            code = value_code_new(codestr, "<lhv>", parser_lineno(state));
+            get_fn = value_closure_new(code, env);
+            DEBUG_LHV(printf("%s: install get function '%s'\n",
+                            codeid(), get_fn_name););
             if (get_fn != NULL && code != NULL)
             {   dir_string_set(infodir, get_fn_name, get_fn);
                 (void)value_closure_pushdir(closure, infodir, /*env_end*/FALSE);
             }
         }
-        OMIT(DIR_SHOW_ST("@parent: ", state, parent);
-             printf("at %p\n", parent););
+        OMIT(VALUE_SHOW_ST("@parent: ", state, parent);
+           printf("at %p\n", (void *)parent););
         (void)value_closure_pushunbound(closure, /*pos*/NULL,
                                         value_cstring_new_measured(arg));
         lhvfn = closure;
@@ -19701,6 +19743,8 @@ parse_index_expr(const char **ref_line, parser_state_t *state,
     {
         ok = parse_index(ref_line, state, out_val);
     }
+    OMIT(printf("%s: parse index expression %s\n",
+                codeid(), ok? "OK": "FAILED"););
     return ok;
 }
 
@@ -19732,7 +19776,11 @@ parse_indexname_expr(const char **ref_line, parser_state_t *state,
 
 
 
-
+/*! Assuming a value has some representation as a directory, return the
+ *  directory it refers to.
+ *  Agument closures with no directory yet with an empty id directory.
+ *  Return TRUE iff successful
+ */
 /**/extern bool
 get_index_dir(const value_t *ival, dir_t **out_parent)
 {   bool ok = TRUE;
@@ -19813,8 +19861,8 @@ dir_dot_lookup(dir_t *dir, const value_t *name)
     {
         type_t nametype = value_type(name);
 
-        OMIT(DPRINTF("%s: dir lookup name type %p - %s\n",
-                   codeid(), nametype, value_type_name(name)););
+        OMIT(DPRINTF("%s: dir lookup %s index (type %p)\n",
+                     codeid(), value_type_name(name), nametype););
 
         if (type_equal(nametype, type_dir))
         {   enum_lookup_arg_t luarg;
@@ -19843,9 +19891,13 @@ dir_dot_lookup(dir_t *dir, const value_t *name)
         }
         else
         {
-            OMIT(DPRINTF("%s: dir lookup name in type %p - %s\n",
-                         codeid(), value_type(dir_value(dir)),
-                         value_type_name(dir_value(dir))););
+            OMIT(
+               DPRINTF("%s: dir lookup %s index in type %s (%p)\n",
+                       codeid(), value_type_name(name),
+                       value_type_name(dir_value(dir)),
+                       value_type(dir_value(dir)));
+               VALUE_SHOW("index: ", name);
+            );
             return dir_get(dir, name);
         }
     }
@@ -19902,8 +19954,8 @@ parse_index_path(const char **ref_line, parser_state_t *state, dir_t *indexed,
     DEBUG_TRACE(DPRINTF("(index path: '%s'\n", *ref_line);)
 
     ok = parse_index_expr(ref_line, state, &new_id) && parse_space(ref_line);
-    OMIT(printf("%s: index was %s ...%s\n",
-              codeid(), ok? "before": "not at", *ref_line);)
+    OMIT(printf("%s: index %s ...%s\n",
+                codeid(), ok? "occurs before": "was not at", *ref_line););
 
     while (ok && parse_dot(ref_line) &&
            parse_space(ref_line))
@@ -20458,17 +20510,23 @@ static bool
 parse_indexed_lhvalue(const char **ref_line, parser_state_t *state,
                       dir_t *indexed, const value_t **out_val)
 {
-    dir_t *parent; /* 'indexed' indexed by the initial [<index>.]* section */
-    const value_t *id;
+    dir_t *parent = NULL;
+    /*< 'indexed' indexed by the initial [<index>.]* section */
+    const value_t *id = NULL;
     bool ok = false;
 
+    DEBUG_LHV(printf("%s: parsing LHV value\n",codeid()););
     if (parse_index_path(ref_line, state, indexed, &parent, &id))
-    {   const value_t *assign_fn =
+    {   const value_t *assign_fn;
+        DEBUG_LHV(printf("%s: creating LHV assign fn\n",codeid()););
+        assign_fn =
             value_func_lhv_assignment(dir_value(parent), id, LHV_FN_GET, state);
         if (assign_fn != NULL)
         {   *out_val = assign_fn;
             ok = true;
         }
+        DEBUG_LHV(else printf("%s: couldn't create assignment fn\n",
+                              codeid()););
     }
     return ok;
 }
