@@ -33,7 +33,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    Apr 2020
+** date    May 2020
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -213,7 +213,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 25
+#define VERSION_MIN 26
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -334,14 +334,14 @@
 #define SYS_EPOCH_YEAR 1900
 #endif
 
-#define FTL_LINESOURCE_NAME_MAX 64
-#define FTL_ID_MAX              128
-#define FTL_CMDNAME_MAX         FTL_ID_MAX
-#define FTL_PRINTF_MAX          4096
-#define FTL_SYSENV_VAL_MAX      4096
-#define FTL_STRING_MAX          4096
-#define FTL_ARGNAMES_CACHED     8
-
+#define FTL_LINESOURCE_NAME_MAX         64
+#define FTL_ID_MAX                      128
+#define FTL_CMDNAME_MAX                 FTL_ID_MAX
+#define FTL_PRINTF_MAX                  4096
+#define FTL_SYSENV_VAL_MAX              4096
+#define FTL_STRING_MAX                  4096
+#define FTL_ARGNAMES_CACHED             8
+#define FTL_LINESOURCE_KETSTACK_SIZE    256
 
 #define HAS_TOWUPPER    /* C99 function */
 #define HAS_TOWLOWER    /* C99 function */
@@ -464,7 +464,7 @@
 // #define DEBUG_ISBLK DO
 // #define DEBUG_LNO DO 
 // #define DEBUG_CONSOLE DO 
-// #define DEBUG_EXPD DO 
+// #define DEBUG_EXPD DO
 // #define DEBUG_SERIES DO 
 // #define DEBUG_TRACE DO
 // #define DEBUG_SUBST DO
@@ -4836,7 +4836,11 @@ linesource_read(linesource_t *source, charsink_t *line)
         bool gotch = FALSE;
         bool escaped = FALSE;
         bool instring = FALSE;
+        const char *bra = "{<([";
+        const char *ket = "}>)]";
+        char ketstack[FTL_LINESOURCE_KETSTACK_SIZE]; /* end bracket stack */
         int brackets = 0;
+        int ket_closing = EOF; /* the value in ketstack[brackets-1] */
 
         while ((gotch || EOF != (ch = instack_getc(&source->in))) &&
                (escaped || instring || brackets>0 ||
@@ -4873,10 +4877,29 @@ linesource_read(linesource_t *source, charsink_t *line)
             {   use_char = TRUE;
                 if (ch == source->string)
                     instring = TRUE;
-                else if (ch == '<' || ch == '(' || ch == '{' || ch == '[')
-                    brackets++;
-                else if (ch == '>' || ch == ')' || ch == '}' || ch == ']')
+                else
+                if (brackets > sizeof(ketstack) && NULL != strchr(ket, ch))
+                {   /* can't check for matching brackets */
                     brackets--;
+                    if (brackets > 0 && brackets <= sizeof(ketstack))
+                        ket_closing = ketstack[brackets-1];
+                    else
+                        ket_closing = EOF;
+                } else
+                if (brackets > 0 && ch == ket_closing)
+                {   /* we only close matching brackets if possible! */
+                    brackets--;
+                    if (brackets > 0)
+                        ket_closing = ketstack[brackets-1];
+                    else
+                        ket_closing = EOF;
+                } else
+                {   char *bkt = strchr(bra, ch);
+                    if (NULL != bkt)
+                    {   ket_closing = ketstack[brackets] = ket[bkt-bra];
+                        brackets++;
+                    }
+                }
             }
 
             if (use_char)
@@ -16367,21 +16390,30 @@ parser_collect(parser_state_t *state)
  */
 static outchar_t *
 parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
-                           charsource_t *inmain, bool omit_braced)
+                           charsource_t *inmain, int string_char,
+                           bool omit_braced)
 {
     instack_t inpile;
     instack_t *in = instack_init(&inpile);
     int ch;
     int lastch = EOF;
     int brace_depth = 0;
+    bool instring = FALSE;
 
+    DEBUG_EXPD(printf("%s: expand stream - quote '%c' %s braced, state %p\n",
+                      codeid(), (char)string_char,
+                      omit_braced?"omit":"include", state););
     instack_push(in, inmain);
 
     while (EOF != (ch = instack_getc(in)))
-    {   if (ch == '{')
-            brace_depth++;
-        else if (ch == '}')
-            brace_depth--;
+    {   if (ch == string_char)
+            instring = !instring;
+        if (!instring)
+        {   if (ch == '{')
+                brace_depth++;
+            else if (ch == '}')
+                brace_depth--;
+        }
         if (omit_braced && brace_depth > 0)
         {   /* not looking for $ expansion in this bit */
             outchar_putc(out, ch);
@@ -16390,7 +16422,8 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
         {   outchar_putc(out, ch);
             ch = EOF; /* this is just to make lastch EOF next time round -
                          so it does not affect the interpretation of $ */
-        } else if (ch == '$' && lastch != '\\')
+        } else
+        if (ch == '$' && lastch != '\\')
         {   ch = instack_getc(in);
             if (ch == '$')
             {   /* parse $$ - escape for just '$' */
@@ -16436,6 +16469,8 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
                 }
                 *mac = '\0';
                 mac_r = &macname[0];
+                DEBUG_EXPD(printf("%s: executing macro '%s' under %d braces\n",
+                                  codeid(), mac_r, brace_depth););
                 if (parse_cmdlist(&mac_r, state, &macval))
                 {   parse_space(&mac_r);
                     if (!parse_empty(&mac_r))
@@ -16450,6 +16485,9 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
                     size_t blen;
                     charsource_t *inmac;
 
+                    DEBUG_EXPD(printf("%s: got %s value from macro '%s'\n",
+                                      codeid(), value_type_name(macval),
+                                      &macname[0]););
                     if (value_type_equal(macval, type_string))
                     {
                         /* include text as a macro - NB any '$' in the
@@ -16503,13 +16541,20 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
  */
 static outchar_t *
 parser_macro_expand_string(parser_state_t *state, outchar_t *out,
-                           const char *phrase, size_t len, bool omit_braced)
+                           const char *phrase, size_t len,
+                           int string_char, bool omit_braced)
 {   charsource_string_t instring;
     charsource_t *inmain = charsource_string_init(&instring, /*delete*/NULL,
                                                   "<expanded_line>",
                                                   phrase, len);
-    DEBUG_EXPD(printf("expanding '%s'[%d]\n", phrase, len););
-    return parser_macro_expand_stream(state, out, inmain, omit_braced);
+    outchar_t *expout;
+    DEBUG_EXPD(printf("%s: expanding '%s'[%d]\n", codeid(), phrase,
+                      (int)len););
+    expout = parser_macro_expand_stream(state, out, inmain, string_char,
+                                        omit_braced);
+    DEBUG_EXPD(printf("%s: expansion %s\n", codeid(),
+                      out == NULL?"FAILED":"OK"););
+    return expout;
 }
 
 
@@ -16524,7 +16569,7 @@ extern outchar_t *
 parser_expand(parser_state_t *state, outchar_t *out,
               const char *phrase, size_t len)
 {
-    return parser_macro_expand_string(state, out, phrase, len,
+    return parser_macro_expand_string(state, out, phrase, len, '"',
                                       !FTL_MACRO_BRACED_EXPAND);
 }
 
@@ -20091,23 +20136,57 @@ parse_code(const char **ref_line, parser_state_t *state,
         const char *str;
         size_t len;
         const char *line = *ref_line;
+        const char *bra = "{<([";
+        const char *ket = "}>)]";
+        const char stringdelim = '"';
+        char ketstack[FTL_LINESOURCE_KETSTACK_SIZE]; /* end bracket stack */
+        char ket_closing = EOF;
         int brackets = 1;
+        bool instring = false;
         int ch;
+        int lastch = EOF;
+
+        ketstack[brackets-1] = '}';
         
         *out_sourcepos = parser_source(state); /* must include whole reference*/
         *out_lineno = parser_lineno(state);    /* linesource place no good */
         DEBUG_LNO(printf("%s: CODE obj starts at %s:%d\n",
                          codeid(), *out_sourcepos, *out_lineno););
 
-        while ((ch = *line) != '\0' && !(brackets == 1 && ch == '}'))
+        while ((ch = *line) != '\0' && 
+               !(brackets == 1 && !instring && ch == '}')
+              )
         {   charsink_putc(sink, ch);
-            if (ch == '{')
-                brackets++;
-            else if (ch == '}')
-                brackets--;
+            if (ch == stringdelim)
+                instring = !instring;
+            if (lastch != '\\' && !instring) {
+                if (brackets > sizeof(ketstack) && NULL != strchr(ket, ch))
+                {   /* can't check for matching brackets */
+                    brackets--;
+                    if (brackets > 0 && brackets <= sizeof(ketstack))
+                        ket_closing = ketstack[brackets-1];
+                    else
+                        ket_closing = EOF;
+                } else
+                if (brackets > 0 && ch == ket_closing)
+                {   /* we only close matching brackets if possible! */
+                    brackets--;
+                    if (brackets > 0)
+                        ket_closing = ketstack[brackets-1];
+                    else
+                        ket_closing = EOF;
+                } else
+                {   char *bkt = strchr(bra, ch);
+                    if (NULL != bkt)
+                    {   ket_closing = ketstack[brackets] = ket[bkt-bra];
+                        brackets++;
+                    }
+                }
+            }
+            lastch = ch;
             line++;
         }
-        if (brackets == 1 && ch == '}')
+        if (brackets == 1 && !instring && ch == '}')
         {   *ref_line = line+1;
             charsink_string_buf(sink, &str, &len);
             *out_val = value_string_new(str, len);
@@ -20175,7 +20254,7 @@ parse_base_env(const char **ref_line, parser_state_t *state,
         {   const value_t *v = dir_string_get(parser_env(state), &strbuf[0]);
             if (NULL == v)
             {   parser_error(state, "undefined symbol '%s'\n", strbuf);
-                DEBUG_ENV(DIR_SHOW("env: ", parser_env(state));)
+                DEBUG_ENV(DIR_SHOW("env: ", parser_env(state)););
                 ok = FALSE;
             }
             *out_val = value_nl(v);
@@ -23613,6 +23692,67 @@ cmds_generic_coroutine(parser_state_t *state, dir_t *cmds)
 
 
 
+static const value_t *
+fn_expand(const value_t *this_fn, parser_state_t *state)
+{
+    const value_t *val = &value_null;
+    const value_t *dobracedval = parser_builtin_arg(state, 1);
+    const value_t *dirval = parser_builtin_arg(state, 2);
+    const value_t *strval = (value_t *)parser_builtin_arg(state, 3);
+    bool is_code = value_type_equal(strval, type_code);
+    bool is_closure = value_type_equal(strval, type_closure);
+    dir_t *env = NULL;
+    dir_t *closure_env = NULL;
+    const char *buf = NULL;
+    size_t len = 0;
+
+    if (is_closure)
+    {   const value_t *closure_code;
+        const value_t *unbound;
+        (void)value_closure_get(strval, &closure_code, &closure_env, &unbound);
+        strval = closure_code;
+        is_code = true;
+    }
+    
+    if ((dirval == &value_null || value_as_dir(dirval, &env)) &&
+        value_is_bool(dobracedval) &&
+        (is_code? value_code_buf(strval, &buf, &len):
+                  value_string_get(strval, &buf, &len)))
+    {
+        if (buf != NULL)
+        {   charsink_string_t expandline;
+            charsink_t *expandsink = charsink_string_init(&expandline);
+            bool do_braced = (dobracedval != value_false);
+
+            if (dirval != &value_null)
+            {   parser_env_push(state, env, /*outer_visible*/false);
+            }
+            if (closure_env != NULL)
+            {   parser_env_push(state, closure_env, /*outer_visible*/false);
+            }
+            DEBUG_EXPD(printf("%s: expand '%.*s'\n", codeid(),
+                      (int)len, buf););
+            /* expand string (buf, len) into expandsink */
+            parser_macro_expand_string(state, expandsink, buf, len, '"',
+                                       !do_braced);
+            /* return the string written to expandsink to buf/len */
+            charsink_string_buf(expandsink, &buf, &len);
+            val = value_string_new(buf, len);
+            if (is_code)
+                val = value_code_new(val, "<expansion>",
+                                     parser_lineno(state));
+            charsink_string_close(expandsink);
+        }
+        else
+            val = NULL;
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
 
 
 static const value_t *
@@ -24621,8 +24761,10 @@ fnparse_opterm(const char **ref_line, parser_state_t *state, void *arg)
     {   return newval;
     }
     else
-    {   parser_error_longstring(state, *ref_line,
-                                "operation term not found, trailing text -");
+    {   OMIT(parser_error_longstring(state, *ref_line,
+                                    "operation term not found, "
+                                     "trailing text -"););
+        /* Allow to fail silently */
         return NULL;
     }
 }
@@ -24747,6 +24889,8 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
     int ver_major;
     int ver_minor;
     int ver_debug;
+    dir_stack_t *scope = parser_env_stack(state);
+
     ftl_version(&ver_major, &ver_minor, &ver_debug);
     dir_int_set(version, 0, value_int_new(ver_major));
     dir_int_set(version, 1, value_int_new(ver_minor));
@@ -24762,6 +24906,9 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
               "<cmds> <stream> - return value of executing "
               "initial <cmds> then stream",
               &fn_exec, 2);
+    mod_addfnscope(pcmds, "expand",
+                  "<do_braced> <env> <val> - expand macros in string or code <val>",
+                   &fn_expand, 3, scope);
     mod_addfn(pcmds, "readline",
               "- read and expand a line from the command input",
               &fn_readline, 0);
