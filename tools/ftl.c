@@ -33,7 +33,7 @@
 *//*! \file
 ** <L5_PRIVATE L5_SOURCE>
 ** \author  cgg
-**  \brief  tests/ftl	New control plane testing framework
+**  \brief  tests/ftl        New control plane testing framework
 **   \date  2005/08
 ** </L5_PRIVATE>
 *//*
@@ -47,7 +47,7 @@
 /*****************************************************************************
  *                                                                           *
  *          Headers                                                          *
- *          =======							     *
+ *          =======                                                          *
  *                                                                           *
  *****************************************************************************/
 
@@ -81,7 +81,7 @@
 /*****************************************************************************
  *                                                                           *
  *          Configuration                                                    *
- *          =============						     *
+ *          =============                                                    *
  *                                                                           *
  *****************************************************************************/
 
@@ -137,7 +137,7 @@
 /*****************************************************************************
  *                                                                           *
  *          Debugging                                                        *
- *          =========							     *
+ *          =========                                                        *
  *                                                                           *
  *****************************************************************************/
 
@@ -226,8 +226,8 @@
 
 /*****************************************************************************
  *                                                                           *
- *          Command Arguments						     *
- *          =================					             *
+ *          Command Arguments                                                *
+ *          =================                                                *
  *                                                                           *
  *****************************************************************************/
 
@@ -240,20 +240,22 @@
 static void 
 usage(const char* msg)
 {   if (NULL != msg)
-	fprintf(stderr, "error: %s\n", msg);
+        fprintf(stderr, "error: %s\n", msg);
 
     fprintf(stderr, "\nusage:\n");
-    fprintf(stderr, "  "CODEID" [-e|-ne] [--version] [-c <commands> | [-f <cmdfile>] "
-	    "[[--] <script arg>...]\n");
+    fprintf(stderr, "  "CODEID" [-e|-ne|-ep] [--version] [-c <cmds> | [-f <file>] "
+            "[[--] <script arg>...]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "     -f <cmdfile>       - read commands from this file instead of the console\n");
     fprintf(stderr, "     -c \"cmd;cmd;...\"   - execute initial commands\n");
     fprintf(stderr, "     -[n]e | --[no]emit - "
-		    "[don't] echo executed commands\n");
+                    "[don't] echo executed commands\n");
+    fprintf(stderr, "     -ep | --emitprolog - "
+                    "echo executed commands (including prolog)\n");
     fprintf(stderr, "     -q | --quiet       - "
-	            "don't report unnecessary info\n");
+                    "don't report unnecessary info\n");
     fprintf(stderr, "     --version          - "
-	            "just print version number and quit\n");
+                    "just print version number and quit\n");
     exit(1);
 }
 
@@ -265,10 +267,10 @@ usage(const char* msg)
 
 static const char *
 parse_args(int argc, char **argv,
-	   int *out_argc, const char **out_argv, size_t out_argv_len,
-	   const char **ref_cmd, const char **ref_input,
-	   bool *out_echo, bool *out_do_version, bool *out_do_prolog,
-           bool *out_quiet)
+           int *out_argc, const char **out_argv, size_t out_argv_len,
+           const char **ref_cmd, const char **ref_input,
+           bool *out_echo, bool *out_echo_prolog, bool *out_do_version,
+           bool *out_do_prolog, bool *out_quiet)
 {   int argn = 1;
     int out_argn = 0;
     const char *err = NULL;
@@ -280,64 +282,69 @@ parse_args(int argc, char **argv,
     while (argn < argc)
     {   const char *arg = argv[argn];
 
-	if (localargs)
-	{   if ((parse_key(&arg, "-h") || parse_key(&arg, "--help")) &&
-		parse_empty(&arg))
-	    {   err = "help requested";
-	    } else
-	    if ((parse_key(&arg, "-c") || parse_key(&arg, "--cmd")) &&
-		parse_empty(&arg))
-	    {   if (++argn < argc)
-		    *ref_cmd = argv[argn];
-		else
-		    err = "ran out of arguments";
-	    } else
-	    if ((parse_key(&arg, "-f") || parse_key(&arg, "--file")) &&
-		parse_empty(&arg))
-	    {   if (++argn < argc)
-		{   *ref_input = argv[argn];
-		} else
-		    err = "ran out of arguments";
-	    } else
-	    if ((parse_key(&arg, "-q") || parse_key(&arg, "--quiet")) &&
-		parse_empty(&arg))
-		*out_quiet = TRUE;
-	    else
+        if (localargs)
+        {   if ((parse_key(&arg, "-h") || parse_key(&arg, "--help")) &&
+                parse_empty(&arg))
+            {   err = "help requested";
+            } else
+            if ((parse_key(&arg, "-c") || parse_key(&arg, "--cmd")) &&
+                parse_empty(&arg))
+            {   if (++argn < argc)
+                    *ref_cmd = argv[argn];
+                else
+                    err = "ran out of arguments";
+            } else
+            if ((parse_key(&arg, "-f") || parse_key(&arg, "--file")) &&
+                parse_empty(&arg))
+            {   if (++argn < argc)
+                {   *ref_input = argv[argn];
+                } else
+                    err = "ran out of arguments";
+            } else
+            if ((parse_key(&arg, "-q") || parse_key(&arg, "--quiet")) &&
+                parse_empty(&arg))
+                *out_quiet = TRUE;
+            else
             if ((parse_key(&arg, "--version")) &&
                 parse_empty(&arg))
                 *out_do_version = TRUE;
             else
+            if ((parse_key(&arg, "-ep") || parse_key(&arg, "--emitprolog")) &&
+                parse_empty(&arg))
+            {   *out_echo = TRUE;
+                *out_echo_prolog = TRUE;
+            } else
             if ((parse_key(&arg, "-e") || parse_key(&arg, "--emit")) &&
-		parse_empty(&arg))
-		*out_echo = TRUE;
-	    else
-	    if ((parse_key(&arg, "-ne") || parse_key(&arg, "--ne") ||
-            parse_key(&arg, "--noemit") ||
+                parse_empty(&arg))
+                *out_echo = TRUE;
+            else
+            if ((parse_key(&arg, "-ne") || parse_key(&arg, "--ne") ||
+                 parse_key(&arg, "--noemit") ||
                  parse_key(&arg, "--noecho")) &&
-		parse_empty(&arg))
-		*out_echo = TRUE;
-	    else
+                parse_empty(&arg))
+                *out_echo = TRUE;
+            else
             if ((parse_key(&arg, "-np") || parse_key(&arg, "--np") ||
             parse_key(&arg, "--noprolog")) &&
-		parse_empty(&arg))
-		*out_do_prolog = FALSE;
-	    else
-	    if (parse_key(&arg, "--") && parse_empty(&arg))
-		localargs = FALSE;
-	    else
-	    {   localargs = FALSE;
+                parse_empty(&arg))
+                *out_do_prolog = FALSE;
+            else
+            if (parse_key(&arg, "--") && parse_empty(&arg))
+                localargs = FALSE;
+            else
+            {   localargs = FALSE;
                 if ((size_t)out_argn < out_argv_len)
                     out_argv[out_argn++] = argv[argn];
                 else
                     err = "too many options";
             }
-	} else
-	{   if ((size_t)out_argn < out_argv_len)
-		out_argv[out_argn++] = argv[argn];
-	    else
-	        err = "too many options";
-	}
-	argn++;
+        } else
+        {   if ((size_t)out_argn < out_argv_len)
+                out_argv[out_argn++] = argv[argn];
+            else
+                err = "too many options";
+        }
+        argn++;
     }
 
     *out_argc = out_argn;
@@ -353,8 +360,8 @@ parse_args(int argc, char **argv,
 
 /*****************************************************************************
  *                                                                           *
- *          Dummy Application						     *
- *          =================				                     *
+ *          Dummy Application                                                *
+ *          =================                                                *
  *                                                                           *
  *****************************************************************************/
 
@@ -410,42 +417,42 @@ typedef test_t testarray_t[3];
 /* FTL definition for array [6] of given type (unsigned char) for mymac_t */
 #define ARRAY_MYMAC(ctx) \
     FTL_TARRAY_BEGIN(ctx, mymac_t)                      \
-    FTL_TARRAY_INT(ctx, mymac_t, unsigned char, 6)	\
+    FTL_TARRAY_INT(ctx, mymac_t, unsigned char, 6)      \
     FTL_TARRAY_END(ctx)                                 \
 
 
 /* FTL definition for struct type subtest_t with fields a and b and n[4] */
-#define STRUCT_SUBTEST(ctx)					\
-    FTL_TSTRUCT_BEGIN(ctx, subtest_t,)				\
-    FTL_TFIELD_INT(ctx, subtest_t, int, a)			\
-    FTL_TFIELD_INT(ctx, subtest_t, int, b)			\
-    FTL_TFIELD_ARRAYOFINT(ctx, subtest_t, short, n, 4)	        \
+#define STRUCT_SUBTEST(ctx)                                       \
+    FTL_TSTRUCT_BEGIN(ctx, subtest_t,)                            \
+    FTL_TFIELD_INT(ctx, subtest_t, int, a)                        \
+    FTL_TFIELD_INT(ctx, subtest_t, int, b)                        \
+    FTL_TFIELD_ARRAYOFINT(ctx, subtest_t, short, n, 4)            \
     FTL_TSTRUCT_END(ctx)
 
 
 /* FTL definition for array [4] of given type (subtest_array_t) for subtest_t */
 #define ARRAY_SUBTEST(ctx) \
-    FTL_TARRAY_BEGIN(ctx, subtest_array_t)                      \
-    FTL_TARRAY_STRUCT(ctx, subtest_array_t, subtest_t, 4)	\
-    FTL_TARRAY_END(ctx)						\
+    FTL_TARRAY_BEGIN(ctx, subtest_array_t)                       \
+    FTL_TARRAY_STRUCT(ctx, subtest_array_t, subtest_t, 4)        \
+    FTL_TARRAY_END(ctx)                                          \
 
 
 /* FTL definition for struct type test_t with fields fa, fb, fc, fd and x[4] */
 #define STRUCT_TEST(ctx) \
-    FTL_TSTRUCT_BEGIN(ctx, test_t, )				\
-    FTL_TFIELD_INT(ctx, test_t, unsigned, fa)    		\
-    FTL_TFIELD_INT(ctx, test_t, char, fb) 			\
-    FTL_TFIELD_INT(ctx, test_t, number_t, fc)    		\
-    FTL_TFIELD_STRUCT(ctx, test_t, subtest_t, fd)		\
+    FTL_TSTRUCT_BEGIN(ctx, test_t, )                            \
+    FTL_TFIELD_INT(ctx, test_t, unsigned, fa)                   \
+    FTL_TFIELD_INT(ctx, test_t, char, fb)                       \
+    FTL_TFIELD_INT(ctx, test_t, number_t, fc)                   \
+    FTL_TFIELD_STRUCT(ctx, test_t, subtest_t, fd)               \
     FTL_TFIELD_ARRAYOFSTRUCT(ctx, test_t, subtest_t, x, 4)      \
     FTL_TSTRUCT_END(ctx)
 
 
 /* FTL definition for array [2] of given type (type_t) for testarray_t */
 #define ARRAY_TEST(ctx) \
-    FTL_TARRAY_BEGIN(ctx, testarray_t)				\
-    FTL_TARRAY_STRUCT(ctx, testarray_t, test_t, 2)		\
-    FTL_TARRAY_END(ctx)						\
+    FTL_TARRAY_BEGIN(ctx, testarray_t)                           \
+    FTL_TARRAY_STRUCT(ctx, testarray_t, test_t, 2)               \
+    FTL_TARRAY_END(ctx)                                          \
 
 
 /* Use the macros above to generate the structures and field access functions
@@ -494,21 +501,21 @@ cmds_ftl(parser_state_t *state)
     
     /* create read-only variable for test_t test_val */
     mod_add_dir(cmds, "t1", dir_cstruct_new(&FTL_TSPEC(test_t),
-					    /*is_const*/TRUE, &test_val));
+                                            /*is_const*/TRUE, &test_val));
     
     /* create read-write variable for test_t test_val */
     mod_add_dir(cmds, "t2", dir_cstruct_new(&FTL_TSPEC(test_t),
-					    /*is_const*/FALSE, &test_val));
+                                            /*is_const*/FALSE, &test_val));
 
     /* create variable to access array mymac_t mymac_val */
     mod_add_dir(cmds, "mac6", dir_carray_new(&FTL_TSPEC(mymac_t),
-					     /*is_const*/ FALSE, &mymac_val,
-					     FTL_ARRAY_STRIDE(mymac_val)));
+                                             /*is_const*/ FALSE, &mymac_val,
+                                             FTL_ARRAY_STRIDE(mymac_val)));
     
     /* create variable to access array testarray_t array_val */
     mod_add_dir(cmds, "vec3", dir_carray_new(&FTL_TSPEC(testarray_t), 
-					     /*is_const*/ FALSE, &array_val,
-					     FTL_ARRAY_STRIDE(array_val)));
+                                             /*is_const*/ FALSE, &array_val,
+                                             FTL_ARRAY_STRIDE(array_val)));
 
     return TRUE;
 }
@@ -689,7 +696,7 @@ static void cmds_obj_end(void)
 
 /*****************************************************************************
  *                                                                           *
- *          FTL Code						             *
+ *          FTL Code                                                         *
  *          ========                                                         *
  *                                                                           *
  *****************************************************************************/
@@ -706,8 +713,8 @@ const char prolog_text[] =  /* ends with 'text end - penv_text' comment */
 
 /*****************************************************************************
  *                                                                           *
- *          Other FTL LIbraries						     *
- *          ===================					             *
+ *          Other FTL LIbraries                                              *
+ *          ===================                                              *
  *                                                                           *
  *****************************************************************************/
 
@@ -799,8 +806,8 @@ static void ftl_libs_end(parser_state_t *state)
 
 /*****************************************************************************
  *                                                                           *
- *          Main Program						     *
- *          ============					             *
+ *          Main Program                                                     *
+ *          ============                                                     *
  *                                                                           *
  *****************************************************************************/
 
@@ -922,6 +929,7 @@ main(int argc, char **argv)
     const char *app_argv[APP_ARGC_MAX];
     int app_argc;
     bool echo_lines = FALSE;
+    bool echo_prolog_lines = FALSE;
     bool do_prolog = TRUE;
     bool do_rcfile = TRUE;
     bool do_version = FALSE;
@@ -934,8 +942,8 @@ main(int argc, char **argv)
     codeid_set(CODEID);
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
-		     &init, &cmd_file, &echo_lines, &do_version, &do_prolog,
-                     &quiet);
+                     &init, &cmd_file, &echo_lines, &echo_prolog_lines,
+                     &do_version, &do_prolog, &quiet);
                  
     if (NULL != err)
     {   usage(err);
@@ -947,19 +955,20 @@ main(int argc, char **argv)
     else
     {   parser_state_t *state = parser_state_new(dir_id_new());
 
-	if (NULL == state)
+        if (NULL == state)
             exit_rc = EXIT_BAD_INIT;
         else
-	{   parser_echo_setlog(state, echo_lines? echo_log: NULL, "> %s\n");
+        {   parser_echo_setlog(state, echo_prolog_lines? echo_log: NULL,
+                               "prolog> %s\n");
 
-	    cmds_generic(state, app_argc, &app_argv[0]);
+            cmds_generic(state, app_argc, &app_argv[0]);
             DEBUG_CLI(printf("%s: opened internal commands\n", codeid()););
 
-	    if (!ftl_libs_init(state))
+            if (!ftl_libs_init(state))
                 exit_rc = EXIT_BAD_FTLINIT;
 
             if (exit_rc == EXIT_OK)
-	    {	const char **opt_argv = &app_argv[1];
+            {        const char **opt_argv = &app_argv[1];
                 int opt_argc = app_argc-1;
                 bool do_args = opt_argc > 0;
 
@@ -1095,6 +1104,8 @@ main(int argc, char **argv)
                         }
 #endif
 
+                        parser_echo_setlog(state, echo_lines? echo_log: NULL,
+                               "> %s\n");
                         if (exit_rc == EXIT_OK &&
                             (do_console || insist_console))
                         {
@@ -1106,13 +1117,13 @@ main(int argc, char **argv)
                             quiet = true;
                     }
                 }
-	        ftl_libs_end(state);
+                ftl_libs_end(state);
                 cmds_obj_end();
                 if (!quiet)
                     printf("%s: finished\n", codeid());
-	    }
-	    parser_state_free(state);
-	}
+            }
+            parser_state_free(state);
+        }
     }
     
     DEBUG_CLI(printf(CODEID " ending FTL\n"););
