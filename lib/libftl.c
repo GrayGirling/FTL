@@ -136,18 +136,6 @@
 
    Can we generate a stream from the execution of a system command portably?
 
-   Implement the parsing of dynamically declared operators with defined
-   binding directions and priorities.  Use these for all directly executed
-   parsing elements (e.g. the arithmetic and string operators).  Associate
-   operator definitions with the environment.  e.g.
-       operator value = op <binding-type> <priority> <function>
-       [ "+" = op "xfx" 4 [a,b]{int.add a b!}!,
-         "-" = op "xfx" 4 [a,b]{int.sub a b!}!]
-   May need to separate the definition of an operator from the assignment
-   of a function invoked when it is parsed.
-   Ensure that a first class function is available to map each existing
-   operator on to.
-
    Perhaps support an operator expansion function:
        > parse ops 1 + 3 * 8
        { add 1 (times 3 8!)! }
@@ -315,8 +303,9 @@
 #define FTLDIR_PARSE  "parse"
 #define FN_UNDEF_HOOK "on_badcmd"
 
-#define OP_FN         "fn"
-#define OP_ASSOC      "assoc"
+#define OP_FN         "fn"      /* operator function to call */
+#define OP_ASSOC      "assoc"   /* type of associativity */
+#define OP_KET        "ket"     /* character terminating RH spec */
 
 #define LHV_FN_GET        "_get"  /* name of extra function to return @x val */
 #define PARSE_BASE_RET_ID "_base" /* for user-provided base function ID */
@@ -6346,9 +6335,13 @@ value_int_parse(const char **ref_line, const value_t *this_cmd,
 
 value_int_t value_int_zero;
 value_int_t value_int_one;
+value_int_t value_int_two;
+value_int_t value_int_three;
 
 const value_t *value_zero = &value_int_zero.value;
 const value_t *value_one = &value_int_one.value;
+const value_t *value_two = &value_int_two.value;
+const value_t *value_three = &value_int_three.value;
 
 
 
@@ -6361,6 +6354,8 @@ values_int_init(void)
               &value_int_compare, &value_delete_alloced, /*mark*/NULL);
     value_int_init(&value_int_zero,  0, /* on_heap */FALSE);
     value_int_init(&value_int_one,   1, /* on_heap */FALSE);
+    value_int_init(&value_int_two,   2, /* on_heap */FALSE);
+    value_int_init(&value_int_three, 3, /* on_heap */FALSE);
 }
 
 
@@ -6799,8 +6794,6 @@ struct value_stringbase_s
 
 
 #define value_stringbase_value(str) (&(str)->value)
-
-
 
 
 
@@ -16648,6 +16641,23 @@ parse_key(const char **ref_line, const char *key)
 
 
 extern bool
+parse_prefix(const char **ref_line, const char *key, size_t keylen)
+{   const char *line = *ref_line;
+    size_t lineleft = strlen(line);
+    bool ok = FALSE;
+
+    if (lineleft >= keylen && 0 == memcmp(line, key, keylen))
+    {   ok = TRUE;
+        *ref_line = &line[keylen];
+    }
+    return ok;
+}
+
+
+
+
+
+extern bool
 parse_ending(const char **ref_line, const char *key)
 {   const char *line = *ref_line;
     const char *end = strstr(line, key);
@@ -17006,10 +17016,10 @@ static void *
 parse_oneof_exec(dir_t *dir, const value_t *name, const value_t *value,
                  void *arg)
 {   enum_parse_oneof_arg_t *onearg = (enum_parse_oneof_arg_t *)arg;
-
+    /* enumeration stops when this function returns non-NULL */
     return (*onearg->parse_match_fn)(onearg->ref_line, onearg->state,
                                      name, onearg->parse_arg)? (void *)value:
-                                                               NULL;
+                                                               NULL/*continue*/;
 }
 
 
@@ -17040,15 +17050,22 @@ parse_oneof_matching(const char **ref_line, parser_state_t *state,
 
 
 static bool
+parse_value_string(const char **ref_line, const value_t *name)
+{   const char *key;
+    size_t keylen;
+    return value_string_get(name, &key, &keylen) &&
+           parse_prefix(ref_line, key, keylen);
+}
+
+
+
+
+
+
+static bool
 parse_match_string(const char **ref_line, parser_state_t *state,
                    const value_t *name, void *arg)
-{   if (value_type_equal(name, type_string))
-    {   const char *key;
-        size_t keylen;
-        return value_string_get(name, &key, &keylen) &&
-               parse_key(ref_line, key);
-    } else
-        return FALSE;
+{   return parse_value_string(ref_line, name);
 }
 
 
@@ -17109,6 +17126,35 @@ parse_one_ending(const char **ref_line, parser_state_t *state,
 
 
 
+
+/*
+   Here we implement the parsing of dynamically declared operators with defined
+   binding directions and priorities.  We use these for all directly executed
+   parsing elements (e.g. the arithmetic and string operators).
+
+   Associate operator definitions with the environment.  e.g.
+       parse opset parse.op <priority> <binding-type> <name> <function>
+   to generate a value in parse.op: e.g.
+       parse opset parse.op 10 parse.assoc.xfx "+" [a,b]{int.add a b!}
+       parse opset parse.op 10 parse.assoc.xfx "1" [a,b]{int.sub a b!}
+   would give
+       <
+       # for priority 10
+       [ "+" = [fn=[a,b]{int.add a b!}, assoc=parse.assoc.xfx],
+         "-" = [fn=[a,b]{int.sub a b!}, assoc=parse.assoc.xfx],
+       >
+       
+   (TODO: One day we may need to separate the definition of an operator from
+    the assignment of a function invoked when it is parsed.)
+
+   We place definitions required for FTL in parse.op
+
+   But alternative definitions can be placed anywhere.  They can be used, for
+   example, by
+        parse.opeval <opdefs> <code>
+   or
+        parse.scanopterm <opdefs> <scanfn> <@val> <parseobj>
+*/
 
 
 
@@ -17244,6 +17290,7 @@ parse_key_always(const char **ref_line, parser_state_t *state, const char *key)
 #define ASSOC_HASRIGHT  0x02
 #define ASSOC_LEFTLOW   0x04
 #define ASSOC_RIGHTLOW  0x08
+#define ASSOC_RIGHTKET  0x10
 
 #define ASSOC_HASLLEFT  (ASSOC_HASLEFT  | ASSOC_LEFTLOW)
 #define ASSOC_HASLRIGHT (ASSOC_HASRIGHT | ASSOC_RIGHTLOW)
@@ -17253,6 +17300,7 @@ parse_key_always(const char **ref_line, parser_state_t *state, const char *key)
       f - position of operator
       x - argument of strictly lower precidence
       y - argument of lower or equal precidence
+      b - bracketed argument of any precidence terminated by specified ket
 */
 
 
@@ -17261,10 +17309,13 @@ typedef enum
     assoc_yfy=ASSOC_HASLEFT  | ASSOC_HASRIGHT,   /* non-associative infix */
     assoc_xfy=ASSOC_HASLLEFT | ASSOC_HASRIGHT,   /* left associative infix */
     assoc_yfx=ASSOC_HASLEFT  | ASSOC_HASLRIGHT,  /* right associative infix */
+    assoc_xfb=ASSOC_HASLLEFT | ASSOC_HASRIGHT | ASSOC_RIGHTKET,
+                                                 /* right associative bracket */
     assoc_yf =ASSOC_HASLEFT,                     /* associative postfix */
     assoc_xf =ASSOC_HASLLEFT,                    /* non-associative postfix */
     assoc_fy =ASSOC_HASRIGHT,                    /* associative prefix */
-    assoc_fx =ASSOC_HASLRIGHT                    /* non-associative prefix */
+    assoc_fx =ASSOC_HASLRIGHT,                   /* non-associative prefix */
+    assoc_fb =ASSOC_HASRIGHT | ASSOC_RIGHTKET    /* right associative bracket */
 } op_assoc_t;   /* associativity */
 
 
@@ -17286,10 +17337,12 @@ static opassoc_def_t op_assoc_info[] =
    {"yfx", assoc_yfx},
    {"xfy", assoc_xfy},
    {"xfx", assoc_xfx},
+   {"xfb", assoc_xfb},
    {"xf",  assoc_xf},
    {"yf",  assoc_yf},
    {"fx",  assoc_fx},
-   {"fy",  assoc_fy}
+   {"fy",  assoc_fy},
+   {"fb",  assoc_fb},
 };
 
 
@@ -17300,6 +17353,17 @@ static opassoc_def_t op_assoc_info[] =
 
 #define assoc_postfix(assoc) \
     (((assoc) & (ASSOC_HASLEFT | ASSOC_HASRIGHT)) == ASSOC_HASLEFT)
+
+#define assoc_hasbracket(assoc) \
+    (((assoc) & (ASSOC_HASRIGHT | ASSOC_RIGHTKET)) == \
+         (ASSOC_HASRIGHT | ASSOC_RIGHTKET) \
+    )
+#if 0
+     || \
+     ((assoc) & (ASSOC_HASLEFT | ASSOC_LEFTKET)) == \
+         (ASSOC_HASLEFT | ASSOC_LEFTKET) \
+
+#endif
 
 #define assoc_infix(assoc) \
     (((assoc) & (ASSOC_HASLEFT | ASSOC_HASRIGHT)) == \
@@ -17315,10 +17379,12 @@ static opassoc_def_t op_assoc_info[] =
      (assoc) == assoc_yfy? "yfy": \
      (assoc) == assoc_xfy? "xfy": \
      (assoc) == assoc_yfx? "yfx": \
+     (assoc) == assoc_xfb? "xfb": \
      (assoc) == assoc_yf? "yf":   \
      (assoc) == assoc_xf? "xf":   \
      (assoc) == assoc_fy? "fy":   \
-     (assoc) == assoc_fx? "fx": "?f?")
+     (assoc) == assoc_fx? "fx":   \
+     (assoc) == assoc_fb? "fb": "?f?")
 
 
 
@@ -17328,6 +17394,7 @@ typedef int op_prec_t; /**< smaller values bind more tightly than larger ones */
 typedef struct
 {   const value_t *fn;  /**< equivalent functional form */
     op_assoc_t assoc;   /**< associativity */
+    const value_t *ket; /**< (ignored) terminating end operator */
 } operator_t;
 
 
@@ -17418,6 +17485,7 @@ parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
             if (value_type_equal(opassoc, type_int))
             {   ref_op->fn = dir_string_get(op, OP_FN);
                 ref_op->assoc = (op_assoc_t)value_int_number(opassoc);
+                ref_op->ket = &value_null;
             } else
             {   DO(DPRINTF("%s: operator definition "OP_ASSOC
                            " is a %s not an integer\n",
@@ -17447,7 +17515,7 @@ parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
 static bool
 parse_op_expr(const char **ref_line, op_state_t *ops,
               op_prec_t prec, const value_t **out_newterm)
-{   /* <oparg> <op> <oparg> .... decoded correctly for precority            */
+{   /* <oparg> <op> <oparg> [<ket>] .... decoded correctly for priority     */
     /* parses the longest run of operators at the given op_prec_t level or  */
     /*     tighter.                                                         */
     bool ok;
@@ -17481,6 +17549,16 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
                 break;
             case assoc_fy:
                 ok = parse_op_expr(&line, ops, prec, out_newterm);
+                if (ok)
+                {   *out_newterm = invoke_monadic(op.fn, *out_newterm,
+                                                  ops->state);
+                    *ref_line = line;
+                }
+                break;
+            case assoc_fb:
+                ok = parse_op_expr(&line, ops, /*prec*/0, out_newterm) &&
+                     parse_space(&line) &&
+                     parse_value_string(&line, op.ket);
                 if (ok)
                 {   *out_newterm = invoke_monadic(op.fn, *out_newterm,
                                                   ops->state);
@@ -17559,6 +17637,16 @@ parse_op_expr(const char **ref_line, op_state_t *ops,
                         break;
                     case assoc_yfy:
                         ok = first && parse_op_expr(&line, ops, prec, &arg);
+                        complete = TRUE;
+                        if (ok)
+                            *out_newterm = invoke_diadic(op.fn, *out_newterm,
+                                                         arg, ops->state);
+                        break;
+                    case assoc_xfb:
+                        ok = first &&
+                             parse_op_expr(&line, ops, prec, &arg) &&
+                             parse_space(&line) &&
+                             parse_value_string(&line, op.ket);
                         complete = TRUE;
                         if (ok)
                             *out_newterm = invoke_diadic(op.fn, *out_newterm,
@@ -23698,7 +23786,7 @@ fn_expand(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
     const value_t *dobracedval = parser_builtin_arg(state, 1);
     const value_t *dirval = parser_builtin_arg(state, 2);
-    const value_t *strval = (value_t *)parser_builtin_arg(state, 3);
+    const value_t *strval = parser_builtin_arg(state, 3);
     bool is_code = value_type_equal(strval, type_code);
     bool is_closure = value_type_equal(strval, type_closure);
     dir_t *env = NULL;
@@ -23746,8 +23834,8 @@ fn_expand(const value_t *this_fn, parser_state_t *state)
         else
             val = NULL;
     } else
-        parser_report_help(state, this_fn);
-
+    {   parser_report_help(state, this_fn);
+    }
     return val;
 }
 
@@ -24086,7 +24174,9 @@ fn_scan(const value_t *this_fn, parser_state_t *state)
     {   dir_t *vec = dir_vec_new();
 
         if (vec != NULL)
-        {   dir_set(vec, value_zero, dstr);
+        {   dir_set(vec, value_zero, dstr); /* left to parse */
+            dir_set(vec, value_one,  dstr); /* original string */
+            dir_set(vec, value_two,  &value_null); /* syntax error log */
             val = (const value_t *)vec;
         }
     } else
@@ -24257,14 +24347,7 @@ genfn_scan(const value_t *this_fn, parser_state_t *state,
 #if 0
 static const value_t *
 fnparse_key(const char **ref_line, parser_state_t *state, const value_t *arg)
-{   const char *key;
-    size_t keylen;
-    if (value_type_equal(arg, type_string) &&
-        value_string_get(arg, &key, &keylen) &&
-        parse_key(ref_line, key))
-        return value_true;
-    else
-        return NULL;
+{   return parse_value_string(ref_line, arg)? value_true: NULL;
 }
 
 
@@ -24678,6 +24761,7 @@ parse_op_using_closure(const char **ref_line, op_state_t *ops,
          */
         value_cstring_init(&ref_line_str, line, linelen, /*on_heap*/false);
         /* pobj_dir.0 will be updated to new position in parse string */
+        /*          (other indeces remain unchanged) */
         line_strval = value_string_value(&ref_line_str);
         dir_set(pobj_dir, value_zero, line_strval);
 
@@ -24828,7 +24912,7 @@ fn_scan_opterm(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_opset(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: file <name> <access> */
+{   /* syntax: <defs> <priority> <assoc> <name> <fn> */
     const value_t *opdefvals = parser_builtin_arg(state, 1);
     const value_t *precval = parser_builtin_arg(state, 2);
     const value_t *assocval = parser_builtin_arg(state, 3);
@@ -24864,6 +24948,33 @@ fn_opset(const value_t *this_fn, parser_state_t *state)
                 dir_cstring_set(opdefn, OP_FN, fn);
                 dir_cstring_set(opdefn, OP_ASSOC, assocval);
                 dir_set(precfns, nameval, dir_value(opdefn));
+
+                if (assoc_hasbracket(assoc))
+                {   /* for the time being derive a right bracket from the
+                     * left */
+                    const char *ket = NULL;
+                    const char *name = NULL;
+                    size_t namelen = 0;
+                    (void)value_string_get(nameval, &name, &namelen);
+                    if (0 == memcmp("(",name, namelen))
+                        ket = ")";
+                    else if (0 == memcmp("{",name, namelen))
+                        ket = "}";
+                    else if (0 == memcmp("<",name, namelen))
+                        ket = ">";
+                    else if (0 == memcmp("[",name, namelen))
+                        ket = "]";
+                    if (ket == NULL)
+                    {   dir_cstring_set(opdefn, OP_KET, value_string_empty);
+                        parser_report(state, "failed to derive a closing "
+                                      "bracket in bracketed operator "
+                                      "definition\n");
+                    }
+                    else
+                    {   dir_cstring_set(opdefn, OP_KET,
+                                        value_string_new(ket, /*len*/1));
+                    }
+                }
             } else
                parser_report(state, "invalid operator definitions at "
                             "precidence %d\n",

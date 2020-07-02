@@ -640,6 +640,8 @@ value_nl(const value_t *value);
 extern type_t type_int;
 extern const value_t *value_zero;
 extern const value_t *value_one;
+extern const value_t *value_two;
+extern const value_t *value_three;
 
 extern value_t *
 value_int_new(number_t number);
@@ -714,6 +716,9 @@ extern bool value_istype_bool(const value_t *val);
 /*          String Values                                    */
 
 extern type_t type_string;
+
+extern const value_t *value_string_empty;
+
 /* make a new string - taking a copy of the string area */
 extern value_t *
 value_string_new(const char *string, size_t len);
@@ -884,7 +889,9 @@ dir_stringl_get(dir_t *dir, const char *name, size_t namelen);
 extern bool
 dir_enumerable(dir_t *dir);
 
-/* invoke enumfn for each entry in dir providing given argument */
+/*! Invoke \c enumfn for each entry in dir providing given argument
+ *  Halt the enumeration when \c enumfn() returns non-NULL and return that value
+ */
 extern void *
 dir_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg);
 
@@ -1621,6 +1628,10 @@ parse_space(const char **ref_line);
 /* parse the prefix given by key */
 extern bool
 parse_key(const char **ref_line, const char *key);
+
+/* parse the prefix given by key and length */
+extern bool
+parse_prefix(const char **ref_line, const char *prefix, size_t len);
 
 /* parse the prefix ending with the key */
 extern bool
