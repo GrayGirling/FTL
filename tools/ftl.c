@@ -243,18 +243,19 @@ usage(const char* msg)
         fprintf(stderr, "error: %s\n", msg);
 
     fprintf(stderr, "\nusage:\n");
-    fprintf(stderr, "  "CODEID" [-e|-ne|-ep] [--version] [-c <cmds> | [-f <file>] "
-            "[[--] <script arg>...]\n");
+    fprintf(stderr, "  "CODEID" [-e|-ne|-ep] [-s] [--version] [-c <cmds> | [-f <file>]\n"
+            "      [[--] <script arg>...]\n");
     fprintf(stderr, "\n");
-    fprintf(stderr, "     -f <cmdfile>       - read commands from this file instead of the console\n");
-    fprintf(stderr, "     -c \"cmd;cmd;...\"   - execute initial commands\n");
-    fprintf(stderr, "     -[n]e | --[no]emit - "
+    fprintf(stderr, "     -s                  - run without interactive prompts\n");
+    fprintf(stderr, "     -f <cmdfile>        - read commands from this file instead of the console\n");
+    fprintf(stderr, "     -c \"cmd;cmd;...\"    - execute initial commands\n");
+    fprintf(stderr, "     -[-n]e | --[no]emit - "
                     "[don't] echo executed commands\n");
-    fprintf(stderr, "     -ep | --emitprolog - "
+    fprintf(stderr, "     --ep | --emitprolog - "
                     "echo executed commands (including prolog)\n");
-    fprintf(stderr, "     -q | --quiet       - "
+    fprintf(stderr, "     -q | --quiet        - "
                     "don't report unnecessary info\n");
-    fprintf(stderr, "     --version          - "
+    fprintf(stderr, "     --version           - "
                     "just print version number and quit\n");
     exit(1);
 }
@@ -268,7 +269,7 @@ usage(const char* msg)
 static const char *
 parse_args(int argc, char **argv,
            int *out_argc, const char **out_argv, size_t out_argv_len,
-           const char **ref_cmd, const char **ref_input,
+           const char **ref_cmd, const char **ref_input, bool *out_interactive,
            bool *out_echo, bool *out_echo_prolog, bool *out_do_version,
            bool *out_do_prolog, bool *out_quiet)
 {   int argn = 1;
@@ -304,6 +305,10 @@ parse_args(int argc, char **argv,
             if ((parse_key(&arg, "-q") || parse_key(&arg, "--quiet")) &&
                 parse_empty(&arg))
                 *out_quiet = TRUE;
+            else
+            if ((parse_key(&arg, "-s") || parse_key(&arg, "--noninteractive")) &&
+                parse_empty(&arg))
+                *out_interactive = FALSE;
             else
             if ((parse_key(&arg, "--version")) &&
                 parse_empty(&arg))
@@ -933,6 +938,7 @@ main(int argc, char **argv)
     bool do_prolog = TRUE;
     bool do_rcfile = TRUE;
     bool do_version = FALSE;
+    bool interactive = TRUE;
     FILE *echo_log = stdout;
     bool quiet = FALSE;
     int exit_rc = EXIT_OK;
@@ -942,7 +948,8 @@ main(int argc, char **argv)
     codeid_set(CODEID);
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
-                     &init, &cmd_file, &echo_lines, &echo_prolog_lines,
+                     &init, &cmd_file, &interactive,
+                     &echo_lines, &echo_prolog_lines,
                      &do_version, &do_prolog, &quiet);
                  
     if (NULL != err)
@@ -1112,7 +1119,8 @@ main(int argc, char **argv)
                             DEBUG_CLI(fprintf(stderr,
                                               "%s: executing from console\n",
                                               codeid()););
-                            cli(state, init, /*rcfile*/NULL);
+                            cli_poll(state, init, /*rcfile*/NULL, interactive,
+                                     /*poll_fn*/NULL, /*poll_arg*/NULL);
                         } else
                             quiet = true;
                     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, NXP Semiconductors Inc.
+ * Copyright 2015, 2018, 2020 NXP
  *
  * All rights reserved.
  *

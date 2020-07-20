@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2019, Gray Girling
+ * Copyright (c) 2005-2020, Gray Girling
  *
  * All rights reserved.
  *
@@ -68,7 +68,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
 
 #ifndef TRUE
 #define TRUE  true
@@ -1961,11 +1960,24 @@ charsource_rcfile(parser_state_t *state, const char *rccode_name,
  *  Commands are read from the terminal and output is written to it.
  *  If the rcfile is NULL no commands are read from it.  If the init_cmds is
  *  NULL no commands are read from the RC file.
+ *  Commands are prompted for if interactive is true and, not non-NULL,
+ *  a function (*poll_fn)(poll_arg) is called while waiting for input.
  */
 extern void
-cli(parser_state_t *state, const char *init_cmds, const char *rcfile);
+cli_poll(parser_state_t *state, const char *init_cmds, const char *rcfile,
+         bool interactive, parser_state_poll_fn *poll_fn, void *poll_arg);
 
     
+/*! Start an interactive ftl interpreter reading rcfile initially
+ *  Commands are read from the terminal and output is written to it.
+ *  If the rcfile is NULL no commands are read from it.  If the init_cmds is
+ *  NULL no commands are read from the RC file.
+ */
+#define cli(state, init_cmds, rcfile)                         \
+    cli_poll(state, init_cmds, rcfile, FALSE, NULL, NULL)
+
+
+
 /*! Run an ftl interpreter taking commands from argv
  *  Comma (,) tokens are used to separate runs of tokens that are interpreted
  *  as separate FTL commands

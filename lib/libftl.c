@@ -33,7 +33,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    May 2020
+** date    July 2020
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -201,7 +201,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 26
+#define VERSION_MIN 27
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -396,7 +396,6 @@
 #include <stddef.h> /* for ptrdiff_t */
 #include <setjmp.h>
 #include <errno.h>
-
 
 
 #include "ftl.h" /* also defines bool */
@@ -3616,12 +3615,12 @@ charsource_prompting_init(charsource_prompting_t *source,
 {
     OMIT(printf("%s: create prompting source\n", codeid()););
     charsource_stream_init(&source->file_base, delete_fn,
-                            &charsource_prompting_rdch, /*read*/NULL,
-                            "*console*", consolein);
-     source->prompt_stream = consoleout;
-     source->prompt_needed = TRUE;
-     source->prompt = prompt;
-     return &source->file_base.base;
+                           &charsource_prompting_rdch, /*read*/NULL,
+                           "*console*", consolein);
+    source->prompt_stream = consoleout;
+    source->prompt_needed = TRUE;
+    source->prompt = prompt;
+    return &source->file_base.base;
 }
 
 
@@ -23125,14 +23124,17 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
 
 /* This function may cause a garbage collection */
 extern void
-cli(parser_state_t *state, const char *init_cmds, const char *rcfile)
+cli_poll(parser_state_t *state, const char *init_cmds, const char *rcfile,
+         bool interactive, parser_state_poll_fn *poll_fn, void *poll_arg)
 {   charsource_t *console;
 
-    console = charsource_console_new("> ");
+    console = interactive? charsource_console_new("> "):
+                           charsource_stream_new(stdin, "*stdin*",
+                                                 /*autoclose*/TRUE);
 
-    (void)parser_expand_exec_int(state, console, init_cmds, rcfile,
-                                 /*expect_no_locals*/TRUE,
-                                 /*interactive*/TRUE);
+    (void)parser_expand_exec_int_poll(state, console, init_cmds, rcfile,
+                                      /*expect_no_locals*/TRUE, interactive,
+                                      poll_fn, poll_arg);
 }
 
 
