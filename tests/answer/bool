@@ -1,25 +1,30 @@
+> # Make sure the bool values exist
 > eval TRUE
 TRUE
 > eval FALSE
 FALSE
-> TRUE {echo "prints"!}           
+> 
+> TRUE {echo "prints"!}           # returns FALSE (NULL returned by body)
 prints
-> FALSE {echo "doesn't print"!}   
+> FALSE {echo "doesn't print"!}   # returns FALSE
 FALSE
-> TRUE {echo "prints"!;TRUE}! {echo "prints again"!}       
+> 
+> TRUE {echo "prints"!;TRUE}! {echo "prints again"!}       # returns TRUE
 prints
 prints again
-> TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}     
+> TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}     # returns FALSE
 prints
 FALSE
-> FALSE {echo "doesn't print"!; TRUE}! {echo "doesn't print"!}   
+> FALSE {echo "doesn't print"!; TRUE}! {echo "doesn't print"!}   # returns FALSE [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[KE
 FALSE
-> FALSE {echo "doesn't print"!; FALSE}! {echo "doesn't print"!}  
+> FALSE {echo "doesn't print"!; FALSE}! {echo "doesn't print"!}  # returns FALSE [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[KE
 FALSE
+> 
 > invert TRUE
 FALSE
 > invert FALSE
 TRUE
+> 
 > equal TRUE TRUE
 TRUE
 > equal TRUE FALSE
@@ -28,6 +33,8 @@ FALSE
 FALSE
 > equal FALSE FALSE
 TRUE
+> 
+> # same thing using pre-defined operator
 > eval TRUE == TRUE
 TRUE
 > eval TRUE == FALSE
@@ -36,8 +43,11 @@ FALSE
 FALSE
 > eval FALSE == FALSE
 TRUE
+> 
 > set ifeval[bool]:{ if bool {"if-TRUE"} {"if-FALSE"}! }
 > ifeval TRUE
 "if-TRUE"
 > ifeval FALSE
 "if-FALSE"
+> 
+> 

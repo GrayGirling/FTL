@@ -1,43 +1,66 @@
+> # indexing
+> 
 > set v1 <0, 1, 2, 3>
+> 
 > eval v1.0
 0
 > eval v1.3
 3
+> 
 > set v2 <0 .. 3>
+> 
 > eval v2.0
 0
 > eval v2.3
 3
+> 
 > eval <0, 1, 2, 3>.0
 0
 > eval <0, 1, 2, 3>.3
 3
+> 
 > eval <0..3>.0
 0
 > eval <0..3>.3
 3
+> 
+> # indexing errors
+> 
 > eval v1.-1
 ftl $*console*:+21 in
 ftl $*console*:22: index symbol undefined in parent '-1'
+ftl $*console*:+21: failed to evaluate expression
 > eval v1.4
 ftl $*console*:+22 in
 ftl $*console*:23: index symbol undefined in parent '4'
+ftl $*console*:+22: failed to evaluate expression
+> 
 > eval v2.-1
 -1
 > eval v2.4
 ftl $*console*:+25 in
 ftl $*console*:26: index symbol undefined in parent '4'
+ftl $*console*:+25: failed to evaluate expression
+> 
 > eval <0, 1, 2, 3>.-1
 ftl $*console*:+27 in
 ftl $*console*:28: index symbol undefined in parent '-1'
+ftl $*console*:+27: failed to evaluate expression
 > eval <0, 1, 2, 3>.4
 ftl $*console*:+28 in
 ftl $*console*:29: index symbol undefined in parent '4'
+ftl $*console*:+28: failed to evaluate expression
+> 
 > eval <0..3>.-1
 -1
 > eval <0..3>.4
 ftl $*console*:+31 in
 ftl $*console*:32: index symbol undefined in parent '4'
+ftl $*console*:+31: failed to evaluate expression
+> 
+> 
+> # vector index
+> 
 > eval v1.<0>
 <0>
 > eval v2.<0>
@@ -50,6 +73,7 @@ ftl $*console*:32: index symbol undefined in parent '4'
 <3, 2>
 > eval <0, 1, 2, 3>.<3, 2>
 <3, 2>
+> 
 > eval v1.[a=2, b=3]
 [a=2, b=3]
 > eval v2..[a=2, b=3]
@@ -60,6 +84,10 @@ ftl $*console*:+44: warning - trailing text .....[a=2, b=3]
 ftl $*console*:+45 in
 ftl $*console*:46: trailing text in expression - '..[a=2, b=3]'
 ftl $*console*:+45: warning - trailing text .....[a=2, b=3]
+> 
+> 
+> # bindings
+> 
 > eval [a] 1
 [a=1]
 > eval [b=3, a] 1
@@ -69,6 +97,7 @@ ftl $*console*:+45: warning - trailing text .....[a=2, b=3]
 > eval [a]::[b=3] 1
 [a=1,b=3]
 > eval [a]::{} 1
-[a=1]::{}
+[]::{}
 > eval [a]:{} 1
-[a=1]:{}
+[]:{}
+> 

@@ -1,6 +1,10 @@
 > eval "£"
 "\xc2\xa3"
+> # "\xc2\xa3"
 > chrcode "\xc2\xa3"
-194
+163
+> # 163
 > eval chrcode "€"!
-226
+8364
+> # 8364
+> 

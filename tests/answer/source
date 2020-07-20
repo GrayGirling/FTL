@@ -2,33 +2,25 @@
 ftl $*console*:+1 in
 ftl $*console*:2: file name expected
 > source ""
-ftl $*console*:+2 in
-ftl $*console*:3: couldn't open file "" to read - No such file or directory (rc 2)
-2
 > source "::://:::"
-ftl $*console*:+3 in
-ftl $*console*:4: couldn't open file "::://:::" to read - No such file or directory (rc 2)
 2
+> 
 > set write[file, msg]:{
-    .f = io.file file "w"!;
-    f != NULL {io.write f ""+(msg)+("\n")!}!;
-    io.close f!;
-}
+>     .f = io.file file "w"!;
+>     f != NULL {io.write f ""+(msg)+("\n")!}!;
+>     io.close f!;
+> }
 > write "test"  "echo Running line from test\necho Finished in test"
 > source test
-> echo Running line from test
 Running line from test
-> echo Finished in test
 Finished in test
 > source "test"
-> echo Running line from test
 Running line from test
-> echo Finished in test
 Finished in test
+> 
 > set src[f]:{if TRUE {source f!}{}!;echo "Done now"!}
 > src "test"
-> echo Running line from test
 Running line from test
-> echo Finished in test
 Finished in test
 Done now
+> 

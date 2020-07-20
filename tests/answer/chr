@@ -1,6 +1,10 @@
-> echo £
-£
+> echo ${chr 163!}
+Â£
+> # Â£
 > chr 163
-"\xa3"
+"\xc2\xa3"
+> # "\xc2\xa3"
 > eval chr 65!
 "A"
+> # "A"
+> 

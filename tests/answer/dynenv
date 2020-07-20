@@ -1,12 +1,15 @@
 > set data [ads=3,b=9]
+> 
 > set dgetall []:{echo "(getall)"!;data}
 > set dget   [n]:{echo "(get)"!;if (inenv data n!) {data.(n)}{}!}
 > set dset [n,v]:{echo "(set)"!;data.(n)=v;TRUE}
 > set dcount  []:{echo "(count)"!;len data!}
+> 
 > set dyn         dynenv dgetall dcount dset dget!
 > set dyn_nocount dynenv dgetall NULL  dset  dget!
 > set dyn_noset   dynenv dgetall dcount NULL dget!
 > set dyn_noget   dynenv dgetall dcount dset NULL!
+> 
 > eval dyn
 (getall)
 [ads=3, b=9]
@@ -32,6 +35,7 @@ TRUE
 > eval dyn
 (getall)
 [ads=77, b=88]
+> 
 > eval dyn_nocount
 (getall)
 [ads=77, b=88]
@@ -57,6 +61,7 @@ TRUE
 > eval dyn_nocount
 (getall)
 [ads=8, b=100]
+> 
 > eval dyn_noset
 (getall)
 [ads=8, b=100]
@@ -86,6 +91,7 @@ TRUE
 > eval dyn_noset
 (getall)
 [ads=8, b=100]
+> 
 > eval dyn_noget
 (getall)
 [ads=8, b=100]
@@ -111,3 +117,6 @@ FALSE
 > eval dyn_noget
 (getall)
 [ads=33, b=44]
+> 
+> 
+> 

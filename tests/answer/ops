@@ -1,32 +1,45 @@
-> set ops <>           
+> # Test for the operator parsing functions in FTL
+> 
+> set ops <>           # op definitions with explicit priorities
+> 
 > parse opset ops 6  parse.assoc."fy"  "_ng_"  neg
 > parse opset ops 8  parse.assoc."xfy" "_sb_"  sub
-> parse opset ops 8  parse.assoc."yfx" "_rsb_" [x,y]:{y-x}  
+> parse opset ops 8  parse.assoc."yfx" "_rsb_" [x,y]:{y-x}  # reverse subtract
 > parse opset ops 10 parse.assoc."fy"  "_mi_"  neg
-> set opdef range ops! 
+> 
+> set opdef range ops! # op definitions with relative priorities
+> 
 > parse opeval opdef {20 _sb_ 4}
 16
 > parse opeval opdef {15 _rsb_ 30}
 15
-> parse opeval opdef {20 _rsb_ 15 _rsb_ 30} 
+> parse opeval opdef {20 _rsb_ 15 _rsb_ 30} # 20 _rsb_ (15 _rsb_ 30)
 -5
-> parse opeval opdef {20 _sb_ 4 _sb_ 6}     
+> parse opeval opdef {20 _sb_ 4 _sb_ 6}     # (20 _sb_ 4) _sb_ 6
 10
-> parse opeval opdef {_ng_ 20 _sb_ 4}       
+> parse opeval opdef {_ng_ 20 _sb_ 4}       # _ng_ (20 _sb_ 4)
 -16
-> parse opeval opdef {_mi_ 20 _sb_ 4}       
+> parse opeval opdef {_mi_ 20 _sb_ 4}       # (_mi_ 20) _sb_ 4
 -24
-> set ops <>      
-> set opdef NULL  
+> 
+> set ops <>      # op definitions with explicit priorities
+> set opdef NULL  # op definitions with relative priorities
+> 
 > set opset[pri, as, name, fn]:{
-    parse.opset ops pri parse.assoc.(as) name fn!;
-    opdef = range ops!;
-}
+>     parse.opset ops pri parse.assoc.(as) name fn!;
+>     opdef = range ops!;
+> }
+> 
+> # unquoted value format
 > set fmt.t [f,p,v]:{ if (equal "string" (typename v!)!) {v} {str v!}!}
+> 
 > set diadic[strf=strf,name,l,r]::{ strf "(%s %t %t)" <name, l, r>! }
 > set monadic[strf=strf,name,lr]::{ strf "(%s %t)" <name, lr>! }
+> 
 > opset 6 "xfy" "xfy" (diadic "xfy")
 > opset 6 "yfx" "yfx" (diadic "yfx")
+> 
+> 
 > opset 6 "fy" "fy" (monadic "fy")
 > opset 6 "fx" "fx" (monadic "fx")
 > opset 6 "yfy" "yfy" (diadic "yfy")
@@ -43,14 +56,16 @@
 > opset 8 "yfx" "yFx" (diadic "yFx")
 > opset 8 "yf" "yF" (monadic "yF")
 > opset 8 "xf" "xF" (monadic "xF")
+> 
 > set opeval[expr]: { parse.opeval opdef expr! }
+> 
 > set x 42
-> opeval {yfy}       
+> opeval {yfy}       # fails - 'yfy' undefined
 ftl $*console*:54+0 in
 ftl $*console*:+57 in
 ftl $*console*:58: undefined symbol 'yfy'
 ftl $*console*:54+0: code has trailing text - ''
-> opeval {x}         
+> opeval {x}         # fails - 'x' undefined
 ftl $*console*:54+0: undefined symbol 'x'
 ftl $*console*:54+0: code has trailing text - ''
 > opeval {4}
@@ -77,22 +92,24 @@ ftl $*console*:54+0: code has trailing text - ''
 "(xf 4)"
 > opeval {4 yf}
 "(yf 4)"
-> opeval {5 xfy 6 xfy 7} 
+> opeval {5 xfy 6 xfy 7} # should give (xfy (xfy 5 6) 7)
 "(xfy (xfy 5 6) 7)"
-> opeval {5 yfx 6 yfx 7} 
+> opeval {5 yfx 6 yfx 7} # should give (yfx 5 (yfx 6 7))
 "(yfx 5 (yfx 6 7))"
+> 
+> 
 > set forops[opdefs, fn]:{
-    forall parse.op [precfns, prec]:{
-        forall precfns [precfn, name]:{
-            fn name prec precfn.assoc precfn.fn!
-        }!
-    }!
-}
+>     forall parse.op [precfns, prec]:{
+>         forall precfns [precfn, name]:{
+>             fn name prec precfn.assoc precfn.fn!
+>         }!
+>     }!
+> }
 > set assocstr[as]:{ (domain (select (equal as) parse.assoc!)!).0 }
 > set printf io.fprintf io.out
 > forops parse.op [name, prec, assoc, fn]:{
-    printf "%3d: %3s %v\n" <prec, assocstr assoc!, name>!;
-}
+>     printf "%3d: %3s %v\n" <prec, assocstr assoc!, name>!;
+> }
   0: xfy "or"
   0: xfy "_or_"
   1: xfy "and"
@@ -124,3 +141,4 @@ ftl $*console*:54+0: code has trailing text - ''
  11: xfy "/"
  11: xfy "rem"
  11: xfy "_rem_"
+> 

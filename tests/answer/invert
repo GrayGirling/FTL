@@ -1,8 +1,11 @@
 > invert TRUE
 FALSE
+> #FALSE
 > invert FALSE
 TRUE
+> #TRUE
 > invert []
 FALSE
 > invert 9
 FALSE
+> 

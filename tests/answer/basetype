@@ -4,6 +4,7 @@
 $basetype.string
 > eval basetype.string
 $basetype.string
+> 
 > help all basetype
 all basetype <subcommand> - commands:
     type - type value
@@ -20,3 +21,5 @@ all basetype <subcommand> - commands:
     mac - type value
     coroutine - type value
     mem - type value
+    obj - type value
+> 

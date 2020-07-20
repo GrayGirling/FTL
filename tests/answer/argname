@@ -2,8 +2,10 @@
 "a"
 > argname set
 "_1"
+> 
 > set needs_argument[fn]:{NULL != (argname fn!)}
 > needs_argument needs_argument
 TRUE
 > needs_argument []:{echo "no"!}
 FALSE
+> 

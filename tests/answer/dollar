@@ -1,30 +1,38 @@
-> set c "$a or $b"
+> set c "$$a or $$b"
 > eval c
 "\$a or \$b"
 > set t "thing"
-> set a "something"
+> set a "some$t"
 > set o "other"
-> set b "an$o"
+> set b "an$$o"
 > eval b
 "an\$o"
-> echo something
+> echo $a
 something
-> echo something or another
+> echo $c
 something or another
-> echo a is something
+> 
+> echo a is ${a}
 a is something
-> echo b is another
+> echo b is ${b}
 b is another
-> echo c is something or another
+> echo c is ${c}
 c is something or another
-> echo a,b,c is something or another
+> echo a,b,c is ${a;b;c}
 a,b,c is something or another
-> set fn[]:{"an$o"}
-> echo another
-another
+> 
+> set fn[]:{"an$$o"}
+> echo ${fn!}
+an$o
+> 
 > set d <1,3,9>
-> echo d is <1, 3, 9>
+> echo d is $d
 d is <1, 3, 9>
-> set e <"something","$b","something or another">
-> echo e is <"something", "\$b", "something or another">
+> 
+> set e <"$a","$$b","$c">
+> echo e is $e
 e is <"something", "\$b", "something or another">
+> 
+> # echo $@1 - what is this?
+> 
+> 

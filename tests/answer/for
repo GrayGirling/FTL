@@ -2,7 +2,14 @@
 next
 next
 next
+> #next
+> #next
+> #next
 > for <"one", "fine", "day"> echo
 one
 fine
 day
+> #one
+> #fine
+> #day
+> 

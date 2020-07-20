@@ -1,0 +1,17 @@
+> set test[]:{
+>     io.fprintf io.out "%d.%d.%d.%d colour " <rnd 256!, rnd 256!, rnd 256!, rnd  256!>!;
+>     echo <"red", "white", "blue">.(rnd 3!)!;
+> }
+> 
+> set myseed 56789012
+> echo Using seed $myseed
+Using seed 56789012
+> rndseed myseed; test
+56.32.198.32 colour white
+> test
+201.228.15.226 colour red
+> rndseed myseed; test
+56.32.198.32 colour white
+> 
+> rndseed "a longer string to extract a seed from"
+> 

@@ -1,8 +1,10 @@
 > > io in
 ftl $*console*:+1 in
 ftl $*console*:2: unknown command '> io in'
+> #<-'<stdin>'
 > set is_stdin[str]: { 0 == (cmp str io.in!) }
 > is_stdin io.err
 FALSE
 > is_stdin io.in
 TRUE
+> 

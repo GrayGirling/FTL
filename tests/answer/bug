@@ -5,3 +5,4 @@
 > set needs_argument[fn]:{NULL != (argname fn!)}
 > needs_argument needs_argument
 TRUE
+> 

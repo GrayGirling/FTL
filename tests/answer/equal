@@ -1,5 +1,14 @@
+> #{   if (equal var NULL!) {
+> #        echo "nothing there"!
+> #    }{  do_something_with var!
+> #    }!
+> #}
+> 
 > eval (3 == 3) {echo "hi"!}!
 hi
+> #hi
+> #FALSE
+> 
 > equal 0 0
 TRUE
 > equal NULL NULL
@@ -12,6 +21,7 @@ TRUE
 TRUE
 > equal basetype.int basetype.int
 TRUE
+> 
 > equal 0 1
 FALSE
 > equal NULL FALSE
@@ -24,16 +34,20 @@ FALSE
 FALSE
 > equal basetype.int basetype.mac
 FALSE
+> 
 > equal <> <>
 FALSE
 > equal [] []
 FALSE
-> set friends_a [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
-> set friends_b [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
+> 
+> set friends_a [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE] [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K]
+> set friends_b [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE] [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K]
 > set friends_c new friends_a!
+> 
 > equal friends_a friends_a
 TRUE
 > equal friends_a friends_b
 FALSE
 > equal friends_a friends_c
 FALSE
+> 

@@ -1,7 +1,12 @@
 > set done FALSE
 > set once[fn]: { if (done) { done=TRUE; fn! } {}! } 
+> #{   rc = fn!;
+> #    if (rc.error_occured) {echo "ERROR"!; FALSE} {TRUE}!
+> #}
 > eval TRUE {echo "always run"!}!
 always run
+> # always run
+> # FALSE
 > equal FALSE TRUE 
 FALSE
 > equal TRUE TRUE
@@ -22,8 +27,10 @@ FALSE
 TRUE
 > logor TRUE TRUE
 TRUE
+> 
 > typeof TRUE
 $basetype.closure
+> 
 > eval TRUE {0}!
 0
 > eval TRUE {TRUE}!
@@ -33,4 +40,4 @@ FALSE
 > eval TRUE {NULL}!
 > eval TRUE {;}!
 > eval TRUE {}!
-FALSE
+> 

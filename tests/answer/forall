@@ -1,14 +1,20 @@
 > set sieve[n]: { 
-    forall <0, n .. (len prime!)> [i]:{ 
-        prime.(i) = NULL 
-    }! 
-}
+>     forall <0, n .. (len prime!)> [i]:{ 
+>         prime.(i) = NULL 
+>     }! 
+> }
 > forall [a="ay", b="bee", c="see"] [pron, let]:{
-    echo "\$let is pronounced '\$pron'"!
-}
+>     echo "\$let is pronounced '\$pron'"!
+> }
 a is pronounced 'ay'
 b is pronounced 'bee'
 c is pronounced 'see'
+> #a is pronounced 'ay'
+> #b is pronounced 'bee'
+> #c is pronounced 'see'
 > forall ([a,b]::{b=20+(a)} 1 2) [val, name]:{echo "\$name = \$val"!}
 b = 2
 a = 1
+> #b = 2
+> #a = 1
+> 

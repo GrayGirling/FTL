@@ -1,15 +1,22 @@
 > cmp 9 1
 1
+> #1
 > cmp "Astring" "Bstring"
 -1
+> #-1
 > cmp "string\0_B" "string\0_A"
 1
+> #1
 > cmp <1> <1>
 -1
+> #-1
 > set dir <1>
 > cmp dir dir
 0
+> #0
 > eval cmp NULL ({}!)!
 0
 > cmp (typeof <>!) (typeof []!)
 0
+> 
+> 

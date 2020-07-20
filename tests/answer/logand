@@ -1,8 +1,13 @@
 > logand TRUE TRUE
 TRUE
+> #TRUE
 > logand TRUE FALSE
 FALSE
+> #FALSE
 > logand FALSE TRUE
 FALSE
+> #FALSE
 > logand FALSE FALSE
 FALSE
+> #FALSE
+> 

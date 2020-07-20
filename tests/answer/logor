@@ -1,8 +1,13 @@
 > logor TRUE TRUE
 TRUE
+> #TRUE
 > logor TRUE FALSE
 TRUE
+> #TRUE
 > logor FALSE TRUE
 TRUE
+> #TRUE
 > logor FALSE FALSE
 FALSE
+> #FALSE
+> 

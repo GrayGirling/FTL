@@ -1,6 +1,8 @@
 > set outer_fn [_help="OUTER"]:{}
 > enter [outer=outer_fn]
 > set local_fn [_help="LOCAL"]:{}
+> 
+> # expected to be TRUE
 > inenv local_fn "inenv"
 TRUE
 > inenv local_fn "outer_fn"
@@ -9,25 +11,30 @@ TRUE
 TRUE
 > inenv local_fn "_help"
 TRUE
-> eval local_fn._help 
+> eval local_fn._help # "LOCAL"
 "LOCAL"
+> 
 > inenv outer "inenv"
 TRUE
 > inenv outer "outer_fn"
 TRUE
 > inenv outer "_help"
 TRUE
-> eval outer._help    
+> eval outer._help    # "OUTER"
 "OUTER"
+> 
 > inenv outer_fn "inenv"
 TRUE
 > inenv outer_fn "outer_fn"
 TRUE
 > inenv outer_fn "_help"
 TRUE
-> eval outer_fn._help 
+> eval outer_fn._help # "OUTER"
 "OUTER"
+> 
+> # expected to be FALSE
 > inenv outer "local_fn"
 FALSE
 > inenv outer_fn "local_fn"
 FALSE
+> 
