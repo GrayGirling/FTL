@@ -69,7 +69,6 @@ MetaWare/VideoCore/driver/daptool/daptool
 # Shell scripts initializing environment variables for debugger
 MetaWare/VideoCore/driver/*.env
 
-
 # Visual Studio auto generated files
 *.ncb
 *.suo
@@ -78,6 +77,17 @@ MetaWare/VideoCore/driver/*.env
 
 # Eclipse settings
 /.settings
+
+### VisualStudioCode ###
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### VisualStudioCode Patch ###
+# Ignore all local history of files
+**/.history
 
 # Mac meta files
 .DS_Store

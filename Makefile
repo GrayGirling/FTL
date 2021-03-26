@@ -264,13 +264,15 @@ ftl$(OBJ): ftl.c tools/ftl_fns.str
 hi$(OBJ): hi.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
-ftlext-test.c: ftl.h ftl_internal.h ftlext.h 
-libftl_elf.c: ftl.h ftl_internal.h ftl_elf.h
-libftl_xml.c: ftl.h ftl_internal.h ftl_xml.h
-libftl_json.c: ftl.h ftl_internal.h ftl_json.h
-libftl.c: ftl.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
-filenames.c: ftl.h filenames.h Makefile
-libdyn.c: libdyn.h filenames.h Makefile
+penv$(OBJ): ftl.h ftl_internal.h ftlext.h 
+ftl$(OBJ): ftl.h ftl_internal.h ftlext.h 
+ftlext-test$(OBJ): ftl.h ftl_internal.h ftlext.h 
+libftl_elf$(OBJ): ftl.h ftl_internal.h ftl_elf.h
+libftl_xml$(OBJ): ftl.h ftl_internal.h ftl_xml.h
+libftl_json$(OBJ): ftl.h ftl_internal.h ftl_json.h
+libftl$(OBJ): ftl.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
+filenames$(OBJ): ftl.h filenames.h Makefile
+libdyn$(OBJ): libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
 

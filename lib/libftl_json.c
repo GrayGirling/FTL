@@ -94,15 +94,15 @@
 
 /* forward reference */
 static bool
-parse_json_value(const char **ref_line, parser_state_t *state,
-                 const value_t **out_val);
+parsew_json_value(const char **ref_line, const char *lineend,
+                  parser_state_t *state, const value_t **out_val);
 
 
 
 
 static bool
-parse_json_object_body(const char **ref_line, parser_state_t *state,
-                       const value_t **out_val)
+parsew_json_object_body(const char **ref_line, const char *lineend,
+                        parser_state_t *state, const value_t **out_val)
 {
     /* syntax: [<string> : <value> [, <string> : <value>]*] */
     bool ok = true;
@@ -115,17 +115,18 @@ parse_json_object_body(const char **ref_line, parser_state_t *state,
         char strbuf[JSON_NAME_MAX];
         size_t namelen = 0;
 
-        parse_space(&line);
-        if (parse_string(&line, &strbuf[0], sizeof(strbuf), &namelen))
-        {   parse_space(&line);
-            if (!parse_key(&line, ":"))
+        parsew_space(&line, lineend-line);
+        if (parsew_string(&line, lineend-line,
+                          &strbuf[0], sizeof(strbuf), &namelen))
+        {   parsew_space(&line, lineend-line);
+            if (!parsew_key(&line, lineend-line, ":"))
             {   parser_error(state, "expected ':' after JSON name string\n");
                 ok = FALSE;
             } else {
                 const value_t *val = NULL;
-                parse_space(&line);
-                ok = parse_json_value(&line, state, &val);
-                parse_space(&line);
+                parsew_space(&line, lineend-line);
+                ok = parsew_json_value(&line, lineend, state, &val);
+                parsew_space(&line, lineend-line);
                 *ref_line = line;
                 if (ok)
                 {
@@ -137,7 +138,7 @@ parse_json_object_body(const char **ref_line, parser_state_t *state,
                         /* syntax OK though so don't update 'ok' */
                     }
                     *ref_line = line;
-                    expect_name = parse_key(&line, ",");
+                    expect_name = parsew_key(&line, lineend-line, ",");
                 }
             }
         }
@@ -159,8 +160,8 @@ parse_json_object_body(const char **ref_line, parser_state_t *state,
 
 
 static bool
-parse_json_array_body(const char **ref_line, parser_state_t *state,
-                      const value_t **out_val)
+parsew_json_array_body(const char **ref_line, const char *lineend,
+                       parser_state_t *state, const value_t **out_val)
 {
     /* syntax: [<value> [, <value>]*] */
     bool ok = true;
@@ -172,9 +173,9 @@ parse_json_array_body(const char **ref_line, parser_state_t *state,
     do
     {
         const value_t *val = NULL;
-        parse_space(&line);
-        ok = parse_json_value(&line, state, &val);
-        parse_space(&line);
+        parsew_space(&line, lineend-line);
+        ok = parsew_json_value(&line, lineend, state, &val);
+        parsew_space(&line, lineend-line);
         if (ok)
         {
             if (!dir_int_set(dirval, index, val))
@@ -184,7 +185,7 @@ parse_json_array_body(const char **ref_line, parser_state_t *state,
             }
             index++;
             *ref_line = line;
-            expect_value = parse_key(&line, ",");
+            expect_value = parsew_key(&line, lineend-line, ",");
         }
         else if (expect_value)
         {   parser_error(state, "expected value in JSON array after ','\n");
@@ -204,8 +205,8 @@ parse_json_array_body(const char **ref_line, parser_state_t *state,
 
 
 static bool
-parse_json_value(const char **ref_line, parser_state_t *state,
-                 const value_t **out_val)
+parsew_json_value(const char **ref_line, const char *lineend,
+                  parser_state_t *state, const value_t **out_val)
 {
     /* syntax: <string> | <number> | <object> | <array> | true | false | null */
     bool ok = true;
@@ -214,38 +215,41 @@ parse_json_value(const char **ref_line, parser_state_t *state,
     char stringbuf[JSON_STRING_MAX];
     size_t stringbufused = 0;
 
-    parse_space(&line);
-    if (parse_key(&line, "{"))
-    {   ok = parse_space(&line) && parse_json_object_body(&line, state, out_val);
-        parse_space(&line);
-        if (ok && !parse_key(&line, "}"))
+    parsew_space(&line, lineend-line);
+    if (parsew_key(&line, lineend-line, "{"))
+    {   ok = parsew_space(&line, lineend-line) &&
+             parsew_json_object_body(&line, lineend, state, out_val);
+        parsew_space(&line, lineend-line);
+        if (ok && !parsew_key(&line, lineend-line, "}"))
         {   parser_error(state, "expected '}' at end of JSON object\n");
             ok = FALSE;
         }
         *ref_line = line;
     } else
-    if (parse_key(&line, "["))
-    {   ok = parse_space(&line) && parse_json_array_body(&line, state, out_val);
-        parse_space(&line);
-        if (ok && !parse_key(&line, "]"))
+    if (parsew_key(&line, lineend-line, "["))
+    {   ok = parsew_space(&line, lineend-line) &&
+             parsew_json_array_body(&line, lineend, state, out_val);
+        parsew_space(&line, lineend-line);
+        if (ok && !parsew_key(&line, lineend-line, "]"))
         {   parser_error(state, "expected ']' at end of JSON array\n");
             ok = FALSE;
         }
         *ref_line = line;
     } else
-    if (parse_int_val(&line, &numb))
+    if (parsew_int_val(&line, lineend-line, &numb))
     {   *out_val = value_int_new(numb);
     } else
-    if (parse_string(&line, &stringbuf[0], sizeof(stringbuf), &stringbufused))
+    if (parsew_string(&line, lineend-line,
+                      &stringbuf[0], sizeof(stringbuf), &stringbufused))
     {   *out_val = value_string_new(&stringbuf[0], stringbufused);
     } else
-    if (parse_key(&line, "null"))
+    if (parsew_key(&line, lineend-line, "null"))
     {   *out_val = &value_null;
     } else
-    if (parse_key(&line, "true"))
+    if (parsew_key(&line, lineend-line, "true"))
     {   *out_val = value_true;
     } else
-    if (parse_key(&line, "false"))
+    if (parsew_key(&line, lineend-line, "false"))
     {   *out_val = value_false;
     } else
         ok = FALSE;
@@ -259,11 +263,12 @@ parse_json_value(const char **ref_line, parser_state_t *state,
 
 
 static const value_t *
-fnparse_json_value(const char **ref_line, parser_state_t *state, void *arg)
+fnparse_json_value(const char **ref_line, size_t linelen,
+                   parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;
-    bool ok = parse_json_value(ref_line, state, &val);
+    bool ok = parsew_json_value(ref_line, &(*ref_line)[linelen], state, &val);
     return ok? value_true: value_false;
 }
 
@@ -271,11 +276,13 @@ fnparse_json_value(const char **ref_line, parser_state_t *state, void *arg)
 
 
 static const value_t *
-fnparse_json_object(const char **ref_line, parser_state_t *state, void *arg)
+fnparse_json_object(const char **ref_line, size_t linelen,
+                    parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;
-    bool ok = parse_json_object_body(ref_line, state, &val);
+    bool ok = parsew_json_object_body(ref_line, &(*ref_line)[linelen], state,
+                                      &val);
     return ok? value_true: value_false;
 }
 
@@ -283,30 +290,30 @@ fnparse_json_object(const char **ref_line, parser_state_t *state, void *arg)
 
 
 static const value_t *
-fn_json_scan(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan(this_fn, state, 1, &fnparse_json_value, NULL);
+fn_json_scan_baseval(const value_t *this_fn, parser_state_t *state)
+{   return genfn_scanw_cb(this_fn, state, 1, &fnparse_json_value, NULL);
 }
 
 
 
 static const value_t *
-fn_json_scanobj(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan(this_fn, state, 1, &fnparse_json_object, NULL);
+fn_json_scan_dir(const value_t *this_fn, parser_state_t *state)
+{   return genfn_scanw_cb(this_fn, state, 1, &fnparse_json_object, NULL);
 }
 
 
 
 
 
-typedef bool json_parse_fn(const char **ref_line, parser_state_t *state,
-                           const value_t **out_val);
+typedef bool json_parse_fn(const char **ref_line, const char *lineend,
+                           parser_state_t *state, const value_t **out_val);
 
 
 
 
 static const value_t *
-genfn_json_parse(const value_t *this_fn, parser_state_t *state,
-                 json_parse_fn *json_scan)
+genfn_json_parse(const value_t *this_fn, 
+                 parser_state_t *state, json_parse_fn *json_scan)
 {   
     const value_t *val = &value_null;
     const value_t *jsontextval = parser_builtin_arg(state, 1);
@@ -324,9 +331,10 @@ genfn_json_parse(const value_t *this_fn, parser_state_t *state,
             )
         {
             const char *line = jsontext;
-            bool ok = (*json_scan)(&line, state, &val) &&
-                      parse_space(&line) &&
-                      parse_empty(&line);
+            const char *lineend = &line[jsontextlen];
+            bool ok = (*json_scan)(&line, lineend, state, &val) &&
+                      parsew_space(&line, lineend-line) &&
+                      parsew_empty(&line, lineend-line);
             if (!ok)
             {
                 size_t len = strlen(line);
@@ -348,7 +356,7 @@ genfn_json_parse(const value_t *this_fn, parser_state_t *state,
 
 static const value_t *
 fn_jsonval(const value_t *this_fn, parser_state_t *state)
-{   return genfn_json_parse(this_fn, state, &parse_json_value);
+{   return genfn_json_parse(this_fn, state, &parsew_json_value);
 }
 
 
@@ -357,7 +365,7 @@ fn_jsonval(const value_t *this_fn, parser_state_t *state)
 
 static const value_t *
 fn_json(const value_t *this_fn, parser_state_t *state)
-{   return genfn_json_parse(this_fn, state, &parse_json_object_body);
+{   return genfn_json_parse(this_fn, state, &parsew_json_object_body);
 }
 
 
@@ -394,12 +402,13 @@ typedef struct
     bool first;
     bool is_obj;
     bool bracketed;
+    parser_state_t *state;
 } dir_json_bind_print_arg_t;
 
 
 
 
-static int json_fmt_printnl(json_format_t *fmt)
+static int json_fmt_printnl(parser_state_t *state, json_format_t *fmt)
 {   int i;
     int len = outchar_printf(fmt->out, "\n");
     for (i=0; i<fmt->depth; i++)
@@ -411,8 +420,8 @@ static int json_fmt_printnl(json_format_t *fmt)
 
 /* forward reference */
 static int
-json_fmt_print(outchar_t *out, const value_t *root, const value_t *value,
-               json_format_t *fmt);
+json_fmt_print(parser_state_t *state, outchar_t *out, const value_t *root,
+               const value_t *value, json_format_t *fmt);
 
 
 
@@ -431,7 +440,7 @@ value_json_dir_bind_print(dir_t *dir, const value_t *name,
         pr->bracketed = TRUE;
         if (pr->is_obj && pr->fmt->pretty)
         {   pr->fmt->depth++;
-            pr->len += json_fmt_printnl(pr->fmt);
+            pr->len += json_fmt_printnl(pr->state, pr->fmt);
         }
     }
     
@@ -440,22 +449,22 @@ value_json_dir_bind_print(dir_t *dir, const value_t *name,
     else
     {   pr->len += outchar_printf(out, pr->fmt->delim);
         if (pr->is_obj && pr->fmt->pretty)
-            pr->len += json_fmt_printnl(pr->fmt);
+            pr->len += json_fmt_printnl(pr->state, pr->fmt);
     }
 
     if (pr->is_obj)
     {
         if (value_type_equal(name, type_string))
-            pr->len += json_fmt_print(out, root, name, pr->fmt);
+            pr->len += json_fmt_print(pr->state, out, root, name, pr->fmt);
         else
             /* shouldn't really be here! */
-            pr->len += json_fmt_print(out, root, name, pr->fmt);
+            pr->len += json_fmt_print(pr->state, out, root, name, pr->fmt);
 
         pr->len += outchar_printf(out, pr->fmt->fielddelim);
     }
     OMIT(pr->len += outchar_printf(out, "(%s)#%p ",
                                    value_type_name(value), value););
-    pr->len += json_fmt_print(out, root, value, pr->fmt);
+    pr->len += json_fmt_print(pr->state, out, root, value, pr->fmt);
 
     return NULL;
 }
@@ -468,10 +477,11 @@ value_json_dir_bind_print(dir_t *dir, const value_t *name,
 
 
 static int
-json_fmt_dir_print(outchar_t *out, const value_t *root, const value_t *value,
-                   json_format_t *fmt)
+json_fmt_dir_print(parser_state_t *state, outchar_t *out, const value_t *root,
+                   const value_t *value, json_format_t *fmt)
 {   dir_json_bind_print_arg_t pr;
 
+    pr.state = state;
     pr.len = 0;
 
     if (value_istype(value, type_dir))
@@ -481,7 +491,7 @@ json_fmt_dir_print(outchar_t *out, const value_t *root, const value_t *value,
         pr.first  = TRUE;
         pr.bracketed = FALSE;
 
-        (void)dir_forall(dir, &value_json_dir_bind_print, &pr);
+        (void)dir_state_forall(dir, state, &value_json_dir_bind_print, &pr);
 
         if (pr.first)
         {   pr.is_obj = FALSE; /* this is arbitrary - we can't tell */
@@ -493,7 +503,7 @@ json_fmt_dir_print(outchar_t *out, const value_t *root, const value_t *value,
         {
             if (pr.is_obj && pr.fmt->pretty)
             {   pr.fmt->depth--;
-                pr.len += json_fmt_printnl(pr.fmt);
+                pr.len += json_fmt_printnl(pr.state, pr.fmt);
             }
             pr.len += outchar_printf(out, pr.is_obj? "}": "]");
         }
@@ -506,8 +516,8 @@ json_fmt_dir_print(outchar_t *out, const value_t *root, const value_t *value,
 
 
 static int
-json_fmt_print(outchar_t *out, const value_t *root, const value_t *val,
-               json_format_t *fmt)
+json_fmt_print(parser_state_t *state, outchar_t *out, const value_t *root,
+               const value_t *val, json_format_t *fmt)
 {   int len;
  
     if (val == &value_null)
@@ -518,9 +528,9 @@ json_fmt_print(outchar_t *out, const value_t *root, const value_t *val,
         len = outchar_printf(out, "false");
     else if (value_type_equal(val, type_int) ||
              value_type_equal(val, type_string))
-        len = value_print(out, root, val);
+        len = value_state_print(state, out, root, val);
     else if (value_type_equal(val, type_dir))
-        len = json_fmt_dir_print(out, root, val, fmt);
+        len = json_fmt_dir_print(state, out, root, val, fmt);
     else
     {
         /* this type is not supported in JSON */
@@ -533,8 +543,10 @@ json_fmt_print(outchar_t *out, const value_t *root, const value_t *val,
 
 
 
+
 extern int
-json_print(outchar_t *out, const value_t *root, const value_t *val, bool pretty)
+json_state_print(parser_state_t *state, outchar_t *out, const value_t *root,
+                 const value_t *val, bool pretty)
 {   json_format_t fmt;
 
     fmt.out = out;
@@ -545,7 +557,7 @@ json_print(outchar_t *out, const value_t *root, const value_t *val, bool pretty)
     fmt.indent = "    ";
     fmt.depth  = 0;
 
-    return json_fmt_print(out, root, val, &fmt);
+    return json_fmt_print(state, out, root, val, &fmt);
 }
 
 
@@ -563,7 +575,8 @@ gengenfn_fmt_json(char *buf, size_t buflen, fprint_flags_t flags, int precision,
     (void)buf;
     (void)buflen;
 
-    json_print(sink, dir_value(parser_root(state)), argval, pretty);
+    json_state_print(state, sink, dir_value(parser_root(state)),
+                     argval, pretty);
     charsink_string_buf(sink, &strbuf, &strsize);
     if (precision > 0 && precision < (int)strsize)
         strsize = precision;
@@ -679,32 +692,33 @@ cmds_json(parser_state_t *state, dir_t *cmds)
 {
     printf_addformat(type_int, "j", "<f> <p> <val> - %j (JSON) value format",
                      &fn_fmt_j);
-    printf_addformat(type_int, "J", "<f> <p> <val> - %J (pretty JSON) value format",
+    printf_addformat(type_int, "J",
+                     "<f> <p> <val> - %J (pretty JSON) value format",
                      &fn_fmt_J);
-    mod_addfn(cmds, "print",
-              "<val> - print value as JSON (as %j format)",
-              &fn_json_out, 1);
-    mod_addfn(cmds, "printp",
-              "<val> - pretty print value as JSON (as %J format)",
-              &fn_json_outpty, 1);
-    mod_addfn(cmds, "str",
-              "<val> - return value as JSON string (as %j format)",
-              &fn_json_str, 1);
-    mod_addfn(cmds, "strp",
-              "<val> - return value as pretty JSON string (as %J format)",
-              &fn_json_strpty, 1);
-    mod_addfn(cmds, "obj",
-              "<code> - return FTL value from JSON object",
-              &fn_json, 1);
-    mod_addfn(cmds, "val",
-              "<string> - return FTL value from JSON string",
-              &fn_jsonval, 1);
-    mod_addfn(cmds, "scanjson",
-              "<@value> <parseobj> - parse value from JSON parse object",
-              &fn_json_scan, 2);
-    mod_addfn(cmds, "scanjsonobj",
-              "<@value> <parseobj> - parse object body from JSON parse object",
-              &fn_json_scanobj, 2);
+    smod_addfn(state, cmds, "print",
+               "<val> - print value as JSON (as %j format)",
+               &fn_json_out, 1);
+    smod_addfn(state, cmds, "printp",
+               "<val> - pretty print value as JSON (as %J format)",
+               &fn_json_outpty, 1);
+    smod_addfn(state, cmds, "str",
+               "<val> - return value as JSON string (as %j format)",
+               &fn_json_str, 1);
+    smod_addfn(state, cmds, "strp",
+               "<val> - return value as pretty JSON string (as %J format)",
+               &fn_json_strpty, 1);
+    smod_addfn(state, cmds, "obj",
+               "<code> - return FTL value from JSON object",
+               &fn_json, 1);
+    smod_addfn(state, cmds, "val",
+               "<string> - return FTL value from JSON string",
+               &fn_jsonval, 1);
+    smod_addfn(state, cmds, "scanjson",
+               "<@value> <parseobj> - parse JSON term value from parse object",
+               &fn_json_scan_baseval, 2);
+    smod_addfn(state, cmds, "scanjsonobj",
+               "<@value> <parseobj> - parse JSON object body from parse object",
+               &fn_json_scan_dir, 2);
     return TRUE;
 }
 

@@ -1,3 +1,10 @@
 {
-    "C_Cpp.dimInactiveRegions": true
+    "C_Cpp.dimInactiveRegions": true,
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL",
+            "binaryPath": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL/ftl",
+            "binaryArgs": []
+        }
+    ]
 }

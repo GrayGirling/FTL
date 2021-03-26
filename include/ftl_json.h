@@ -49,8 +49,12 @@ extern void
 cmds_json_end(parser_state_t *state);
 
 extern int
-json_print(outchar_t *out, const value_t *root, const value_t *val,
-           bool pretty);
+json_state_print(parser_state_t *state, outchar_t *out, const value_t *root,
+                 const value_t *val, bool pretty);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define json_print(out, root, val, pretty) \
+        json_state_print(root_state, out, root, val, pretty)
 
 #ifdef __cplusplus
 }

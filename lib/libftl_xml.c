@@ -355,10 +355,11 @@ static const xml_escape_entry_t xml_escape[] =
 
 
 static bool
-parse_xml_escape(const char **ref_line, unsigned *out_unicode)
+parsew_xml_escape(const char **ref_line, const char *lineend,
+                  unsigned *out_unicode)
 {
     const char *line = *ref_line;
-    bool ok = (*line++ == '&');
+    bool ok = (line < lineend && *line++ == '&');
     bool got_token = FALSE;
     if (ok) {
         if (*line == '#') {
@@ -366,38 +367,42 @@ parse_xml_escape(const char **ref_line, unsigned *out_unicode)
             unsigned unicode = 0;
 
             line++;
-            ch = *line++;
+            if (line < lineend)
+            {
+                ch = *line++;
 
-            if (ch == 'X' || ch == 'x') {
-                bool is_hex = TRUE;
-                do {
-                    ch = *line++;
-                    if (ch <= '9' && ch >= '0')
-                        unicode = (unicode << 4) | (ch - '0');
-                    else if (ch <= 'f' && ch >= 'a')
-                        unicode = (unicode << 4) | (ch - 'a');
-                    else if (ch <= 'F' && ch >= 'A')
-                        unicode = (unicode << 4) | (ch - 'A');
-                    else
-                        is_hex = FALSE;
-                } while (is_hex);
-            } else
-            {   while (isdigit((unsigned char)ch))
-                {   unicode = unicode * 10 + (ch - '0');
-                    ch = *line++;
+                if (ch == 'X' || ch == 'x') {
+                    bool is_hex = TRUE;
+                    while (is_hex && line < lineend)
+                    {   ch = *line++;
+                        if (ch <= '9' && ch >= '0')
+                            unicode = (unicode << 4) | (ch - '0');
+                        else if (ch <= 'f' && ch >= 'a')
+                            unicode = (unicode << 4) | (ch - 'a');
+                        else if (ch <= 'F' && ch >= 'A')
+                            unicode = (unicode << 4) | (ch - 'A');
+                        else
+                            is_hex = FALSE;
+                    } 
+                } else
+                {   while (line < lineend && isdigit((unsigned char)ch))
+                    {   unicode = unicode * 10 + (ch - '0');
+                        ch = *line++;
+                    }
                 }
+                ok = got_token = (ch == ';');
+                if (ok)
+                    *out_unicode = unicode;
             }
-            ok = got_token = (ch == ';');
-            if (ok)
-                *out_unicode = unicode;
         }
         else {
             char esc[16];
             const char *name = line;
             const char *name_toolong = line + sizeof(esc);
-            while (isalpha((unsigned char)*line) && line < name_toolong)
+            while (line < lineend && isalpha((unsigned char)*line) &&
+                   line < name_toolong)
                 line++;
-            ok = got_token = (*line++ == ';');
+            ok = got_token = (line < lineend && *line++ == ';');
             if (ok) {
                 const xml_escape_entry_t *knownesc = &xml_escape[0];
                 memcpy(&esc[0], name, line-1-name);
@@ -428,19 +433,20 @@ parse_xml_escape(const char **ref_line, unsigned *out_unicode)
  * if the value is NULL just parse the text, but don't generate its value
  */
 static bool
-parse_xml_text(const char **ref_line, const value_t **out_strval)
+parsew_xml_text(parser_state_t *state, const char **ref_line,
+                const char *lineend, const value_t **out_strval/*local*/)
 {   charsink_string_t charbuf;
     charsink_t *sink = out_strval != NULL? charsink_string_init(&charbuf): NULL;
     const char *line = *ref_line;
-    int ch;
+    int ch = -1;
     bool ok = FALSE;
 
-    while ((ch = *line) != '\0' && ch != '<')
+    while (line < lineend && (ch = *line) != '\0' && ch != '<')
     {
         ok = TRUE;
         if (ch == '&')
         {   unsigned unicode = 0;
-            if (parse_xml_escape(&line, &unicode))
+            if (parsew_xml_escape(&line, lineend, &unicode))
             {
                 int written = 0;
                 char mbstring[FTL_MB_LEN_MAX+1];
@@ -473,7 +479,7 @@ parse_xml_text(const char **ref_line, const value_t **out_strval)
 
         charsink_string_buf(sink, &str, &len);
         if (out_strval != NULL)
-            *out_strval = value_string_new(str, len);
+            *out_strval = value_string_lnew(state, str, len);
         charsink_string_close(sink);
     }
 
@@ -489,23 +495,27 @@ parse_xml_text(const char **ref_line, const value_t **out_strval)
  *  Note: we handle only the ASCII 7-bit subset
  */
 static bool
-parse_xml_name(const char **ref_line, char *buf, size_t len)
+parsew_xml_name(const char **ref_line, const char *lineend,
+                char *buf, size_t len)
 {   const char *start = *ref_line;
     const char *line = start;
-    char ch = *line;
 
-    if (ch=='_' || ch==':' || isalpha((unsigned char)ch))
-    {
-        do {
-            if (len > 1)
-            {   len--;
-                *buf++ = ch;
-            }
-            line++;
-        } while ((ch = *line) != '\0' &&
-                 (ch=='_' ||  ch==':' || ch=='-' || ch=='.' ||
-                  isalnum((unsigned char)ch))
-                );
+    if (line < lineend)
+    {   char ch = *line;
+
+        if (ch=='_' || ch==':' || isalpha((unsigned char)ch))
+        {
+            do {
+                if (len > 1)
+                {   len--;
+                    *buf++ = ch;
+                }
+                line++;
+            } while (line < lineend && (ch = *line) != '\0' &&
+                     (ch=='_' ||  ch==':' || ch=='-' || ch=='.' ||
+                      isalnum((unsigned char)ch))
+                    );
+        }
     }
 
     if (len <= 0)
@@ -536,22 +546,24 @@ parse_xml_name(const char **ref_line, char *buf, size_t len)
  *  if the value is NULL just parse the text, but don't generate its value.
  */
 static bool
-parse_xml_attributes(const char **ref_line, const value_t **out_dirval)
+parsew_xml_attributes(parser_state_t *state, const char **ref_line,
+                      const char *lineend, const value_t **out_dirval)
 {   const char *line = *ref_line;
     char attribute_name[64];
     char attribute_value[64];
-    dir_t *dir = (out_dirval == NULL? NULL: dir_id_new());
+    dir_t *dir = (out_dirval == NULL? NULL: dir_id_lnew(state));
     bool ok = TRUE;
 
-    while (ok && parse_space(&line) &&
-           parse_xml_name(&line, &attribute_name[0], sizeof(attribute_name))) {
+    while (ok && line < lineend && parse_space(&line) &&
+           parsew_xml_name(&line, lineend,
+                           &attribute_name[0], sizeof(attribute_name))) {
         ok = FALSE;
         parse_space(&line);
         if (*line++ == '=') {
             size_t attr_len = 0;
             parse_space(&line);
-            ok = parse_string(&line, &attribute_value[0],
-                              sizeof(attribute_value), &attr_len);
+            ok = parsew_string(&line, lineend-line, &attribute_value[0],
+                               sizeof(attribute_value), &attr_len);
             if (ok && dir != NULL) {
                 const value_t *attrname =
                     value_string_new_measured(&attribute_name[0]);
@@ -559,6 +571,8 @@ parse_xml_attributes(const char **ref_line, const value_t **out_dirval)
                     value_string_new(&attribute_value[0], attr_len);
 
                 dir_set(dir, attrname, attrval);
+                value_unlocal(attrname);
+                value_unlocal(attrval);
             }
         }
     }
@@ -579,7 +593,8 @@ parse_xml_attributes(const char **ref_line, const value_t **out_dirval)
  *  to just before the final >
  */
 static bool
-parse_xml_pi_body(const char **ref_line, char *buf, size_t len)
+parsew_xml_pi_body(const char **ref_line, const char *lineend,
+                   char *buf, size_t len)
 {   const char *line = *ref_line;
     bool ok = (*line++ == '?');
 
@@ -588,7 +603,7 @@ parse_xml_pi_body(const char **ref_line, char *buf, size_t len)
         do {
             char ch;
             ok = FALSE;
-            while ((ch = *line) != '\0' && ch != '?')
+            while (line < lineend && (ch = *line) != '\0' && ch != '?')
             {
                 if (len > 1)
                 {   len--;
@@ -596,7 +611,7 @@ parse_xml_pi_body(const char **ref_line, char *buf, size_t len)
                 }
                 line++;
             }
-            if (ch != '\0' && line[1] != '>')
+            if (line < lineend && ch != '\0' && line[1] != '>')
             {
                 if (len > 1)
                 {   len--;
@@ -607,9 +622,9 @@ parse_xml_pi_body(const char **ref_line, char *buf, size_t len)
             else
                 /* ch is '?' and line[1] is '>' or ch is '\0' */
                 complete = TRUE;
-        } while (!complete || *line == '\0');
+        } while (!complete || line >= lineend || *line == '\0');
 
-        if (complete && *line != '\0')
+        if (complete && line < lineend && *line != '\0')
         {   ok = TRUE;
             line += 1; /* skip over the ? */
             *buf = '\0';
@@ -627,7 +642,8 @@ parse_xml_pi_body(const char **ref_line, char *buf, size_t len)
  *  to just before the final >
  */
 static bool
-parse_xml_cmt_body(const char **ref_line, char *buf, size_t len)
+parsew_xml_cmt_body(const char **ref_line, const char *lineend,
+                    char *buf, size_t len)
 {   const char *line = *ref_line;
     bool ok = (*line++ == '!' && *line++ == '-' && *line++ == '-');
 
@@ -636,7 +652,7 @@ parse_xml_cmt_body(const char **ref_line, char *buf, size_t len)
         do {
             char ch;
             ok = FALSE;
-            while ((ch = *line) != '\0' && ch != '-')
+            while (line < lineend && (ch = *line) != '\0' && ch != '-')
             {
                 if (len > 1)
                 {   len--;
@@ -644,7 +660,7 @@ parse_xml_cmt_body(const char **ref_line, char *buf, size_t len)
                 }
                 line++;
             }
-            if (ch != '\0' && line[1] != '-')
+            if (line < lineend && ch != '\0' && line[1] != '-')
             {
                 if (len > 1)
                 {   len--;
@@ -655,9 +671,9 @@ parse_xml_cmt_body(const char **ref_line, char *buf, size_t len)
             else
                 /* ch is '-' and line[1] is '-' or ch is '\0' */
                 complete = TRUE;
-        } while (!complete || *line == '\0');
+        } while (!complete || line >= lineend || *line == '\0');
 
-        if (complete && *line != '\0')
+        if (complete && line < lineend && *line != '\0')
         {
             *buf = '\0';
             line += 2; /* skip over the '--' */
@@ -678,18 +694,18 @@ parse_xml_cmt_body(const char **ref_line, char *buf, size_t len)
  *  always seems to be upper case alphabetics.
  */
 static bool
-parse_xml_decl_body(const char **ref_line, char *dec, size_t declen,
-                    char *buf, size_t len)
+parsew_xml_decl_body(const char **ref_line, const char *lineend,
+                     char *dec, size_t declen, char *buf, size_t len)
 {   const char *line = *ref_line;
-    bool ok = (*line++ == '!' &&
-               parse_id(&line, dec, declen) &&
-               parse_space(&line));
+    bool ok = (*line++ == '!' && line < lineend && 
+               parsew_id(&line, lineend-line, dec, declen) &&
+               parsew_space(&line, lineend-line));
 
     if (ok) {
         int indent = 1;
         char ch;
         ok = FALSE;
-        while ((ch = *line) != '\0' && indent > 0)
+        while (line < lineend && (ch = *line) != '\0' && indent > 0)
         {
             if (ch == '<')
                 indent++;
@@ -722,12 +738,14 @@ parse_xml_decl_body(const char **ref_line, char *dec, size_t declen,
  *  Note: we handle only the ASCII 7-bit subset of the tag name
  */
 static bool
-parse_xml_etag_body(const char **ref_line, char *buf, size_t len)
+parsew_xml_etag_body(const char **ref_line, const char *lineend,
+                     char *buf, size_t len)
 {   const char *line = *ref_line;
-    bool ok = (*line++ == '/') && parse_xml_name(&line, buf, len);
+    bool ok = (*line++ == '/') && line < lineend &&
+              parsew_xml_name(&line, lineend, buf, len);
 
     if (ok) {
-        parse_space(&line);
+        parsew_space(&line, lineend-line);
         *ref_line = line;
     }
     return ok;
@@ -741,16 +759,18 @@ parse_xml_etag_body(const char **ref_line, char *buf, size_t len)
  *  Note: we handle only the ASCII 7-bit subset of the tag name
  */
 static bool
-parse_xml_tag_body(const char **ref_line, char *buf, size_t len,
-                   bool *out_is_mttag, const value_t **out_dirval)
+parsew_xml_tag_body(parser_state_t *state,
+                    const char **ref_line, const char *lineend,
+                    char *buf, size_t len,
+                    bool *out_is_mttag, const value_t **out_dirval/*local*/)
 {   const char *line = *ref_line;
-    bool ok = parse_xml_name(&line, buf, len);
+    bool ok = parsew_xml_name(&line, lineend, buf, len);
 
     if (ok) {
-        parse_space(&line);
-        ok = parse_xml_attributes(&line, out_dirval);
+        parsew_space(&line, lineend-line);
+        ok = parsew_xml_attributes(state, &line, lineend, out_dirval);
 
-        if ((*out_is_mttag = (*line == '/')))
+        if ((*out_is_mttag = (line < lineend && *line == '/')))
             line++;
     }
 
@@ -767,11 +787,13 @@ parse_xml_tag_body(const char **ref_line, char *buf, size_t len,
 /*! Parse the next XML item and construct a binding from the xmlobj functions
  *  and the arguments from the parse
  */
-static const value_t *
-fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
+static const value_t * /*local*/
+fnparse_xml_itemfn(const char **ref_line, size_t linelen,
+                   parser_state_t *state, void *arg)
 {   dir_t *xmlobj = (dir_t *)arg;
     const value_t *parsefn = NULL; /* to be a fn to parse the next item */
     const char *line = *ref_line;
+    const char *lineend = &line[linelen];
     bool ok = (*line != '\0');
     bool action_found = FALSE;
 
@@ -785,55 +807,77 @@ fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
             bool is_mt_tag = FALSE;
 
             line++;
-            if (parse_xml_pi_body(&line, &content[0], sizeof(content))) {
-                const value_t *fn_pi = dir_string_get(xmlobj, "pi");
+            if (parsew_xml_pi_body(&line, lineend,
+                                   &content[0], sizeof(content))) {
+                const value_t *fn_pi = /*lnew*/
+                    dir_string_get(xmlobj, "pi");
                 if (fn_pi != NULL && fn_pi != &value_null) {
                     action_found = TRUE;
-                    parsefn = substitute(fn_pi,
-                                         value_string_new_measured(&content[0]),
-                                         state, /*unstrict*/FALSE);
+                    parsefn = /*lnew*/
+                        substitute(fn_pi,
+                                   value_string_lnew_measured(state,
+                                                              &content[0]),
+                                   state, /*unstrict*/FALSE);
                 }
+                value_unlocal(fn_pi);
             }
-            else if (parse_xml_cmt_body(&line, &content[0], sizeof(content))) {
-                const value_t *fn_comment = dir_string_get(xmlobj, "cmt");
+            else if (parsew_xml_cmt_body(&line, lineend,
+                                         &content[0], sizeof(content))) {
+                const value_t *fn_comment = /*lnew*/
+                    dir_string_get(xmlobj, "cmt");
                 if (fn_comment != NULL && fn_comment != &value_null) {
                     action_found = TRUE;
-                    parsefn = substitute(fn_comment,
-                                         value_string_new_measured(&content[0]),
-                                         state, /*unstrict*/FALSE);
+                    parsefn = /*lnew*/
+                        substitute(fn_comment,
+                                   value_string_lnew_measured(state,
+                                                              &content[0]),
+                                   state, /*unstrict*/FALSE);
                 }
+                value_unlocal(fn_comment);
             }
-            else if (parse_xml_decl_body(&line,
-                                         &declname[0], sizeof(declname),
-                                         &content[0], sizeof(content))) {
-                const value_t *fn_decl = dir_string_get(xmlobj, "decl");
+            else if (parsew_xml_decl_body(&line, lineend,
+                                          &declname[0], sizeof(declname),
+                                          &content[0], sizeof(content))) {
+                const value_t *fn_decl = /*lnew*/
+                    dir_string_get(xmlobj, "decl");
                 if (fn_decl != NULL && fn_decl != &value_null) {
-                    parsefn = substitute(fn_decl,
-                                         value_string_new_measured(
-                                             &declname[0]),
-                                         state, /*unstrict*/FALSE);
-                    if (parsefn != NULL) {
+                    const value_t *parsefn1 = /*lnew*/
+                        substitute(fn_decl,
+                                   value_string_lnew_measured(state,
+                                                              &declname[0]),
+                                   state, /*unstrict*/FALSE);
+                    if (parsefn1 != NULL) {
                         action_found = TRUE;
-                        parsefn = substitute(parsefn,
-                                             value_string_new_measured(
-                                                 &content[0]),
-                                             state, /*unstrict*/FALSE);
+                        parsefn = /*lnew*/
+                            substitute(parsefn1,
+                                       value_string_lnew_measured(state,
+                                                                  &content[0]),
+                                       state, /*unstrict*/FALSE);
+                        value_unlocal(parsefn1);
                     }
                 }
+                value_unlocal(fn_decl);
             }
-            else if (parse_xml_etag_body(&line, &content[0], sizeof(content))) {
-                const value_t *fn_etag = dir_string_get(xmlobj, "etag");
+            else if (parsew_xml_etag_body(&line, lineend, &content[0],
+                                          sizeof(content))) {
+                const value_t *fn_etag = /*lnew*/
+                    dir_string_get(xmlobj, "etag");
                 if (fn_etag != NULL && fn_etag != &value_null) {
                     action_found = TRUE;
-                    parsefn = substitute(fn_etag,
-                                         value_string_new_measured(&content[0]),
-                                         state, /*unstrict*/FALSE);
+                    parsefn = /*lnew*/
+                        substitute(fn_etag,
+                                   value_string_lnew_measured(state,
+                                                              &content[0]),
+                                   state, /*unstrict*/FALSE);
                 }
+                value_unlocal(fn_etag);
             }
             else
             {
-                const value_t *fn_mttag = dir_string_get(xmlobj, "mttag");
-                const value_t *fn_stag  = dir_string_get(xmlobj, "stag");
+                const value_t *fn_mttag = /*lnew*/
+                    dir_string_get(xmlobj, "mttag");
+                const value_t *fn_stag  = /*lnew*/
+                    dir_string_get(xmlobj, "stag");
                 const value_t *attrs = NULL;
 
                 if (fn_mttag == &value_null)
@@ -841,38 +885,46 @@ fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
                 if (fn_stag == &value_null)
                     fn_stag = NULL;
 
-                if (parse_xml_tag_body(&line, &content[0], sizeof(content),
-                                       &is_mt_tag,
-                                       fn_mttag == NULL && fn_stag == NULL?
-                                           NULL: &attrs))
+                if (parsew_xml_tag_body(state, &line, lineend,
+                                        &content[0], sizeof(content),
+                                        &is_mt_tag,
+                                        fn_mttag == NULL && fn_stag == NULL?
+                                            NULL: &attrs))
                 {
                     const value_t *tagname =
-                        value_string_new_measured(&content[0]);
+                        value_string_lnew_measured(state, &content[0]);
                     if (is_mt_tag) {
                         if (fn_mttag != NULL) {
-                            parsefn = substitute(fn_mttag, tagname,
-                                                 state, /*unstrict*/FALSE);
-                            if (parsefn != NULL) {
+                            const value_t *parsefn1 = /*lnew*/
+                                substitute(fn_mttag, tagname, state,
+                                           /*unstrict*/FALSE);
+                            if (parsefn1 != NULL) {
                                 action_found = TRUE;
-                                parsefn = substitute(parsefn, attrs,
+                                parsefn = substitute(parsefn1, attrs,
                                                      state, /*unstrict*/FALSE);
+                                value_unlocal(parsefn1);
                             }
                        }
                    }
                    else {
                         if (fn_stag != NULL) {
-                            parsefn = substitute(fn_stag, tagname,
-                                                 state, /*unstrict*/FALSE);
-                            if (parsefn != NULL) {
+                            const value_t *parsefn1 = /*lnew*/
+                                substitute(fn_stag, tagname, state,
+                                           /*unstrict*/FALSE);
+                            if (parsefn1 != NULL) {
                                 action_found = TRUE;
-                                parsefn = substitute(parsefn, attrs,
+                                parsefn = substitute(parsefn1, attrs,
                                                      state, /*unstrict*/FALSE);
+                                value_unlocal(parsefn1);
                             }
                        }
                    }
                 }
                 else
                     ok = FALSE; /* unrecognizable '<...' */
+                value_unlocal(attrs);
+                value_unlocal(fn_mttag);
+                value_unlocal(fn_stag);
             }
 
             ch = *line;
@@ -895,15 +947,17 @@ fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
         } else
         {
             const value_t *strval = NULL;
-            ok = parse_xml_text(&line, &strval);
+            ok = parsew_xml_text(state, &line, lineend, &strval/*lnew*/);
             if (ok && xmlobj != NULL) {
-                const value_t *fn_text = dir_string_get(xmlobj, "text");
+                const value_t *fn_text = /*lnew*/dir_string_get(xmlobj, "text");
                 if (fn_text != NULL && fn_text != &value_null) {
                     action_found = TRUE;
                     parsefn = substitute(fn_text, strval, state,
                                          /*unstrict*/FALSE);
                 }
+                value_unlocal(fn_text);
             }
+            value_unlocal(strval);
         }
     }
 
@@ -913,6 +967,7 @@ fnparse_xml_itemfn(const char **ref_line, parser_state_t *state, void *arg)
                     codeid(), parsefn==NULL? "": "non-"););
         return parsefn;
     } else {
+        value_unlocal(parsefn);
         OMIT(printf("%s: fail - sNULL parse function returned\n", codeid()););
         return &value_null;
     }
@@ -943,8 +998,8 @@ fn_scan_xml_itemfn(const value_t *this_fn, parser_state_t *state)
 {   const value_t *xmlobj = parser_builtin_arg(state, 1);
     if (value_istype(xmlobj, type_dir))
     {   dir_t *xmlobj_dir = (dir_t *)xmlobj;
-        return genfn_scan(this_fn, state, 2, &fnparse_xml_itemfn,
-                          (void *)xmlobj_dir);
+        return genfn_scanw_cb(this_fn, state, 2, &fnparse_xml_itemfn,
+                              (void *)xmlobj_dir);
     } else
         return &value_null;
 }
@@ -953,10 +1008,11 @@ fn_scan_xml_itemfn(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_xml_name(const char **ref_line, parser_state_t *state, void *arg)
+fnparse_xml_name(const char **ref_line, size_t linelen,
+                 parser_state_t *state, void *arg)
 {   char buf[128];
-    if (parse_xml_name(ref_line, buf, sizeof(buf)))
-        return value_string_new_measured(buf);
+    if (parsew_xml_name(ref_line, &(*ref_line)[linelen], buf, sizeof(buf)))
+        return value_string_lnew_measured(state, buf);
     else
         return &value_null;
 }
@@ -966,7 +1022,7 @@ fnparse_xml_name(const char **ref_line, parser_state_t *state, void *arg)
 
 static const value_t *
 fn_scan_xml_name(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan(this_fn, state, 1, &fnparse_xml_name, NULL);
+{   return genfn_scanw_cb(this_fn, state, 1, &fnparse_xml_name, NULL);
 }
 
 

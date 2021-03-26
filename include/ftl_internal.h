@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
- * Copyright (c) 2005-2018, Gray Girling
+ * Copyright (c) 2005-2021, Gray Girling
  *
  * All rights reserved.
  *
@@ -54,11 +54,6 @@
 extern "C" {
 #endif
 
-#ifdef _WIN32
-#define STATIC_INLINE static __inline
-#else
-#define STATIC_INLINE static inline
-#endif
 
 #define FTL_MALLOC malloc
 #define FTL_FREE   free
@@ -104,25 +99,33 @@ typedef void value_delete_fn_t(value_t *value);
 /* set the heap version of that values dependent on this value belong to */
 typedef void value_markver_fn_t(const value_t *value, int version);
 
-typedef int value_print_fn_t(outchar_t *out, const value_t *root,
-                             const value_t *value, bool detailed);
+typedef int value_print_fn_t(parser_state_t *state, outchar_t *out,
+                             const value_t *root, const value_t *value, 
+                             bool detailed);
+/*< Note: legacy version of this function did not include the state
+ */
 
-typedef const value_t *value_parse_fn_t(const char **ref_line,
+/*! Parse a nul-terminated string into a value
+ */
+typedef const value_t *value_parse_fn_t(const char **ref_line, 
                                         const value_t *this_cmd,
                                         parser_state_t *state);
 
 typedef int value_cmp_fn_t(const value_t *v1, const value_t *v2);
 
 struct value_s
-{   struct value_s *link;
+{   /* local chain for garbage collection */
+    struct value_s *loc_next;   /**< ref to next value on chain */
+    struct value_s **loc_last_ref; /**< ref to last value's "loc_next" link */
+    /* main value fields */
+    struct value_s *link;       /**< multipurpose "next" link */
     struct value_s *heap_next;  /**< next value allocated in heap */
-    int heap_version;		    /**< last heap version this was a member of */
+    int heap_version;	        /**< last heap version this was a member of */
 #ifdef FTL_VAL_HAS_LINENO
     int lineno;                 /**< used only for debugging */
 #endif
-    unsigned char local;        /**< if local this is not free for collection */
-    unsigned char on_heap;      /**< if set don't delete it with kind->del */
     const value_type_t *kind;	/**< type of this value */
+    unsigned char on_heap;      /**< if set don't delete it with kind->del */
 } /* value_t */;
 
 /*! Initialize a value data structure
@@ -133,40 +136,14 @@ struct value_s
 extern /*internal*/ value_t *
 (value_init)(value_t *val, type_t kind, bool on_heap);
 
-
-/*! To try to isolate uncommitted values (i.e. ones that are valid but which
- *  should not be garbage collected yet, we use the notion of a value being
- *  'local' (local == not reachable from garbage collection root).  Most new
- *  values are allocated 'local' and should be unset as soon as they have
- *  either been used in the garbage-collection-safe tree, or known not to be
- *  required, they can be un-localed.
- *  Ideally every new value will be un-localed before it leaves the scope of the
- *  routine that consumes it.
- *  The hope here is to enable the garbage collector to be run relatively
- *  asynchronously (e.g. when memory is low).
- *  Note that local values will never be collected by the garbage collector if
- *  they are not unlocalled, so that any which are still local at the time of
- *  an exception (which uses longjmp) may never be retrieved.
+/*! Allocate storage for a value_t, which is initially placed on the
+ *  thread's local values list (so it doesn't get garbage collected)
+ *  Note: these values should, once initialized be attached to other
+ *  ultimately non-local variables using HOME()
  */
-STATIC_INLINE void
-_value_unlocal(const value_t *val, int lineno)
-{   /* we will need to discard the const - it applies only to the real content
-       of the value - not its garbage collection status
-       NOTE: this is potentially dangerous if a const value has been placed in
-             read-only memory
-    */
-    /* if (NULL != val) allow value to be garbage collected as usual */
-    if (NULL != val)
-    {	/*IGNORE(if (!val->local)
-	       fprintf(stderr, "%s: line %5d - value %p "
-		       "not local made unlocal\n",
-		       codeid(), lineno, val););*/
-	((value_t *)val)->local = FALSE;
-    }
-}
+extern value_t *value_malloc_newl(parser_state_t *state, size_t size);
 
-#define value_unlocal(val) _value_unlocal(val, __LINE__)
-
+    
 /* candidate function for value_delete_fn_t for a simple value_t */
 extern void
 value_delete_alloced(value_t *value);
@@ -206,36 +183,56 @@ type_init(value_type_t *kind, bool on_heap,
 extern bool type_values_simple(type_t kind);
 
 extern value_t *
-type_clone(bool on_heap,
-           type_id_t cloned_type_id, const char *name,
-           value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
-           value_cmp_fn_t *compare, value_delete_fn_t *delete_fn,
-           value_markver_fn_t *mark_version);
+type_state_clone(parser_state_t *state, bool on_heap,
+                 type_id_t cloned_type_id, const char *name,
+                 value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+                 value_cmp_fn_t *compare_fn, value_delete_fn_t *delete_fn,
+                 value_markver_fn_t *mark_version);
+
+#define type_clone(on_heap, clone_type_id, name, print_fn, parse_fn,    \
+                   compare_fn, delete_fn, mark_version) \
+    type_state_clone(state, on_heap, clone_type_id, name, \
+                     print_fn, parse_fn, compare_fn, delete_fn, mark_version) 
+
 
 extern value_t *
-type_new(bool on_heap,
-         const char *name,
-         value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
-         value_cmp_fn_t *compare_fn,
-         value_delete_fn_t *delete_fn,
-         value_markver_fn_t *mark_version_fn);
+type_state_new(parser_state_t *state, bool on_heap,
+               const char *name,
+               value_print_fn_t *print_fn, value_parse_fn_t *parse_fn,
+               value_cmp_fn_t *compare_fn,
+               value_delete_fn_t *delete_fn,
+               value_markver_fn_t *mark_version_fn);
+
+#define type_new(on_heap, name, print_fn, parse_fn, compare_fn, \
+                 delete_fn, mark_version)                   \
+    type_state_clone(state, on_heap, name, \
+                     print_fn, parse_fn, compare_fn, delete_fn, mark_version) 
+
+
 
 /*          Directories					                     */
 
 /* create a new name-value binding - name and value assumed to have
    permanent values (the name is not in the directory)
 */
-typedef bool dir_add_fn_t(dir_t *dir, const value_t *name,
-			  const value_t *value);
+typedef bool dir_add_fn_t(dir_t *dir, parser_state_t *state,
+                          const value_t *name, const value_t *value);
 
 typedef const value_t **dir_lookup_fn_t(dir_t *dir, const value_t *name);
 
-typedef unsigned dir_count_fn_t(dir_t *dir);
+typedef unsigned dir_count_fn_t(dir_t *dir, parser_state_t *state);
 
-typedef const value_t *dir_get_fn_t(dir_t *dir, const value_t *name);
+/*! Fetch a value from a directory given its name
+ *  Typically the result will not be a local value, but there are directories
+ *  (e.g. dynamic ones) where they will be.  
+ */
+typedef const value_t * /*local*/dir_get_fn_t(dir_t *dir, const value_t *name);
 
-/* result is from first enumfn to return non NULL */
-typedef void *dir_forall_fn_t(dir_t *dir, dir_enum_fn_t *enumfn, void *arg);
+/* result is from first enumfn to return non NULL
+ * Note: legacy version of this function did not include the state
+ */
+typedef void *dir_forall_fn_t(dir_t *dir, parser_state_t *state, 
+                              dir_enum_fn_t *enumfn, void *arg);
 
 struct dir_s
 {   value_t value;           /* directory used as a value */
@@ -364,12 +361,21 @@ value_mem_init(value_mem_t *mem, type_t mem_subtype,
 
 /*          Scanning					                     */
 
+
+#if 0
 typedef bool ftl_scan_prefix_fn(const char **ref_line);
 
 /*! Generic ftl function that just updates the parse state provided at argument
  *  'argstart'.
  *  The parsing itself is handled by the function 'fnparse' which removes a
  *  prefix from the string at <arg>.0.
+ *
+ *  The function will return
+ *        &value_null  - if the argument has the wrong type
+ *        value_false  - if fnparse returns FALSE
+ *        value_true   - if fnparse returns TRUE
+ *
+ * Deprecated: Legacy use only - don't use in new code - use genfn_scanw_noret
  */
 extern const value_t *
 genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
@@ -379,16 +385,82 @@ genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
 typedef const value_t *
 ftl_scan_value_fn(const char **ref_line, parser_state_t *state, void *arg);
 
-/*! Generic ftl function that updates the parse state provided at argument
+/*! Generic FTL function that updates the parse state provided at argument
+ *  'argstart' and generates an FTL value from the prefix which
+ *  is returned via 
+ *
+ *  .... <pobj> ...
+ *       |
+ *       argstart
+ *
+ *  Normally 'argstart' is the last argument to patch other parse.<fn>s
+ *
+ *  The parsing itself is handled by the function 'fnparse'
+ *          (*fnparse)(&line, state, arg)
+ *  which can not assume that the line is nul-terminated and returns the
+ *  object (value_t) parsed.
+ *
+  *  This returns
+ *        &value_null        - if the argument has the wrong type
+ *        the fnparse result - otherwise
+ *
+ */
+extern const value_t *
+genfn_scanw(const value_t *this_fn, parser_state_t *state,
+            int argstart, ftl_scanw_value_fn *fnparse, void *arg);
+
+
+/*! Generic FTL function that updates the parse state provided at argument
  *  'argstart'+1 and generates an FTL value from the prefix which
  *  is returned via a callback closure provided at argument 'argstart'+0.
- *  Normally 'argstart'+1 will be the last argument to patch other parse.<fn>s
- *  The parsing itself is handled by the function 'fnparse' which delivers the
- *  value parsed.
+ *
+ *  .... <@setres> <pobj> ...
+ *       |
+ *       argstart
+ *
+ *  Normally 'argstart'+1 is the last argument to patch other parse.<fn>s
+ *
+ *  The parsing itself is handled by the function 'fnparse'
+ *          (*fnparse)(&line, state, arg)
+ *  which can assume that the line is nul-terminated (although this is less
+ *  efficient) and returns the object (value_t) parsed.
  */
 extern const value_t *
 genfn_scan(const value_t *this_fn, parser_state_t *state,
            int argstart, ftl_scan_value_fn *fnparse, void *arg);
+#endif
+
+    
+typedef const value_t *
+ftl_scanw_value_fn(const char **ref_line, const char *lineend,
+                   parser_state_t *state, void *arg);
+
+/*! Generic FTL function that updates the parse state provided at argument
+ *  'argstart'+1 and generates an FTL value from the prefix which
+ *  is returned via a callback closure provided at argument 'argstart'+0.
+ *
+ *  .... <@setres> <pobj> ...
+ *       |
+ *       argstart
+ *
+ *  Normally 'argstart'+1 is the last argument to patch other parse.<fn>s
+ *
+ *  The parsing itself is handled by the function 'fnparse'
+ *          (*fnparse)(&line, linelen, state, arg)
+ *  which must not assume that the line is nul-terminated and will return the
+ *  object (value_t) that has been parsed.
+ *
+ *  The function will return
+ *        &value_null  - if the arguments have the wrong type
+ *        value_false  - if fnparse returns NULL
+ *        value_true   - if fnparse returns non-NULL
+ *
+ *  If value_true is returned then the parsed value will be provided as an
+ *  argument to the setres closure which will then be invoked
+ */
+extern const value_t *
+genfn_scanw_cb(const value_t *this_fn, parser_state_t *state,
+               int argstart, ftl_scanw_value_fn *fnparse, void *arg);
 
     
 /*          Printing					                     */
@@ -436,6 +508,10 @@ printf_addformat(type_t for_type, const char *fmtchar,
      true)
 #endif
 #endif
+
+#define VALVALID(_val) \
+    (PTRVALID(_val) && \
+     ( (_val)->on_heap == TRUE || (_val)->on_heap == FALSE )  )
 
 
 

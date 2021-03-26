@@ -505,22 +505,25 @@ cmds_ftl(parser_state_t *state)
     OMIT(printf("%s: test val at %p\n", codeid(), &test_val););
     
     /* create read-only variable for test_t test_val */
-    mod_add_dir(cmds, "t1", dir_cstruct_new(&FTL_TSPEC(test_t),
-                                            /*is_const*/TRUE, &test_val));
+    smod_add_dir(state, cmds, "t1",
+                 dir_cstruct_lnew(state, &FTL_TSPEC(test_t), /*is_const*/TRUE,
+                                  &test_val));
     
     /* create read-write variable for test_t test_val */
-    mod_add_dir(cmds, "t2", dir_cstruct_new(&FTL_TSPEC(test_t),
-                                            /*is_const*/FALSE, &test_val));
+    smod_add_dir(state, cmds, "t2",
+                 dir_cstruct_lnew(state, &FTL_TSPEC(test_t), /*is_const*/FALSE,
+                                  &test_val));
 
     /* create variable to access array mymac_t mymac_val */
-    mod_add_dir(cmds, "mac6", dir_carray_new(&FTL_TSPEC(mymac_t),
-                                             /*is_const*/ FALSE, &mymac_val,
-                                             FTL_ARRAY_STRIDE(mymac_val)));
+    smod_add_dir(state, cmds, "mac6",
+                 dir_carray_lnew(state, &FTL_TSPEC(mymac_t), /*is_const*/ FALSE,
+                                 &mymac_val, FTL_ARRAY_STRIDE(mymac_val)));
     
     /* create variable to access array testarray_t array_val */
-    mod_add_dir(cmds, "vec3", dir_carray_new(&FTL_TSPEC(testarray_t), 
-                                             /*is_const*/ FALSE, &array_val,
-                                             FTL_ARRAY_STRIDE(array_val)));
+    smod_add_dir(state, cmds, "vec3",
+                 dir_carray_lnew(state, &FTL_TSPEC(testarray_t),
+                                 /*is_const*/ FALSE,
+                                 &array_val, FTL_ARRAY_STRIDE(array_val)));
 
     return TRUE;
 }
@@ -678,16 +681,18 @@ fn_obj_close(const value_t *this_fn, parser_state_t *state)
 
 static void cmds_obj(parser_state_t *state)
 {   dir_t *cmds = parser_env(state);
-    dir_t *objcmds = dir_id_new();
+    dir_t *objcmds = dir_id_lnew(state);
 
     values_obj_init(state);
-    mod_add_dir(cmds, "obj", objcmds);
-    mod_addfn(objcmds, "new", "<n> - create object holing <n>",
-              &fn_obj_new, 1);
-    mod_addfn(objcmds, "status", "<obj> - report status of obj",
-              &fn_obj_state, 1);
-    mod_addfn(objcmds, "close", "<obj> - close obj",
-              &fn_obj_close, 1);
+    smod_add_dir(state, cmds, "obj", objcmds);
+    smod_addfn(state, objcmds, "new", "<n> - create object holing <n>",
+               &fn_obj_new, 1);
+    smod_addfn(state, objcmds, "status", "<obj> - report status of obj",
+               &fn_obj_state, 1);
+    smod_addfn(state, objcmds, "close", "<obj> - close obj",
+               &fn_obj_close, 1);
+
+    value_unlocal(dir_value(objcmds));
 }
     
 
@@ -743,7 +748,7 @@ static bool ftl_libs_init(parser_state_t *state)
 #ifdef USE_FTLLIB_ELF
     if (ok)
     {   dir_t *cmds = parser_root(state);
-        dir_t *elf_cmds = dir_id_new();
+        dir_t *elf_cmds = dir_id_lnew(state);
         DEBUG_CLI(fprintf(stderr, "%s: adding ELF commands\n", CODEID););
         if (cmds_elf(state, elf_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_ELF, elf_cmds);
@@ -751,13 +756,14 @@ static bool ftl_libs_init(parser_state_t *state)
         {   fprintf(stderr, "%s: failed to load ELF commands\n", CODEID);
             ok = FALSE;
         }
+        value_unlocal(dir_value(elf_cmds));
     }
 #endif
 
 #ifdef USE_FTLLIB_XML
     if (ok)
     {   dir_t *cmds = parser_root(state);
-        dir_t *xml_cmds = dir_id_new();
+        dir_t *xml_cmds = dir_id_lnew(state);
         DEBUG_CLI(fprintf(stderr, "%s: adding XML commands\n", CODEID););
         if (cmds_xml(state, xml_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_XML, xml_cmds);
@@ -765,13 +771,14 @@ static bool ftl_libs_init(parser_state_t *state)
         {   fprintf(stderr, "%s: failed to load XML commands\n", CODEID);
             ok = FALSE;
         }
+        value_unlocal(dir_value(xml_cmds));
     }
 #endif
 
 #ifdef USE_FTLLIB_JSON
     if (ok)
     {   dir_t *cmds = parser_root(state);
-        dir_t *json_cmds = dir_id_new();
+        dir_t *json_cmds = dir_id_lnew(state);
         DEBUG_CLI(fprintf(stderr, "%s: adding JSON commands\n", CODEID););
         if (cmds_json(state, json_cmds))
             mod_add_dir(cmds, FTL_DIR_CMDS_JSON, json_cmds);
@@ -779,6 +786,7 @@ static bool ftl_libs_init(parser_state_t *state)
         {   fprintf(stderr, "%s: failed to load SJON commands\n", CODEID);
             ok = FALSE;
         }
+        value_unlocal(dir_value(json_cmds));
     }
 #endif
 
@@ -838,7 +846,7 @@ static bool option_result(parser_state_t *state, const char *cmd,
 
 #if 0
     printf("OPTION %s result: ", cmd);
-    value_fprint(stdout, dir_value(parser_root(state)), resval);
+    value_state_fprint(state, stdout, dir_value(parser_root(state)), resval);
     fprintf(stdout, "\n");
 #endif
         
@@ -960,8 +968,10 @@ main(int argc, char **argv)
     {   show_version(CODEID);
     }
     else
-    {   parser_state_t *state = parser_state_new(dir_id_new());
+    {   dir_t *root = dir_id_lnew(NULL);
+        parser_state_t *state = parser_state_lnew(NULL, root);
 
+        value_unlocal(dir_value(root));
         if (NULL == state)
             exit_rc = EXIT_BAD_INIT;
         else
@@ -975,7 +985,7 @@ main(int argc, char **argv)
                 exit_rc = EXIT_BAD_FTLINIT;
 
             if (exit_rc == EXIT_OK)
-            {        const char **opt_argv = &app_argv[1];
+            {   const char **opt_argv = &app_argv[1];
                 int opt_argc = app_argc-1;
                 bool do_args = opt_argc > 0;
 
@@ -989,7 +999,7 @@ main(int argc, char **argv)
 #if USE_FTL_OPTION_PARSER
                 if (exit_rc == EXIT_OK && do_args && do_prolog)
                 {   // parse --<option> ..
-                    const value_t *opt_parse_dirval =
+                    const value_t *opt_parse_dirval = /*lnew*/
                         dir_string_get(parser_env(state), FTL_DIR_OPTIONS);
                     
                     DEBUG_CLI(fprintf(stderr, "%s: %sparsing options%s\n",
@@ -1012,7 +1022,8 @@ main(int argc, char **argv)
                         else
                             if (arg.badopt)
                                 exit_rc = EXIT_BAD_FTLOPT;
-                                
+
+                        value_unlocal(opt_parse_dirval);
                     }
                     do_args = opt_argc > 0;
                 }
@@ -1024,14 +1035,17 @@ main(int argc, char **argv)
                         charsource_rcfile(state, codeid(), /*&rcfile*/NULL);
 
                     if (rcstream != NULL) {
-                        if (NULL == parser_expand_exec(state, rcstream,
-                                                       /*cmd string*/NULL,
-                                                       /*rcfile*/NULL,
-                                                       /*no_locals*/TRUE))
+                        const value_t *retval =
+                            parser_expand_exec(state, rcstream,
+                                               /*cmd string*/NULL,
+                                               /*rcfile*/NULL,
+                                               /*no_locals*/TRUE);
+                        if (NULL == retval)
                         {   fprintf(stderr, "%s: attempted execution of "
                                     "init file for \"%s\" failed\n",
                                     codeid(), codeid());
-                        }
+                        } else
+                            value_unlocal(retval);
                     }
                     DEBUG_CLI(
                         else
@@ -1052,14 +1066,18 @@ main(int argc, char **argv)
                                    CODEID, cmd_file);
                             exit_rc = EXIT_BAD_CMDFILE;
                         } else
-                        if (NULL == parser_expand_exec(state, fin,
-                                                       /*cmd string*/NULL,
-                                                       /*rcfile*/NULL,
-                                                       /*no_locals*/TRUE))
-                        {   fprintf(stderr, "%s: attempted execution of "
-                                    "file \"%s\" failed\n",
-                                    codeid(), cmd_file);
-                            exit_rc = EXIT_BAD_CMDFRUN;
+                        {   const value_t *retval =
+                                parser_expand_exec(state, fin,
+                                                   /*cmd string*/NULL,
+                                                   /*rcfile*/NULL,
+                                                   /*no_locals*/TRUE);
+                            if (NULL == retval)
+                            {   fprintf(stderr, "%s: attempted execution of "
+                                        "file \"%s\" failed\n",
+                                        codeid(), cmd_file);
+                                exit_rc = EXIT_BAD_CMDFRUN;
+                            } else
+                                value_unlocal(retval);
                         }
                     } else
                     {
@@ -1089,7 +1107,7 @@ main(int argc, char **argv)
                         if (exit_rc == EXIT_OK && do_prolog)
                         {
                             bool allow_console = true;
-                            const value_t *code =
+                            const value_t *code = /*lnew*/
                                 dir_string_get(parser_env(state),
                                                FTL_CMDNAME_NOCLI);
                             if (code != NULL)
@@ -1098,9 +1116,11 @@ main(int argc, char **argv)
                                 DEBUG_CLI(printf(CODEID
                                                  " calling '%s' function\n",
                                                  FTL_CMDNAME_NOCLI););
-                                cmd_response = invoke(code, state);
+                                cmd_response = /*lnew*/invoke(code, state);
                                 allow_console = cmd_response != value_false;
                                 do_console = do_console & allow_console;
+                                value_unlocal(cmd_response);
+                                value_unlocal(code);
                             }
                             DEBUG_CLI(
                                 else

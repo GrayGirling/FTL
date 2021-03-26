@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
  * Copyright (c) 2014, Broadcom Inc.
- * Copyright (c) 2005-2020, Gray Girling
+ * Copyright (c) 2005-2021, Gray Girling
  *
  * All rights reserved.
  *
@@ -89,21 +89,32 @@ typedef int wbool; /* Wide BOOLEAN - for boolean pointers */
 /*          O/S Independence                                     */
 
 #ifdef _WIN32
+#define STATIC_INLINE static __inline
+#else
+#define STATIC_INLINE static inline
+#endif
 
+
+#ifdef _WIN32
 /* The following two should mimic the Windows.h types */
 typedef void *PVOID;
 typedef PVOID HANDLE;
 typedef HANDLE thread_os_t;
 #define THREAD_OS_BAD 0
 
+
 /*          Numbers                                          */
 
 #ifdef __GNUC__ /* e.g. mingw? */
 typedef long long number_t;
 typedef unsigned long long unumber_t;
-#else
+#define os_strtonumber  strtoll
+#define os_strtounumber strtoull
+#else /* assume windows compiler? */
 typedef __int64 number_t;
 typedef unsigned __int64 unumber_t;
+#define os_strtonumber  _strtoi64
+#define os_strtounumber _strtoui64
 #endif
 
 #define NUMBER(digits) digits##ll
@@ -579,6 +590,74 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
              bool with_chars);
 
 
+/*          Value Memory 				                     */
+
+typedef struct value_chain_head_s value_chain_head_t;
+typedef value_chain_head_t valpool_t;
+typedef struct value_s value_t;
+
+
+/*! Remove a value from any double linked chain it is on
+ */
+extern void value_extract(value_t *val);
+
+
+/*! To try to isolate uncommitted values (i.e. ones that are valid but which
+ *  should not be garbage collected yet, we use the notion of a value being
+ *  'local' (local == not reachable from garbage collection root).  Most new
+ *  values are allocated 'local' by placing them on a chained list of values
+ *  which will not normally be garbage collected (because the list is marked
+ *  during the live-marking process).  Once a value is known to be "safe" inside
+ *  another data structure it can be "un-localled" by removing it from this
+ *  list.
+ *  Ideally every new value will be un-localed before it leaves the scope of the
+ *  routine that consumes it (value_local_assign() can be used, below).
+ *  The hope here is to enable the garbage collector to be run relatively
+ *  asynchronously (e.g. when memory is low).
+ *  Note that once a variable is un-localled - if asynchronous garbage
+ *  collection is active - it is no longer safe to refer to it directly
+ */
+STATIC_INLINE void
+_value_unlocal(const value_t *val, int lineno)
+{   /* We will need to discard the const - it applies only to the real content
+       of the value - not its garbage collection status
+       NOTE: this is potentially dangerous if a const value has been placed in
+             read-only memory
+    */
+    /* if (NULL != val) allow value to be garbage collected as usual */
+    if (NULL != val)
+    {	/*IGNORE(if (val->last == NULL)
+	       fprintf(stderr, "%s: line %5d - value %p "
+		       "not local made unlocal\n",
+		       codeid(), lineno, val););*/
+        value_extract((value_t *)/*unconst*/val);
+    }
+}
+
+#define value_unlocal(val) _value_unlocal(val, __LINE__)
+
+/*! Assign a (local) value to a field in a value structure
+ *  This macro includes an implicit value_unlocal once the assignment is
+ *  complete.
+ *  It behaves as if it had the proforma:
+ *  void value_local_assign(value_t **ref_val, const value_t *local_val)
+ */
+#define value_local_assign(ref_val, local_val) \
+    {   *(ref_val) = (value_t *)/*unconst*/(local_val); \
+        value_unlocal(local_val);              \
+    }
+
+
+/* forward references */
+typedef struct value_coroutine_s value_coroutine_t;
+typedef value_coroutine_t parser_state_t;
+
+/*! Default value pool where values unattached to the environment can be placed
+    to survive garbage collection
+*/
+extern parser_state_t *root_state;    
+
+
 /*          Values                                       */
 
 typedef struct value_s value_t;
@@ -596,19 +675,37 @@ extern bool
 value_istype(const value_t *val, type_t kind);
 
 extern int
-value_print_detail(outchar_t *out, const value_t *root, const value_t *val,
-                   bool detailed);
-    
+value_state_print_detail(parser_state_t *state, outchar_t *out,
+                         const value_t *root, const value_t *val, 
+                         bool detailed);
+
+#define value_state_print(state, out, root, val)          \
+    value_state_print_detail(state,out,root,val,/*detail*/FALSE)
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_print_detail(out, root, val, detailed)        \
+    value_state_print_detail(root_state,out,root,val,detailed)
+
+/*! Deprecated: Legacy use only - don't use in new code */
 #define value_print(out, root, val) \
-    value_print_detail(out,root,val,/*detail*/FALSE)
+    value_state_print_detail(root_state,out,root,val,/*detail*/FALSE)
 
 extern int
 value_cmp(const value_t *v1, const value_t *v2);
 
 extern int
-value_fprint_detail(FILE *out, const value_t *root, const value_t *val,
-                    bool detailed);
+value_state_fprint_detail(parser_state_t *state, FILE *out,
+                          const value_t *root, const value_t *val,
+                          bool detailed);
+
+#define value_state_fprint(state, out, root, val) \
+    value_state_fprint_detail(state,out,root,val,/*detail*/FALSE)
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_fprint_detail(out, root, val, detailed) \
+    value_state_fprint_detail(root_state,out,root,val,/*detail*/FALSE)
     
+/*! Deprecated: Legacy use only - don't use in new code */
 #define value_fprint(out, root, val) \
     value_fprint_detail(out,root,val,/*detail*/FALSE)
 
@@ -631,8 +728,44 @@ value_fprint_detail(FILE *out, const value_t *root, const value_t *val,
 extern type_t type_null;
 extern value_t value_null;
 
+/*! substitute &value_null for NULL (or keep value) */
 extern const value_t *
 value_nl(const value_t *value);
+
+/*          _new and _lnew                                   */
+
+/*   Allocated values are initially allocated on a "locals" list, which is used
+ *   during garbage collection to prevent over zealous collection.
+ *   Legacy calls are of the form
+ *          value_<something>_new(args...)
+ *   The correct local pool to use for a given thread is the one associated
+ *   with the parser state, paser_locals(state), so most newer code should use
+ *          value_<something>_lnew(state, args...)
+ *   which will provide the correct local pool found in the state.
+ *
+ *  To allow asynchronous garbage collection these values should be 
+ *  \c value_unlocal'ed once they go out of the scope in to which they were
+ *  allocated.
+ *
+ *  Note: functions calling <something>_lnew and return it for the purpose of
+ *  new value creation do not need to call \c value_unlocal().  Such functions
+ *  will ideally use "_lnew" postfix in their name.
+ *
+ *  Values allocated using _lnew functions should not be free'd directly using
+ *  either FTL_FREE() or free()
+ *
+ *  In terms of other parts of the code:
+ *       functions and commands:
+ *            - assume all inputs (for functions) are possibly re-used by
+ *              the caller (so don't unlocal them)
+ *            - when calling them always assume that the output is local
+ *       parse functions creating a value (parse_<x>>)
+ *            - assume the output value is local
+ *       operators:
+ *            - assume functions do not unlocal their arguments
+ *            - assume returned values are local
+ */
+
 
 /*          Integer Values                                   */
 
@@ -643,13 +776,16 @@ extern const value_t *value_two;
 extern const value_t *value_three;
 
 extern value_t *
-value_int_new(number_t number);
+value_int_lnew(parser_state_t *state, number_t number);
+#define value_int_new(n) value_int_lnew(root_state, n)
 
 extern value_t *
-value_uint_new(unumber_t number);
+value_uint_lnew(parser_state_t *state, unumber_t number);
+#define value_uint_new(n) value_uint_lnew(root_state, n)
 
 extern void
-value_int_update(const value_t **ref_value, number_t n);
+value_int_lupdate(parser_state_t *state, const value_t **ref_value, number_t n);
+#define value_int_update(ref_val, n) value_int_pupdate(root_state, ref_val, n)
 
 extern number_t
 value_int_number(const value_t *value);
@@ -664,16 +800,26 @@ extern int
 ipaddr_fprint(FILE *out, const addr_ip_t *ip);
 
 extern const value_t *
-value_ipaddr_new(addr_ip_t *ref_ipaddr);
+value_ipaddr_lnew(parser_state_t *state, addr_ip_t *ip);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_ipaddr_new(ip) value_ipaddr_lnew(root_state, ip)
 
 extern value_t *
-value_ipaddr_new_quad(int a, int b, int c, int d);
+value_ipaddr_quad_lnew(parser_state_t *state, int a, int b, int c, int d);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_ipaddr_new_quad(a, b, c, d) \
+    value_ipaddr_quad_lnew(root_state, a, b, c, d)
 
 extern void
 value_ipaddr_get(const value_t *value, addr_ip_t *out_ipaddr);
 
 extern bool
-parse_ipaddr(const char **ref_line, addr_ip_t *out_ipaddr);
+parsew_ipaddr(const char **ref_line, const char *lineend,
+              addr_ip_t *out_ipaddr);
+#define parse_ipaddr(ref_line, out_ipaddr) \
+    parsew_ipaddr(ref_line, &(*ref_line)[strlen(*(ref_line))], out_ipaddr)
 
 #define ipaddr_net32(ref_ip)                      \
         (((((unsigned char *)(ref_ip)))[3]<<24) | \
@@ -693,7 +839,12 @@ extern const value_t *
 value_macaddr_new(addr_mac_t *ref_macaddr);
 
 extern value_t *
-value_macaddr_new_sextet(int a, int b, int c, int d, int e, int f);
+value_macaddr_sextet_lnew(parser_state_t *state,
+                          int a, int b, int c, int d, int e, int f);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_macaddr_new_sextet(a, b, c, d, e, f)                  \
+    value_macaddr_sextet_lnew(root_state, a, b, c, d, e, f)
 
 extern void
 value_macaddr_get(const value_t *value, unsigned char *ref_macaddr);
@@ -720,41 +871,82 @@ extern const value_t *value_string_empty;
 
 /* make a new string - taking a copy of the string area */
 extern value_t *
-value_string_new(const char *string, size_t len);
+value_string_lnew(parser_state_t *state, const char *string, size_t len);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_string_new(string, len) value_string_lnew(root_state, string, len)
+
+#define value_string_lnew_measured(state, _string)       \
+    value_string_lnew(state, _string, strlen(_string))
 
 #define value_string_new_measured(_string) \
-        value_string_new(_string, strlen(_string))
+    value_string_new(_string, strlen(_string)) /*deprecated*/
 
 /*! data source is newly allocated buffer returned for initialization */
 extern value_t *
-value_string_alloc_new(size_t len, char **out_string);
+value_string_alloc_lnew(parser_state_t *state, size_t len, char **out_string);
+
+#define value_string_alloc_new(len, out_string) \
+    value_string_alloc_lnew(root_state, len, out_string) 
 
 /*! make a new string - converted from unicode string */
 extern value_t *
-value_wcstring_new(const wchar_t *wcstring, size_t string_wchars);
+value_wcstring_lnew(parser_state_t *state, const wchar_t *wcstring,
+                    size_t string_wchars);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_wcstring_new(_wcstring, _wchars) \
+    value_wcstring_lnew(state, _wcstring, _wchars)
 
 /*! make new constant string - out of existing string storage
  *  Use only when you know that the storage has static scope.
  */
 extern value_t *
-value_cstring_new(const char *string, size_t len);
+value_cstring_lnew(parser_state_t *state, const char *string, size_t len);
 
-#define value_cstring_new_measured(_string) \
-        value_cstring_new(_string, strlen(_string))
+#define value_cstring_lnew_measured(state, _string)      \
+    value_cstring_lnew(state, _string, strlen(_string))
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_cstring_new(_string, _len)                     \
+    value_cstring_lnew(state, _string, _len)
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_cstring_new_measured(_string)      \
+    value_cstring_lnew(root_state, _string, strlen(_string))
 
 extern value_t *
-value_substring_new(const value_t *string, size_t offset, size_t len);
+value_substring_lnew(parser_state_t *state, const value_t *string,
+                     size_t offset, size_t len);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_substring_new(string, offset, len) \
+    value_substring_lnew(root_state, string, offset, len)
 
 extern void
-value_string_update(const value_t **ref_value, const char *str);
+value_string_lupdate(parser_state_t *state,
+                     const value_t **ref_value, const char *str);
 
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_string_update(ref_value, str) \
+    value_string_lupdate(root_state, ref_value, str)
+
+/*! Return the base address and length of the string
+ *  Returns FALSE if \c value is NULL or not a string, TRUE otherwise.
+ *  Prints an error to stderr if FALSE is returned.
+ */
 extern bool
 value_string_get(const value_t *value, const char **out_buf, size_t *out_len);
 
-/* create a new string that will be followed by '\0' */
+/* return a new string that will be followed by '\0'
+ * allocates a new value if the one provided does not already end with '\0'
+ */
 extern const value_t *
-value_string_get_terminated(const value_t *value, const char **out_buf,
-                            size_t *out_len);
+value_string_nulterm_lnew(parser_state_t *state, const value_t *value,
+                          const char **out_buf, size_t *out_len);
+
+#define value_string_get_terminated(value, out_buf, out_len) \
+    value_string_nulterm_lnew(root_state, value, out_buf, out_len)
 
 extern const char *
 value_string_chars(const value_t *string);
@@ -764,7 +956,14 @@ value_string_chars(const value_t *string);
 extern type_t type_code;
 
 extern value_t *
-value_code_new(const value_t *string, const char *defsource, int lineno);
+value_code_lnew(parser_state_t *state, const value_t *string,
+                const char *sourcename, int lineno);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_code_new(string, sourcename, lineno) \
+    value_code_lnew(root_state, string, sourcename, lineno)
+
+
 
 extern bool
 value_code_buf(const value_t *value, const char **out_buf, size_t *out_len);
@@ -797,43 +996,84 @@ value_stream_takesource(value_t *value, charsource_t **out_source);
 
 /*          Filing System Stream Values                                      */
 
+/*! Open a named file to create a new stream object
+ *  Deprecated: Legacy use only - don't use in new code
+ */
 extern value_t *
-value_stream_openfile_new(FILE *file, bool autoclose,
-              const char *name, bool read, bool write);
-
-extern value_t *
-value_stream_file_new(const char *name, bool binary, bool read, bool write);
-
-extern value_t *
-value_stream_file_path_new(const char *path, const char *name, size_t namelen,
-               bool binary, bool read, bool write,
-                       char *namebuf, size_t buflen);
-
-/*          Socket Stream Values                                             */
-
-extern value_t *
-value_stream_opensocket_new(int fd, bool autoclose,
+value_stream_openfile_lnew(parser_state_t *state, FILE *file, bool autoclose,
                            const char *name, bool read, bool write);
 
-extern value_t *
-value_stream_socket_connect_new(const char *protocol, const char *address,
-                                bool read, bool write);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_openfile_new(file, autoclose, name, read, write) \
+    value_stream_openfile_lnew(root_state, file, autoclose, name, read, write)
 
 extern value_t *
-value_stream_socket_listen_new(const char *protocol, const char *name,
-                               bool read, bool write);
+value_stream_file_lnew(parser_state_t *state, const char *name,
+                       bool binary, bool read, bool write);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_file_new(name, binary, read, write) \
+    value_stream_file_lnew(root_state, name, binary, read, write)
+
+extern value_t *
+value_stream_file_path_lnew(parser_state_t *state, const char *path,
+                            const char *name, size_t namelen,
+                            bool binary, bool read, bool write,
+                            char *namebuf, size_t buflen);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_file_path_new(path, name, namelen, binary, \
+                                   read, write, namebuf, buflen) \
+    value_stream_file_path_lnew(root_state, path, name, namelen, binary, \
+                                read, write, namebuf, buflen)
+    
+
+/*          Socket Stream Values                                             */
+
+/*! Create a stream from an open socket */
+extern value_t *
+value_stream_opensocket_lnew(parser_state_t *state, int fd, bool autoclose,
+                           const char *name, bool read, bool write);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_opensocket_new(fd, autoclose, name, read, write) \
+    value_stream_opensocket_lnew(root_state, fd, autoclose, name, read, write)
+
+
+extern value_t *
+value_stream_socket_connect_lnew(parser_state_t *state, const char *protocol,
+                                 const char *address, bool read, bool write);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_socket_connect_new(protocol, address, read, write) \
+    value_stream_socket_connect_lnew(root_state, protocol, address, read, write)
+
+extern value_t *
+value_stream_socket_listen_lnew(parser_state_t *state, const char *protocol,
+                                const char *name, bool read, bool write);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_socket_listen_new(protocol, name, read, write) \
+    value_stream_socket_listen_lnew(root_state, protocol, name, read, write)
 
 
 /*          Socket Stream Values                                             */
 
 extern value_t *
-value_stream_instring_new(const char *name, const char *string, size_t len);
+value_stream_instring_lnew(parser_state_t *state, const char *name,
+                           const char *string, size_t len);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_instring_new(name, string, len) \
+    value_stream_instring_new(root_state, name, string, len)
 
 extern value_t *
-value_stream_outstring_new(void);
+value_stream_outstring_lnew(parser_state_t *state);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_outstring_new() value_stream_outstring_lnew(root_state)
 
 extern value_t *
-value_stream_outmem_new(char *str, size_t len);
+value_stream_outmem_lnew(parser_state_t *state, char *str, size_t len);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_stream_outmem_new(str, len) \
+    value_stream_outmem_lnew(root_state, str, len)
+
 
 /*          Directories                                      */
 
@@ -847,8 +1087,9 @@ typedef const void *dir_lock_state_t;
  *  (enumeration will cease with the provided value if the return value is not
  *   NULL)
  */
-typedef void *dir_enum_fn_t(dir_t *dir, const value_t *name,
-                const value_t *value, void *arg);
+typedef void *dir_enum_fn_t(dir_t *dir,
+                            const value_t *name, const value_t *value,
+                            void *arg);
 
 extern value_t *
 dir_value(dir_t *dir);
@@ -859,30 +1100,85 @@ dir_lock(dir_t *dir, dir_lock_state_t *old_lock);
 extern bool
 dir_islocked(dir_t *dir);
 
+/* In the directory set the given name to a value
+ * Either:
+ *    Look up the place where the name is stored - if there is such a place
+ *    assign the value to that location; otherwise add the name, value pair.
+ * Or (if there is no ability to look up locations)
+ *    Add the name, value pair
+ */
 extern bool
-dir_set(dir_t *dir, const value_t *name, const value_t *value);
+dir_lset(dir_t *dir, parser_state_t *state,
+         const value_t *name, const value_t *value);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_set(dir, name, value) dir_lset(dir, root_state, name, value)
 
-extern const value_t *
+/*! Fetch a value from a directory given its name
+ *  Typically the result will not be a local value, but there are directories
+ *  (e.g. dynamic ones) where they will be.  
+ */
+extern const value_t * /*local*/
 dir_get(dir_t *dir, const value_t *name);
 
 extern bool
-dir_int_set(dir_t *dir, int index, const value_t *value);
+dir_int_lset(dir_t *dir, parser_state_t *state,
+             int index, const value_t *value);
+/*! Convenient way to set a local value and then unlocal it
+ *  (to allow immediate *_lnew() values to be set)
+ */
+#define dir_int_lsetul(dir, state, name, local_value)   \
+    do { const value_t *_val = (local_value); \
+         dir_int_lset(dir, state, name, _val);    \
+         value_unlocal(_val); } while (false)
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_int_set(dir, name, value) \
+    dir_int_lset(dir, root_state, name, value)
+
 
 /* Set copied name to value in directory */
 extern bool
-dir_string_set(dir_t *dir, const char *name, const value_t *value);
+dir_string_lset(dir_t *dir, parser_state_t *state,
+                const char *name, const value_t *value);
+/*! Convenient way to set a local value and then unlocal it
+ *  (to allow immediate *_lnew() values to be set)
+ */
+#define dir_string_lsetul(dir, state, name, local_value)   \
+    do { const value_t *_val = (local_value); \
+         dir_string_lset(dir, state, name, _val);         \
+         value_unlocal(_val); } while (false)
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_string_set(dir, name, value) \
+    dir_string_lset(dir, root_state, name, value)
 
 /* Set statically allocated name to value in directory */
 extern bool
-dir_cstring_set(dir_t *dir, const char *name, const value_t *value);
+dir_cstring_lset(dir_t *dir, parser_state_t *state,
+                 const char *name, const value_t *value);
+/*! Convenient way to set a local value and then unlocal it
+ *  (to allow immediate *_lnew() values to be set)
+ */
+#define dir_cstring_lsetul(dir, state, name, local_value)   \
+    do { const value_t *_val = (local_value); \
+         dir_cstring_lset(dir, state, name, _val); \
+         value_unlocal(_val); } while (false)
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_cstring_set(dir, name, value) \
+    dir_cstring_lset(dir, root_state, name, value)
 
-extern const value_t *
+/*! Fetch a value from a directory given an integer used as a name
+ */
+extern const value_t * /*local*/
 dir_int_get(dir_t *dir, int n);
 
-extern const value_t *
+/*! Fetch a value from a directory given a string used as a name
+ */
+extern const value_t * /*local*/
 dir_string_get(dir_t *dir, const char *name);
 
-extern const value_t *
+/*! Fetch a value from a directory given a string (as character pointer and
+ *  length) used as a name
+ */
+extern const value_t * /*local*/
 dir_stringl_get(dir_t *dir, const char *name, size_t namelen);
 
 extern bool
@@ -892,43 +1188,71 @@ dir_enumerable(dir_t *dir);
  *  Halt the enumeration when \c enumfn() returns non-NULL and return that value
  */
 extern void *
-dir_forall(dir_t *dir, dir_enum_fn_t *enumfn, void *arg);
+dir_state_forall(dir_t *dir, parser_state_t *state,
+                 dir_enum_fn_t *enumfn, void *arg);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_forall(dir, enumfn, arg) \
+        dir_state_forall(dir, root_state, enumfn, arg)
 
 extern unsigned
-dir_count(dir_t *dir);
+dir_state_count(dir_t *dir, parser_state_t *state);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_count(dir) \
+        dir_state_forall(dir, root_state)
 
 extern int
-dir_fprint(FILE *out, const value_t *root, dir_t *dir);
-
-#define DIR_SHOW_RT(msg, root, dir) \
+dir_state_fprint(parser_state_t *state, FILE *out, const value_t *root,
+                 dir_t *dir);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_fprint(out,root,dir) dir_state_fprint(root_state,out,root,dir)
+    
+#define DIR_STATE_SHOW_RT(state, msg, root, dir) \
 {   printf("%s", msg);                \
-    dir_fprint(stdout, root, dir);    \
+    dir_state_fprint(state, stdout, root, dir);    \
     printf("\n");                     \
 }
 
-#define DIR_SHOW_DR(msg, root, dir) \
-        DIR_SHOW_RT(msg, dir_value(root), dir)
+/*! Deprecated: Legacy use only - don't use in new code */
+#define DIR_SHOW_RT(msg, root, dir) \
+        DIR_STATE_SHOW_RT(root_state, msg, root, dir)
+
+#define DIR_STATE_SHOW_DR(state, msg, root, dir) \
+        DIR_STATE_SHOW_RT(state, msg, dir_value(root), dir)
 
 #define DIR_SHOW_ST(msg, state, dir) \
-        DIR_SHOW_DR(msg, parser_env(state), dir)
+        DIR_STATE_SHOW_DR(state, msg, parser_env(state), dir)
 
-#define DIR_SHOW(msg, dir) DIR_SHOW_RT(msg, NULL, dir)
+/*! Deprecated: Legacy or debug use only - don't use in new code */
+#define DIR_SHOW(msg, dir) \
+        DIR_STATE_SHOW_DR(root_state, msg, NULL, dir)
 
 
 /*          Identifier Directories                               */
 
 extern dir_t *
-dir_id_new(void);
+dir_id_lnew(parser_state_t *state);
+#define dir_id_new() dir_id_lnew(root_state) /* deprecated */
 
 /*          Integer vector Directories                               */
 
 extern dir_t *
-dir_vec_new(void);
+dir_vec_lnew(parser_state_t *state);
+#define dir_vec_new() dir_vec_lnew(root_state) /* deprecated */
 
 /*          Composed Directories                                 */
 
+/*! Return a directory which is the database join of the given index and
+ * value directories
+ */
 extern dir_t *
-dir_join_new(dir_t *index_dir, dir_t *value_dir);
+dir_join_lnew(parser_state_t *state, dir_t *index_dir, dir_t *value_dir);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_join_new(index_dir, value_dir) \
+    dir_join_lnew(root_state, index_dir, value_dir)
+
 
 /*          Field of Array/Structure Definition                          */
 
@@ -1061,8 +1385,9 @@ struct_spec_add_field(struct_spec_t *spec, field_kind_t kind,
 #define _FTL_FIELD_STRUCT_DECL(spec, stype, ftype, field, fspec)  \
     static void stype##__##field##__get(const void *mem,                \
                                         const value_t **ref_cached)     \
-    {   dir_struct_update(ref_cached, &fspec, /*is_const*/FALSE,        \
-                          (void *)&((stype *)mem)->field);              \
+    {   dir_struct_update_lnew(root_state, ref_cached, &fspec, \
+                               /*is_const*/FALSE,                   \
+                               (void *)&((stype *)mem)->field);              \
     }
 #define _FTL_FIELD_STRUCT_DEF(spec, stype, ftype, field, fspec)         \
     struct_spec_add_field(&spec, field_kind_struct, #field,     \
@@ -1114,20 +1439,38 @@ struct_spec_add_field(struct_spec_t *spec, field_kind_t kind,
 
 
 extern dir_t *
-dir_struct_new(struct_spec_t *spec, bool is_const, void *malloc_struct);
+dir_struct_lnew(parser_state_t *state, struct_spec_t *spec,
+                bool is_const, void *malloc_struct);
 
 extern dir_t *
-dir_struct_cast(struct_spec_t *spec, bool is_const,
-        const value_t *ref, void *ref_struct);
+dir_struct_cast_lnew(parser_state_t *state, struct_spec_t *spec, bool is_const,
+                     const value_t *ref, void *ref_struct);
 
-#define dir_vars(spec, const, ref) dir_struct_cast(spec, const, ref, NULL)
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_struct_cast_new(spec, is_const, ref, ref_struct) \
+    dir_struct_cast_lnew(root_state, spec, is_const, ref, ref_struct)
+
+#define dir_vars_lnew(state, spec, const, ref) \
+    dir_struct_cast_lnew(state, spec, const, ref, NULL)
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_vars(spec, const, ref) dir_vars_lnew(root_state, spec, const, ref)
 
 extern dir_t *
-dir_cstruct_new(struct_spec_t *spec, bool is_const, void *static_struct);
+dir_cstruct_lnew(parser_state_t *state, struct_spec_t *spec,
+                 bool is_const, void *static_struct);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_cstruct_new(spec, is_const, static_struct) \
+    dir_cstruct_lnew(root_state, spec, is_const, static_struct)
 
 extern void
-dir_struct_update(const value_t **ref_value,
-          struct_spec_t *spec, bool is_const, void *structmem);
+dir_struct_update_lnew(parser_state_t *state, const value_t **ref_value,
+                       struct_spec_t *spec, bool is_const, void *structmem);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_struct_update_new(ref_value, spec, is_const, structmem) \
+    dir_struct_update_lnew(root_state, ref_value, spec, is_const, structmem)
 
 
 /*          Array Directories                                */
@@ -1185,9 +1528,9 @@ array_spec_set_cont(array_spec_t *spec, field_kind_t kind, size_t elems,
 
 #define _FTL_ARRAY_STRUCT_DECL(aspec, _atype_uid, cspec, elems)           \
     static void _atype_uid##___get(const void *mem,                       \
-                   const value_t **ref_cached)            \
-    {   dir_struct_update(ref_cached, &cspec, /*is_const*/FALSE,          \
-                          (void *)mem);                               \
+                   const value_t **ref_cached)                            \
+    {   dir_struct_update_lnew(root_state, ref_cached, &cspec,            \
+                               /*is_const*/FALSE, (void *)mem);           \
     }
 #define _FTL_ARRAY_STRUCT_DEF(aspec, _atype_uid, cspec, elems)            \
     array_spec_set_cont(&aspec, field_kind_struct, elems,                 \
@@ -1243,39 +1586,72 @@ array_spec_set_cont(array_spec_t *spec, field_kind_t kind, size_t elems,
 /* you may wish to use dir_lock() after the following calls */
 
 extern dir_t *
-dir_carray_new(array_spec_t *spec,bool is_const,
-           void *static_array, size_t stride);
+dir_carray_lnew(parser_state_t *state, array_spec_t *spec,bool is_const,
+                void *static_array, size_t stride);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_carray_new(spec, is_const, static_array, stride) \
+    dir_carray_lnew(root_state, spec, is_const, static_array, stride)
 
 extern dir_t *
-dir_array_new(array_spec_t *spec, bool is_const,
-          void *malloc_array, size_t stride);
+dir_array_lnew(parser_state_t *state, array_spec_t *spec, bool is_const,
+               void *malloc_array, size_t stride);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_array_new(spec, is_const, malloc_array, stride) \
+    dir_array_lnew(root_state, spec, is_const, malloc_array, stride)
 
 extern dir_t *
-dir_array_cast(array_spec_t *spec, bool is_const,
-           const value_t *ref, void *ref_array, size_t stride);
+dir_array_cast_lnew(parser_state_t *state, array_spec_t *spec, bool is_const,
+                    const value_t *ref, void *ref_array, size_t stride);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_array_cast(spec, is_const, ref, ref_array, stride)         \
+    dir_array_cast_lnew(root_state, spec, is_const, ref, ref_array, stride)
 
 extern dir_t *
-dir_array_string(array_spec_t *spec, bool is_const,
-             const value_t *string, size_t stride);
+dir_array_string_lnew(parser_state_t *state, array_spec_t *spec, bool is_const,
+                      const value_t *string, size_t stride);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_array_string(spec, is_const, string, stride) \
+    dir_array_string_lnew(root_state, spec, is_const, string, stride)
 
 extern void
-dir_array_update(const value_t **ref_value, array_spec_t *spec, bool is_const,
-         void *arraymem, size_t stride);
+dir_array_update_lnew(parser_state_t *state, const value_t **ref_value,
+                      array_spec_t *spec, bool is_const,
+                      void *arraymem, size_t stride);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_array_update(ref_value, spec, is_const, arraymem, stride) \
+    dir_array_update_lnew(root_state, ref_value, spec, is_const, \
+                          arraymem, stride)
 
 /*          String Argument vector Directories                           */
 
 extern dir_t *
-dir_argvec_new(int argc, const char **argv);
+dir_argvec_lnew(parser_state_t *state, int argc, const char **argv);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_argvec_new(argc, argv) dir_argvec_lnew(root_state, argc, argv)
 
 /*          Integer Series Directories                               */
 
 extern dir_t *
-dir_series_new(number_t first, number_t inc, number_t last);
+dir_series_lnew(parser_state_t *state,
+                number_t first, number_t inc, number_t last);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_series_new(first, inc, last) \
+    dir_series_lnew(root_state, first, inc, last)
 
 /*          System Env Directories                               */
 
 extern dir_t *
-dir_sysenv_new(void);
+dir_sysenv_lnew(parser_state_t *state);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_sysenv_new() dir_sysenv_lnew(root_state) 
 
 
 /*          Stacked Directory Directories                                */
@@ -1286,10 +1662,23 @@ typedef value_t **dir_stack_pos_t;
 #define DIR_STACK_POS_BAD ((dir_stack_pos_t)NULL)
 
 extern dir_t *
-dir_stack_new(void);
+dir_stack_lnew(parser_state_t *state);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_state_new() dir_state_lnew(root_state)
 
 extern dir_stack_t *
-dir_stack_copy(dir_stack_t *old);
+dir_stack_copy_lnew(parser_state_t *state, dir_stack_t *old);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define dir_stack_copy(old) dir_stack_copy_lnew(root_state, old)
+
+/*! Make a new dir stack containing the single directory referred to by a pos
+ *  (That directory becomes the base directory of a new stack)
+ */
+extern dir_stack_t *
+dir_stack_copy_pos_lnew(parser_state_t *state, dir_stack_pos_t pos);
+
 
 extern dir_stack_pos_t
 dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end);
@@ -1312,7 +1701,10 @@ extern type_t type_closure;
 typedef struct value_env_s value_env_t;
 
 extern value_env_t *
-value_env_new(void);
+value_env_lnew(parser_state_t *state);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_env_new() value_env_lnew(root_state)
 
 extern void
 value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end);
@@ -1321,13 +1713,25 @@ extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name);
 
 extern value_env_t *
-value_env_newpushdir(dir_t *newdir, bool env_end, value_t *unbound);
+value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir,
+                          bool env_end, value_t *unbound);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_env_newpushdir(newdir, env_end, unbound) \
+    value_env_pushdir_lnew(root_state, newdir, env_end, unbound)
 
 extern bool
 value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end);
 
 extern value_t *
-value_env_bind(value_env_t *envval, const value_t *value);
+value_env_bind_lnew(parser_state_t *state, value_env_t *envval,
+                    const value_t *value);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_env_bind(envval, value)                   \
+    value_env_bind_lnew(root_state, envval, value) 
+
+
 
 /*          Closure Values                                   */
 
@@ -1336,29 +1740,47 @@ value_env_bind(value_env_t *envval, const value_t *value);
     value_type_equal(_val, type_cmd)  || \
     value_type_equal(_val, type_func))
 
+/*! Create a new closure
+ */
 extern value_t *
-value_closure_new(const value_t *code, value_env_t *env);
+value_closure_lnew(parser_state_t *state,
+                   const value_t *code, value_env_t *env);
 
-/* create a closure that will optionally invoke once supplied with its last
- * argument (autorun) */
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_closure_new(code, env) value_closure_lnew(root_state, code, env)
+
+/*! Create a closure that will optionally invoke once supplied with its last
+ *  argument (autorun)
+ */
 extern value_t *
-value_closure_fn_new(const value_t *code, value_env_t *env, bool autorun);
+value_closure_fn_lnew(parser_state_t *state,
+                      const value_t *code, value_env_t *env, bool autorun);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_closure_fn_new(code, env, autorun) \
+    value_closure_fn_lnew(root_state, code, env, autorun)
 
 /*! return an identical closure that does not auto execute
  */
 extern value_t *
-value_closure_unprime(value_t *oldclosureval);
+value_closure_deprime_lnew(parser_state_t *state, value_t *oldclosureval);
 
 /*! return an identical closure that will auto execute
  */
 extern value_t *
-value_closure_prime(value_t *oldclosureval);
+value_closure_prime_lnew(parser_state_t *state, value_t *oldclosureval);
 
 extern bool
 value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end);
 
 extern bool
-value_closure_pushenv(const value_t *value, value_env_t *env, bool env_end);
+value_closure_spushenv(parser_state_t *state, const value_t *value,
+                       value_env_t *env, bool env_end);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_closure_pushenv(value, env, env_end) \
+    value_closure_spushenv(root_state, value, env, env_end) 
+
 
 /*! return the component code, environment and unbound arguments of a closure */
 extern bool
@@ -1377,10 +1799,20 @@ value_closure_argcount(const value_t *closureval);
 extern value_t *
 value_closure_prime(value_t *closureval);
 
+/*! bind a new argument to a closure, setting autorun */
+extern value_t *
+value_closure_fn_bind_lnew(parser_state_t *state,
+                           const value_t *closureval, const value_t *value,
+                           bool autorun);
+
 /*! bind a new argument to a closure */
 extern value_t *
-value_closure_bind(const value_t *envval, const value_t *value);
+value_closure_bind_lnew(parser_state_t *state,
+                        const value_t *envval, const value_t *value);
 
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_closure_bind(envval, value) \
+    value_closure_bind_lnew(root_state, envval, value)
 
 
 /*          Transfer Functions                               */
@@ -1399,18 +1831,27 @@ typedef struct value_coroutine_s value_coroutine_t;
 typedef void suspend_fn_t(unsigned long milliseconds);
 
 extern value_coroutine_t *
-value_coroutine_new(dir_t *root, dir_stack_t *env, dir_t *opdefs);
+value_coroutine_lnew(parser_state_t *state, dir_t *root,
+                     dir_stack_t *env, dir_t *opdefs);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_coroutine_new(root, env, opdefs) \
+    value_coroutine_lnew(root_state, root, env, opdefs)
 
 
 /*          Parser State                                 */
 
-typedef value_coroutine_t parser_state_t;
-
 extern parser_state_t *
-parser_state_new(dir_t *root);
+parser_state_lnew(parser_state_t *owner_state, dir_t *root);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define parser_state_new(root) parser_state_lnew(root_state, root)
 
 extern void
 parser_state_free(parser_state_t *state);
+
+extern valpool_t *
+parser_locals(parser_state_t *parser_state);
 
 extern linesource_t *
 parser_linesource(parser_state_t *parser_state);
@@ -1430,6 +1871,9 @@ parser_env_copy_pos(parser_state_t *parser_state, dir_stack_pos_t pos);
 extern dir_t *
 parser_opdefs(const parser_state_t *parser_state);
 
+/*! Look up the argument bound in the environment to a builtin function
+ *  In practice all such environments return values which are not local
+ */
 extern const value_t *
 parser_builtin_arg(parser_state_t *parser_state, int argno);
 
@@ -1475,13 +1919,17 @@ parser_suspend_get(const parser_state_t *parser_state);
 extern void
 parser_suspend_set(parser_state_t *parser_state, suspend_fn_t *sleep);
 
+/*! Write line to sink incoporating backtrace of calling line numbers
+ *  Use stderr if sink is NULL
+ */
 extern int
 charsink_parser_vreport(charsink_t *sink, parser_state_t *parser_state,
-                    const char *format, va_list ap);
+                        const char *format, va_list ap);
 
+/*! Write line to sink incoporating only immediate calling line number */
 extern int
 charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
-                         const char *format, va_list ap);
+                             const char *format, va_list ap);
 
 #define parser_vreport(state, format, ap) \
         charsink_parser_vreport(NULL, state, format, ap)
@@ -1491,13 +1939,18 @@ charsink_parser_vreport_line(charsink_t *sink, parser_state_t *parser_state,
 
 extern int
 charsink_parser_value_print(charsink_t *sink, parser_state_t *parser_state,
-                const value_t *val);
+                            const value_t *val);
 
 #define parser_value_print(state, val)  \
         charsink_parser_value_print(NULL, state, val)
 
+/*! Output line of text incoporating source line number and backtrace */
 extern int
 parser_report(parser_state_t *parser_state, const char *format, ...);
+
+/*! Output line of text incoporating (only) source line number */
+extern int
+parser_report_line(parser_state_t *parser_state, const char *format, ...);
 
 extern int
 parser_error(parser_state_t *parser_state, const char *format, ...);
@@ -1526,15 +1979,24 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
  * return the result of executing code if there was no throw
  * return the thrown value if there was a throw
  */
-extern const value_t *
+extern const value_t * /*local*/
 parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok);
 
+/*! Collect garbage in all known coroutines
+ *  keeping local variables allocated in each of them 
+ */
+extern void
+parser_collect_async(parser_state_t *state);
+
+/*! Collect garbage in all known coroutines 
+ *  but discarding local variables allocated in the current thread 
+ */
 extern void
 parser_collect(parser_state_t *state);
 
 extern outchar_t *
 parser_expand(parser_state_t *state, outchar_t *out,
-          const char *phrase, size_t len);
+              const char *phrase, size_t len);
 
 
 /*          Type Values                                      */
@@ -1570,8 +2032,12 @@ typedef struct value_handle_s value_handle_t;
  *  If autoclose is set close the handle when the object is deleted
  */
 extern value_t *
-value_handle_new(void *handle, type_t handle_type,
-                 handle_close_fn_t *closefn, bool autoclose);
+value_handle_lnew(parser_state_t *state, void *handle, type_t handle_type,
+                  handle_close_fn_t *closefn, bool autoclose);
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_handle_new(handle, handle_type, closefn, autoclose) \
+    value_handle_lnew(root_state, handle, handle_type, closefn, autoclose)
 
 
 /*! Return whether the value handle is still open
@@ -1612,108 +2078,167 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
 /*          Line Parsing                             */
 
 
-/* parse the end of the string (i.e. succeed only if line empty) */
+/*! parse the end of the string (i.e. succeed only if line empty) */
 extern bool
 parse_empty(const char **ref_line);
 
-/* parse white space (succeeds only if there is some) */
+/*! parse the end of the string (i.e. succeed only if line empty) */
+extern bool
+parsew_empty(const char **ref_line, const char *lineend);
+
+/*! parse white space (succeeds only if there is some) */
 extern bool
 parse_white(const char **ref_line);
 
-/* parse optional white space (always succeeds) */
+/*! parse white space (succeeds only if there is some) */
+extern bool
+parsew_white(const char **ref_line, const char *lineend);
+
+/*! parse optional white space (always succeeds) */
+extern bool
+parsew_space(const char **ref_line, const char *lineend);
+
+/*! parse optional white space (always succeeds) */
 extern bool
 parse_space(const char **ref_line);
 
-/* parse the prefix given by key */
+/*! parse the prefix given by key */
+extern bool
+parsew_key(const char **ref_line, const char *lineend, const char *key);
+
+/*! parse the prefix given by key */
 extern bool
 parse_key(const char **ref_line, const char *key);
 
-/* parse the prefix given by key and length */
+/*! parse the prefix given by key and length */
 extern bool
-parse_prefix(const char **ref_line, const char *prefix, size_t len);
+parsew_prefix(const char **ref_line, const char *lineend,
+              const char *prefix, size_t len);
+#define parse_prefix(ref_line, prefix, len) \
+    parsew_prefix(ref_line, &(*ref_line)[strlen(*(ref_line))]prefix, len)
 
-/* parse the prefix ending with the key */
+/*! parse the prefix ending with the key */
 extern bool
-parse_ending(const char **ref_line, const char *key);
+parsew_ending(const char **ref_line, const char *lineend,
+              const char *key, size_t keylen);
+#define parse_ending(ref_line, key) \
+    parsew_ending(ref_line, strlen(*ref_line), key, strlen(key))
 
-/* parse a signed 64-bit decimal number */
+/*! parse a signed 64-bit decimal number */
 extern bool
 parse_int(const char **ref_line, number_t *out_int);
 
-/* parse an unsigned 64-bit hexadecimal number */
+/*! parse an unsigned 64-bit hexadecimal number */
 extern bool
-parse_hex(const char **ref_line, unumber_t *out_int);
+parsew_hex(const char **ref_line, const char *lineend, unumber_t *out_int);
+#define parse_hex(ref_line, out_int) \
+    parsew_hex(ref_line, &(*ref_line)[strlen(*(ref_line))], out_int)
 
-/* parse an unsigned 64-bit octal number */
+/*! parse an unsigned 64-bit octal number */
 extern bool
-parse_octal(const char **ref_line, unumber_t *out_int);
+parsew_octal(const char **ref_line, const char *lineend, unumber_t *out_int);
+#define parse_octal(ref_line, out_int) \
+    parsew_octal(ref_line, &(*ref_line)[strlen(*(ref_line))], out_int)
 
-/* parse an unsigned 64-bit octal number taking width digits  */
+/*! parse an unsigned 64-bit octal number always taking width digits  */
 extern bool
-parse_hex_width(const char **ref_line, unsigned width, unumber_t *out_int);
+parsew_hex_width(const char **ref_line, const char *lineend, unsigned width,
+                unumber_t *out_int);
+#define parse_hex_width(ref_line, width, out_int) \
+    parsew_hex_width(ref_line, &(*ref_line)[strlen(*(ref_line))], \
+                     width, out_int)
 
 /*! parse [-] [ 0[x|X]<nex> | 0[o|O]<octal> | <decimal> ] */
 extern bool
-parse_int_val(const char **ref_line, number_t *out_int);
+parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int);
+#define parse_int_val(ref_line, out_int) \
+    parsew_int_val(ref_line, &(*ref_line)[strlen(*(ref_line))], out_int)
 
 /*! parse [<int> | ( <FTL expr> )] integer expression */
 extern bool
-parse_int_expr(const char **ref_line,
-           parser_state_t *state, number_t *out_int);
+parsew_int_expr(const char **ref_line, const char *lineend,
+                parser_state_t *state, number_t *out_int);
+#define parse_int_expr(ref_line, state, out_int) \
+    parsew_int_expr(ref_line, &(*ref_line)[strlen(*(ref_line))], out_int)
 
 /*! parse <non-space-non-delim>* */
 extern bool
-parse_item(const char **ref_line, const char *delims, size_t ndelims,
-       char *buf, size_t len);
+parsew_item(const char **ref_line, const char *lineend, const char *delims,
+            size_t ndelims, char *buf, size_t len);
+#define parse_item(ref_line, delims, ndelims, buf, len) \
+    parsew_item(ref_line, &(*ref_line)[strlen(*(ref_line))], \
+                delims, ndelims, buf, len)
 
 /*! parse [<alpha>|_][<alpha>|<num>|_]* */
 extern bool
-parse_id(const char **ref_line, char *buf, size_t size);
+parsew_id(const char **ref_line, const char *lineend, char *buf, size_t size);
+#define parse_id(ref_line, buf, size) \
+    parsew_id(ref_line, &(*ref_line)[strlen(*(ref_line))], buf, size)
 
 /*! parse single or double quoted string
  *  note: succeeds if syntax is correct even if insufficient room in the buffer
  *        including when there is no room for a terminating null (len==0)
  */
 extern bool
-parse_string(const char **ref_line, char *buf, size_t len, size_t *out_len);
+parsew_string(const char **ref_line, const char *lineend, char *buf, size_t len,
+              size_t *out_len);
+#define parse_string(ref_line, buf, len, out_len) \
+    parsew_string(ref_line, &(*ref_line)[strlen(*(ref_line))], \
+                  buf, len, out_len)
+
 
 /* note: succeeds if syntax is correct even if insufficient room in the buffer
          including when there is no room for a terminating null (len==0) */
 extern bool
-parse_string_expr(const char **ref_line, parser_state_t *state,
-          char *buf, size_t len, const value_t **out_string);
+parsew_string_expr(const char **ref_line, const char *lineend, parser_state_t *state,
+                   char *buf, size_t len, const value_t **out_string);
+#define parse_string_expr(ref_line, state, buf, len, out_string) \
+    parsew_string_expr(ref_line, &(*ref_line)[strlen(*(ref_line))], state, \
+                       buf, len, out_string)
 
 extern bool
-parse_itemstr(const char **ref_line, char *buf, size_t size);
+parsew_itemstr(const char **ref_line, const char *lineend,
+               char *buf, size_t size);
+#define parse_itemstr(ref_line, buf, size) \
+    parsew_itemstr(ref_line, &(*ref_line)[strlen(*(ref_line))], buf, size)
 
 extern bool
 parse_type(const char **ref_line, type_t *out_type);
 
 typedef bool
-parse_match_fn_t(const char **ref_line, parser_state_t *state,
-         const value_t *name, void *arg);
+parse_match_fn_t(const char **ref_line, const char *lineend,
+                 parser_state_t *state, const value_t *name, void *arg);
 
-/*! parse one of the names in 'prefixes' and return the associated value
+/*! parse first of the names in 'prefixes' and return the associated value
  *  where match_fn is used to match the name with the parse object
  */
 extern bool
-parse_oneof_matching(const char **ref_line, parser_state_t *state,
-                 dir_t *prefixes, const value_t **out_val,
-             parse_match_fn_t *match_fn, void *match_fn_arg);
+parsew_oneof_matching(const char **ref_line, const char *lineend,
+                      parser_state_t *state, dir_t *prefixes,
+                      const value_t **out_val,
+                      parse_match_fn_t *match_fn, void *match_fn_arg);
 
-/*! parse one of the names in 'prefixes' and return the associated value
+/*! parse the first of the names in 'prefixes' and return the associated value
  */
 extern bool
-parse_oneof(const char **ref_line, parser_state_t *state, dir_t *prefixes,
-            const value_t **out_val);
+parsew_oneof(const char **ref_line, const char *lineend, parser_state_t *state,
+             dir_t *prefixes, const value_t **out_val);
+
+#define parse_oneof(ref_line, state, prefixes, out_val) \
+    parsew_oneof(ref_line, &(*ref_line)[strlen(*(ref_line))], state, \
+                 prefixes, out_val)
 
 /*! parse text ending with one of the names in 'delims' and return the
  *  associated value
  */
 extern bool
-parse_one_ending(const char **ref_line, parser_state_t *state, dir_t *delims,
-                 const value_t **out_val);
+parsew_one_ending(const char **ref_line, const char *lineend,
+                  parser_state_t *state, dir_t *delims,
+                  const value_t **out_val);
 
+#define parse_one_ending(ref_line, state, delims, out_val) \
+    parsew_one_ending(ref_line, &(*ref_line)[strlen(*(ref_line))], state, \
+                      delims, out_val)
 
 
 /*          Command Values                               */
@@ -1724,7 +2249,11 @@ typedef const value_t *cmd_fn_t(const char **ref_line, const value_t *this_cmd,
                                 parser_state_t *state);
 
 extern value_t *
-value_cmd_new(cmd_fn_t *exec, const value_t *fn_exec, const char *help);
+value_cmd_lnew(parser_state_t *state, cmd_fn_t *exec, const value_t *fn_exec,
+               const char *help);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_cmd_new(exec, fn_exec, help) \
+         value_cmd_lnew(root_state, exec, fn_exec, help) 
 
 extern const char *
 value_cmd_help(const value_t *cmd);
@@ -1738,7 +2267,10 @@ typedef const value_t *func_fn_t(const value_t *this_func,
                  parser_state_t *state);
 
 extern value_t *
-value_func_new(func_fn_t *exec, const char *help, int args, void *implicit);
+value_func_lnew(parser_state_t *state,
+                func_fn_t *exec, const char *help, int args, void *implicit);
+#define value_func_new(exec, help, args, implicit) \
+        value_func_lnew(root_state, exec, help, args, implicit)
 
 extern void *
 value_func_implicit(const value_t *func); /* deliver implicit arguments */
@@ -1751,46 +2283,102 @@ value_func_help(const value_t *func);
 extern type_t type_mem;
 
 extern value_t *
-value_mem_bin_new(const value_t *binstr, number_t base,
-                  bool sole_user, bool readonly);
+value_mem_bin_lnew(parser_state_t *state, const value_t *binstr, number_t base,
+                   bool sole_user, bool readonly);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_mem_bin_new(binstr, base, sole_user, readonly) \
+    value_mem_bin_lnew(root_state, binstr, base, sole_user, readonly)
 
 extern value_t *
-value_mem_bin_alloc_new(number_t base, size_t len, int memset_val,
-                        char **out_block);
+value_mem_bin_alloc_lnew(parser_state_t *state, number_t base,
+                         size_t len, int memset_val, char **out_block);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_mem_bin_alloc_new(base, len, memset_val, out_block) \
+    value_mem_bin_alloc_lnew(root_state, base, len, memset_val, out_block)
+
 
 extern value_t *
-value_mem_rebase_new(const value_t *unbase_mem_val,
-                     number_t base, bool readonly, bool sole_user);
+value_mem_rebase_lnew(parser_state_t *state, const value_t *unbase_mem_val,
+                      number_t base, bool readonly, bool sole_user);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_mem_rebase_new(unbase_mem_val, base, readonly, sole_user) \
+    value_mem_rebase_lnew(root_state, unbase_mem_val, base, readonly, sole_user)
 
 
 
 /*          Modules                                          */
 
-/*! Add a new command (cmd) to a module directory */
+/*! Add a new command (cmd) to state's module directory */
 extern value_t *
-mod_add(dir_t *dir, const char *name, const char *help, cmd_fn_t *exec);
+smod_add_lnew(parser_state_t *state, dir_t *dir,
+              const char *name, const char *help, cmd_fn_t *exec);
 
-/*! Add a new function to a module directory */
+/*! Add a new function to state's module directory */
 extern value_t *
-mod_addfn(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
-      int args);
+smod_addfn_lnew(parser_state_t *state, dir_t *dir,
+                const char *name, const char *help, func_fn_t *exec,
+                int args);
 
-/*! Add a new function with bound implicit args to a module directory */
+/*! Add a new function with bound implicit args to state's module directory */
 extern value_t *
-mod_addfn_imp(dir_t *dir, const char *name, const char *help, func_fn_t *exec,
-          int args, void *implicit_args);
+mod_addfn_imp_lnew(parser_state_t *state, dir_t *dir,
+                   const char *name, const char *help, func_fn_t *exec,
+                   int args, void *implicit_args);
 
-/*! Add a new directory to a module directory */
+/*! Add a new directory to state's module directory */
 extern void
-mod_add_dir(dir_t *dir, const char *name, dir_t *mod);
+smod_add_dir(parser_state_t *state, dir_t *dir,
+             const char *name, dir_t *mod);
 
-/*! Add a new value to a module directory */
+/*! Add a new value to state's module directory */
 extern void
-mod_add_val(dir_t *dir, const char *name, const value_t *val);
+smod_add_val(parser_state_t *state, dir_t *dir,
+             const char *name, const value_t *val);
+
+/*! Convenience versions of the above which unlocal their result */
+
+#define smod_add(state, dir, name, help, exec)           \
+        value_unlocal(smod_add_lnew(state, dir, name, help, exec))
+#define smod_addfn(state, dir, name, help, exec, args)           \
+        value_unlocal(smod_addfn_lnew(state, dir, name, help, exec, args))
+#define smod_addfn_imp(state, dir, name, help, exec, args, implicit_args) \
+        value_unlocal(smod_addfn_imp_lnew(state, dir, name, \
+                                          help, exec, args, implicit_args))
+
+/*! Convenience versions that takes a local value to be unlocalled */
+
+#define smod_add_lval(state, dir, name, val) \
+    {   const value_t *_val = (val); \
+        smod_add_val(state, dir, name, _val);            \
+        value_unlocal(_val);                     \
+    }
+        
+
+
+
+/*! Deprecated: Legacy use only - don't use in new code */
+#define mod_add(dir, name, help, exec) \
+        smod_add(root_state, dir, name, help, exec)
+#define mod_addfn(dir, name, help, exec, args) \
+        smod_addfn(root_state, dir, name, help, exec, args)
+#define mod_addfn_imp(dir, name, help, exec, args, implicit_args) \
+        smod_addfn_imp(root_state, dir, name, help, exec, args, implicit_args)
+#define mod_add_dir(dir, name, mod) \
+        smod_add_dir(root_state, dir, name, mod)
+#define mod_add_val(dir, name, val) \
+        smod_add_val(root_state, dir, name, val)
+
+
+
+
 
 /*! Parse a value to execute taken from a given module */
 extern bool
-mod_parse_cmd(dir_t *dir, const char **ref_line, const value_t **out_cmd);
+mod_parsew_cmd(dir_t *dir, const char **ref_line, const char *lineend,
+               const value_t **out_cmd/*local*/);
+#define mod_parse_cmd(dir, ref_line, out_cmd) \
+    mod_parsew_cmd(dir, ref_line, &(*ref_line)[strlen(*(ref_line))], out_cmd)
+
 
 /*! Retrieve any implicit argument defined for this function in its module */
 extern void *
@@ -1817,7 +2405,7 @@ extern const value_t *
 substitute(const value_t *code, const value_t *arg, parser_state_t *state,
            bool unstrict);
 
-/*! Invoke a binding */
+/*! Invoke a binding (returning a local value) */
 extern const value_t *
 invoke(const value_t *code, parser_state_t *state);
 
@@ -1826,18 +2414,26 @@ parse_int_base(const char **ref_line, parser_state_t *state,
            number_t *out_int);
 
 extern bool
-parse_code(const char **ref_line, parser_state_t *state,
+parsew_code(const char **ref_line, const char *lineend, parser_state_t *state,
            const value_t **out_strval,
            const char **out_sourcepos, int *out_lineno);
+#define parse_code(ref_line, state, out_strval, out_sourcepos, out_lineno) \
+    parsew_code(ref_line, &(*ref_line)[strlen(*(ref_line))], state, \
+                out_strval, out_sourcepos, out_lineno)
 
-/* most complex expression built using delimiters */
+
+/*! parse most complex expression built using delimiters */
 extern bool
-parse_retrieval(const char **ref_line, parser_state_t *state,
-        const value_t **out_val);
+parsew_retrieval(const char **ref_line, const char *lineend,
+                 parser_state_t *state, const value_t **out_val);
+#define parse_retrieval(ref_line, state, out_val) \
+    parse_retrieval(ref_line, &(*ref_line)[strlen(*(ref_line))], state, out_val)
 
 extern bool
-parse_expr(const char **ref_line, parser_state_t *state,
-       const value_t **out_val);
+parsew_expr(const char **ref_line, const char *lineend, parser_state_t *state,
+            const value_t **out_val);
+#define parse_expr(ref_line, state, out_val) \
+    parsew_expr(ref_line, &(*ref_line)[strlen(*(ref_line))], state, out_val)
 
 
 /*          Command Line Interpreter                         */
@@ -1852,7 +2448,10 @@ typedef bool register_opt_result_fn(parser_state_t *state, const char *cmd,
  *  text.
  */
 extern const value_t *
-mod_exec_cmd(const char **ref_line, parser_state_t *state);
+mod_exec_cmdw(const char **ref_line, const char *lineend, parser_state_t *state);
+
+#define mod_exec_cmd(ref_line, state) \
+    mod_exec_cmdw(ref_line, &(*ref_line)[strlen(*(ref_line))], state)
 
 
 typedef void parser_state_poll_fn(parser_state_t *state, bool interactive,
@@ -1867,14 +2466,17 @@ typedef void parser_state_poll_fn(parser_state_t *state, bool interactive,
  *    @param ref_argn  - updatable reference number of syms in array
  *    @param delim     - NULL for --opt processing otherwise a delimiter token
  *    @param fndir     - directory to take parsing function definitions from
+ *    @param expect_no_locals - garbage collect on every line if TRUE
  *    @param with_results - function for dealing with command results
  *    @param with_results_arg - argument to provide with \c with_results
- *    @param out_value - last value created by the commands
+ *    @param out_value - last value (local) created by the commands
  *    @param out_ends_with_delim - TRUE when last parsed item is the delimiter
  *
  *  If delim is NULL only the initial commands that consist of --opt style
  *  tokens are parsed (until the following --opt style entry or until --).
  *  Otherwise command sequences between delim options are parsed.
+ *
+ *  Note: *out_value is always NULL if expect_no_locals is TRUE
  *
  *  This function may cause a garbage collection
  */
@@ -1883,13 +2485,27 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
                  const char *delim, const char *term,
                  const char *execpath, dir_t *fndir, bool expect_no_locals,
                  register_opt_result_fn *with_results, void *with_results_arg,
-                 const value_t **out_value, wbool *out_ends_with_delim);
+                 const value_t **out_value/*local*/,
+                 wbool *out_ends_with_delim);
 
 
     
 /*! Execute the commands provided from three sources in order
  *  This is an internal function implementing a range of others (that follow
  *  as macro definitions)
+ *
+ *    @param state     - current parser state
+ *    @param source    - source to read commands from 
+ *    @param cmd_str   - a string containing commands to be executed
+ *    @param rcfile_id - name of an initialization file on RC path
+ *    @param expect_no_locals - garbage collect on every line if TRUE
+ *    @param interactive - use exception handling if TRUE 
+ *    @param pre_line_wait - function to call at the start of a line while
+ *                           no user input is available
+ *    @param wait_arg  - argument to be passed to \c pre_line_wait
+ * 
+ *    @return the last (possibly local) value executed unless \c
+ *            expect_no_locals is TRUE.
  *
  *  The parser's current instack is saved and restored once the instack provided
  *  here is completed.
@@ -1916,7 +2532,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
  *  If pre_line_wait is a pointer to a function it will be called prior to
  *  each line read 
  */
-extern const value_t *
+extern const value_t * /*local*/
 parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
                const char *cmd_str, const char *rcfile_id,
                bool expect_no_locals, bool interactive,

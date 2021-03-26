@@ -350,11 +350,11 @@ elf_get_ehdr(const value_t *this_fn, parser_state_t *state,
    size_t n;
 
    if (eclass == ELFCLASS32)
-      dir_string_set(einfo, "class", value_int_new(32));
+       dir_string_lsetul(einfo, state, "class", value_int_new(32));
    else if (eclass == ELFCLASS64)
-      dir_string_set(einfo, "class", value_int_new(64));
+       dir_string_lsetul(einfo, state, "class", value_int_new(64));
    else {
-      dir_string_set(einfo, "class", &value_null);
+       dir_string_lsetul(einfo, state, "class", &value_null);
       if (eclass != ELFCLASSNONE)
          parser_report(state, "ELF file has unknown class %d - %s\n",
                        eclass, elf_errmsg(-1));
@@ -364,41 +364,41 @@ elf_get_ehdr(const value_t *this_fn, parser_state_t *state,
       parser_report(state, "ELF file has unknown identity - %s\n",
                     elf_errmsg(-1));
    else
-      dir_string_set(einfo, "id",
-                     value_string_new(id, EI_NIDENT));
+       dir_string_lsetul(einfo, state, "id",
+                         value_string_new(id, EI_NIDENT));
 
-   dir_string_set(einfo, "ehdr", dir_value(edir));
+   dir_string_lsetul(einfo, state, "ehdr", dir_value(edir));
 
-   dir_string_set(edir,"type"   , value_int_new(ehdr->e_type));
-   dir_string_set(edir,"machine", value_int_new(ehdr->e_machine));
-   dir_string_set(edir,"version", value_int_new(ehdr->e_version));
-   dir_string_set(edir,"entry"  , value_int_new(ehdr->e_entry));
-   dir_string_set(edir,"phoff"  , value_int_new(ehdr->e_phoff));
-   dir_string_set(edir,"shoff"  , value_int_new(ehdr->e_shoff));
-   dir_string_set(edir,"flags"  , value_int_new(ehdr->e_flags));
-   dir_string_set(edir,"ehsize" , value_int_new(ehdr->e_ehsize));
-   dir_string_set(edir,"phentsize",
-                  value_int_new(ehdr->e_phentsize));
-   dir_string_set(edir,"shentsize",
-                  value_int_new(ehdr->e_shentsize));
+   dir_string_lsetul(edir, state,"type"   , value_int_new(ehdr->e_type));
+   dir_string_lsetul(edir, state,"machine", value_int_new(ehdr->e_machine));
+   dir_string_lsetul(edir, state,"version", value_int_new(ehdr->e_version));
+   dir_string_lsetul(edir, state,"entry"  , value_int_new(ehdr->e_entry));
+   dir_string_lsetul(edir, state,"phoff"  , value_int_new(ehdr->e_phoff));
+   dir_string_lsetul(edir, state,"shoff"  , value_int_new(ehdr->e_shoff));
+   dir_string_lsetul(edir, state,"flags"  , value_int_new(ehdr->e_flags));
+   dir_string_lsetul(edir, state,"ehsize" , value_int_new(ehdr->e_ehsize));
+   dir_string_lsetul(edir, state,"phentsize",
+                     value_int_new(ehdr->e_phentsize));
+   dir_string_lsetul(edir, state,"shentsize",
+                     value_int_new(ehdr->e_shentsize));
 
    if (elf_getphdrnum(e, &n) != 0)
       parser_report(state,"ELF file has unknown number of segments - %s\n",
                     elf_errmsg(-1));
    else
-      dir_string_set(einfo, "progsects", value_int_new(n));
+       dir_string_lsetul(einfo, state, "progsects", value_int_new(n));
 
    if (elf_getshdrnum(e, &n) != 0)
       parser_report(state, "%s: ELF file has unknown number of sections - %s\n",
                     elf_errmsg(-1));
    else
-      dir_string_set(einfo, "sections", value_int_new(n));
+       dir_string_lsetul(einfo, state, "sections", value_int_new(n));
 
    if (elf_getshdrstrndx(e, &n) != 0)
       parser_report(state, "%s: ELF file has no section names - %s\n",
                     elf_errmsg(-1));
    else
-      dir_string_set(einfo, "shdrstrndx", value_int_new(n));
+       dir_string_lsetul(einfo, state, "shdrstrndx", value_int_new(n));
 
    return dir_value(einfo);
 }
@@ -437,16 +437,24 @@ elf_get_phdrs(const value_t *this_fn, parser_state_t *state,
                           "ELF segment %d unretrievable - %s\n",
                           i, elf_errmsg(-1));
          else {
-            dir_string_set(pdir,"type"   , value_int_new(phdr.p_type));
-            dir_string_set(pdir,"offset" , value_int_new(phdr.p_offset));
-            dir_string_set(pdir,"vaddr"  , value_int_new(phdr.p_vaddr));
-            dir_string_set(pdir,"paddr"  , value_int_new(phdr.p_paddr));
-            dir_string_set(pdir,"filesz" , value_int_new(phdr.p_filesz));
-            dir_string_set(pdir,"memsz"  , value_int_new(phdr.p_memsz));
-            dir_string_set(pdir,"flags"  , value_int_new(phdr.p_flags));
-            dir_string_set(pdir,"align"  , value_int_new(phdr.p_align));
+             dir_string_lsetul(pdir, state, "type"   ,
+                               value_int_new(phdr.p_type));
+             dir_string_lsetul(pdir, state, "offset" ,
+                               value_int_new(phdr.p_offset));
+             dir_string_lsetul(pdir, state, "vaddr"  ,
+                               value_int_new(phdr.p_vaddr));
+             dir_string_lsetul(pdir, state, "paddr"  ,
+                               value_int_new(phdr.p_paddr));
+             dir_string_lsetul(pdir, state, "filesz" ,
+                               value_int_new(phdr.p_filesz));
+             dir_string_lsetul(pdir, state, "memsz"  ,
+                               value_int_new(phdr.p_memsz));
+             dir_string_lsetul(pdir, state, "flags"  ,
+                               value_int_new(phdr.p_flags));
+             dir_string_lsetul(pdir, state, "align"  ,
+                               value_int_new(phdr.p_align));
 
-            dir_int_set(partdir, i, dir_value(pdir));
+             dir_int_lsetul(partdir, state, i, dir_value(pdir));
          }
       }
       resval = dir_value(partdir);
@@ -774,7 +782,7 @@ fn_ehdr_flags(const value_t *this_fn, parser_state_t *state)
          const char *info = #msg;                                    \
          if (0 == strcmp(info, "GNU EABI extension"))                \
             info = flagname+3;                                       \
-         dir_int_set(vec, index++, value_string_new_measured(info)); \
+         dir_int_lsetul(vec, state, index++, value_string_new_measured(info)); \
       }
 
       WITH_ELF_EF_FLAG(_ELF_DEFINE_EF, )
@@ -788,7 +796,8 @@ fn_ehdr_flags(const value_t *this_fn, parser_state_t *state)
          while (bit < 32) {
             if (0 != (flags & (1<<bit))) {
                sprintf(flagno, "%d", bit);
-               dir_int_set(vec, index++, value_string_new_measured(flagname));
+               dir_int_lsetul(vec, state, index++,
+                              value_string_new_measured(flagname));
             }
             bit++;
          }
@@ -823,7 +832,7 @@ fn_phdr_flags(const value_t *this_fn, parser_state_t *state)
 #undef   _ELF_DEFINE_PF
 #define  _ELF_DEFINE_PF(name, val, msg, _opt)                            \
       if ((val) != 0 && (val) == (flags & (val)))                   \
-         dir_int_set(vec, index++, value_string_new_measured(#msg));
+          dir_int_lsetul(vec, state, index++, value_string_new_measured(#msg));
 
       WITH_ELF_PF_FLAG(_ELF_DEFINE_PF, )
 
@@ -1123,26 +1132,29 @@ cmds_elf(parser_state_t *state, dir_t *cmds)
       printf("%s: ELF library version unknown - %s\n",
              codeid(), elf_errmsg(-1));
    else {
-      mod_addfn(cmds, "kind", "<file> - return the kind of data in <file>",
-                &fn_kind, 1);
-      mod_addfn(cmds, "hdr", "<file> - the ELF header in <file>",
-                &fn_elfhdr, 1);
-      mod_addfn(cmds, "segments", "<file> - vector of the program headers "
-                                           "in <file>",
-                &fn_elfphdrs, 1);
+       smod_addfn(state, cmds,
+                  "kind", "<file> - return the kind of data in <file>",
+                  &fn_kind, 1);
+       smod_addfn(state, cmds, "hdr", "<file> - the ELF header in <file>",
+                  &fn_elfhdr, 1);
+       smod_addfn(state, cmds, "segments",
+                  "<file> - vector of the program headers in <file>",
+                  &fn_elfphdrs, 1);
 
-      mod_addfn(cmds, "rdsegs", "<ckfn> <fn> <file> - "
-                "apply <ckfn> to header then "
-                "<fn> to each <file> segment args <addr> <string>",
-                &fn_elfrdsegs, 3);
-      mod_addfn(cmds, "hdrtype", "<type> - description of header type",
-                &fn_ehdr_type, 1);
-      mod_addfn(cmds, "hdrflags", "<mc> <flags> - vector of hdr flag "
-                                  "descriptions for machine <mc>",
-                &fn_ehdr_flags, 2);
-      mod_addfn(cmds, "segflags", "<flags> - vector of segment header "
-                                  "flag descriptions",
-                &fn_phdr_flags, 1);
+       smod_addfn(state, cmds, "rdsegs",
+                  "<ckfn> <fn> <file> - apply <ckfn> to header then "
+                  "<fn> to each <file> segment args <addr> <string>",
+                  &fn_elfrdsegs, 3);
+       smod_addfn(state, cmds, "hdrtype",
+                  "<type> - description of header type",
+                  &fn_ehdr_type, 1);
+       smod_addfn(state, cmds, "hdrflags",
+                  "<mc> <flags> - vector of hdr flag descriptions for "
+                  "machine <mc>",
+                  &fn_ehdr_flags, 2);
+       smod_addfn(state, cmds, "segflags",
+                  "<flags> - vector of segment header flag descriptions",
+                  &fn_phdr_flags, 1);
    }
 
    return ok;

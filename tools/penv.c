@@ -461,7 +461,8 @@ file_rep_marshal_enum(dir_t *dir,
 
 
 static bool 
-dir_penv_marshal(dir_penv_t *penvdir, const char* filename)
+dir_penv_marshal(parser_state_t *state, dir_penv_t *penvdir,
+                 const char* filename)
 {
     value_t *stream_out = value_stream_file_new(filename, /*read*/FALSE,
                                                 /*write*/TRUE);
@@ -474,7 +475,8 @@ dir_penv_marshal(dir_penv_t *penvdir, const char* filename)
 
         if (ok && repn->out_init(fout)) {
 
-            dir_forall(penvdir, &file_rep_marshal_enum, (void *)stream_out);
+            dir_state_forall(penvdir, state,
+                             &file_rep_marshal_enum, (void *)stream_out);
 
             if (!repn->out_end(fout))
                 ok = FALSE;
@@ -502,7 +504,7 @@ file_rep_marshal_enum(dir_t *dir,
 
 
 static bool
-file_rep_unmarshal(file_rep_t *, value_stream_t *stream)
+file_rep_unmarshal(parser_state_t *state, file_rep_t *, value_stream_t *stream)
     value_t *stream_in = value_stream_file_new(filename, /*read*/TRUE,
                                                /*write*/FALSE);
     bool ok = stream_in != NULL;
@@ -511,7 +513,8 @@ file_rep_unmarshal(file_rep_t *, value_stream_t *stream)
         charsource_t *fin;
         bool ok = value_stream_source(stream_in, &fin);
 
-        dir_forall(penvdir, &file_rep_unmarshal_enum, (void *)stream_in);
+        dir_state_forall(state, penvdir,
+                         &file_rep_unmarshal_enum, (void *)stream_in);
         value_stream_close(stream_in);
     }
     return ok;
@@ -566,8 +569,9 @@ dir_penv_init(dir_penv_t *penvdir, file_rep_t *file_representation)
 
 
 extern dir_t *
-dir_penv_new(file_rep_t *file_representation)
-{   dir_penv_t *penvdir = (dir_penv_t *)FTL_MALLOC(sizeof(dir_penv_t));
+dir_penv_lnew(parser_state_t *state, file_rep_t *file_representation)
+{   dir_penv_t *penvdir =
+        (dir_penv_t *)value_local_alloc(state, sizeof(dir_penv_t));
 
     if (NULL != penvdir)
        dir_penv_init(penvdir, file_representation);
@@ -655,7 +659,8 @@ fn_dir_marshal(const value_t *this_fn, parser_state_t *state)
             enum_args.stream = fout;
             enum_args.repn = repn;
 
-            dir_forall(dir, &file_rep_marshal_enum, (void *)&enum_args);
+            dir_state_forall(state, dir,
+                             &file_rep_marshal_enum, (void *)&enum_args);
 
             ok = repn->out_end(fout);
         }
