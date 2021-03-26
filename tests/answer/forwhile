@@ -1,0 +1,25 @@
+> set list [cmds]:{ 
+>    forwhile cmds [cmd]:{
+>        if cmd != "stop" {echo cmd!}{FALSE}!
+>    }!
+> }
+> list <>
+TRUE
+> # <nothing>
+> list <"add","subtract","print">
+add
+subtract
+print
+TRUE
+> #add
+> #subtract
+> #print
+> #TRUE
+> list <"add","subtract","stop","ignore","ignore">
+add
+subtract
+FALSE
+> #add
+> #subtract
+> #FALSE
+> 
