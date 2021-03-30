@@ -5,6 +5,11 @@
             "cwd": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL",
             "binaryPath": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL/ftl",
             "binaryArgs": []
+        },
+        {
+            "cwd": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL",
+            "binaryPath": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL/hi",
+            "binaryArgs": []
         }
     ]
 }

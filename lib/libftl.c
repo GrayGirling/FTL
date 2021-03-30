@@ -52,7 +52,7 @@
 
    Fix source command which crashes if executed inside a code item
 
-   Garbage collection on demand - so we can support infinite loops
+   Garbage collection on demand - so we can support infinite loops (in progress)
 
    Separate per-type fields from per-value fields in value representations to
    reduce their size
@@ -109,6 +109,10 @@
    Note that this kind of value can currently be created with syntax such as
    <9=NULL>::<4=4>::<1="one">, which is displayed as containing no value for
    intermediate indeces.
+
+   Allow integer-indexed environments (vectors) to be used in bindings.
+   Consider using these as a more efficient basis for the builtin_arg
+   directory.
 
    Vector types should be given a base which is set to the first non-zero index.
 
@@ -169,9 +173,6 @@
 
    File directory as an environment type.
 
-   Functions to support automatic generation of an XML representation of
-   an environment.
-
    Support for generating a C-section for linking into the library from a
    specification of an available C interface (a specification which is a C
    header - perhaps with restricted syntax - would be nice).
@@ -202,7 +203,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 27
+#define VERSION_MIN 28
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -10298,7 +10299,7 @@ dir_cstring_lset(dir_t *dir, parser_state_t *state,
 extern const value_t * /*local*/
 dir_int_get(dir_t *dir, int n)
 {   value_int_t nameval;
-    value_int_init(&nameval, n, /*on_healp*/FALSE);
+    value_int_init(&nameval, n, /*on_heap*/FALSE);
     return dir_get(dir, &nameval.value);
 }
 
@@ -10814,10 +10815,32 @@ dir_id_lnew(parser_state_t *state)
 
 typedef struct
 {   dir_t dir;
-    const value_t **bindvec;
-    size_t n;
-    size_t maxn;
+    const value_t **bindvec;  /* vector of values */
+    size_t n;                 /* active area of vector firstn .. n */
+    size_t maxn;              /* allocated area size */
+    size_t firstn;            /* first active offset in allocated area */ 
+    number_t base;            /* active area indeces: base+firstn .. base+n */
 } dir_vec_t;
+
+
+/* dir_vect_t is designed to be extended from both below and above. It
+ * contains an allocated area usually larger than the active area so that
+ * new indeces near-by to those already in existence don't require the
+ * vector to be reallocated and copied.
+ *
+ *                              |---active area---|
+ *                    |-------------allocated area----------|
+ *                  < ? ? ? ? ? x x x x x x ... x x ? ? ? ? ? >
+ *                    |         |                   |       |
+ * bindvec offset     0         firstn              n       maxn-1
+ * index              base      base+firstn    base+n       base+maxn-1
+ *
+ * Extension is managed by going from size zero to size DIR_VEC_N_INIT
+ * and from then onwards doubling in size when necessary.
+ */
+
+
+
 
 
 
@@ -10850,14 +10873,17 @@ dir_vec_delete(value_t *value)
 static void
 dir_vec_markver(const value_t *value, int heap_version)
 {   dir_vec_t *vecdir = (dir_vec_t *)value;
-    const value_t **bind = vecdir->bindvec;
 
-    if (PTRVALID(bind))
-    {   const value_t **endbind = &vecdir->bindvec[vecdir->n];
+    if (PTRVALID(vecdir->bindvec))
+    {   const value_t **first   = &vecdir->bindvec[vecdir->firstn];
+        const value_t **endbind = &vecdir->bindvec[vecdir->n];
+        const value_t **bind = first;
 
         while (bind < endbind)
-        {   OMIT(fprintf(stderr, "%s: vec %p mark v%d [%d]=%p\n", codeid(),
-                         value, heap_version, (int)(bind - vecdir->bindvec),
+        {   OMIT(fprintf(stderr, "%s: vec [%d..%d] %p mark v%d [%d]=%p\n",
+                         codeid(), (int)vecdir->firstn, (int)vecdir->n,
+                         value, heap_version,
+                         (int)(vecdir->base + bind - first),
                          *bind););
             value_mark_version((value_t *)/*unconst*/*bind, heap_version);
             bind++;
@@ -10869,29 +10895,96 @@ dir_vec_markver(const value_t *value, int heap_version)
 
 
 
+
+
+
+#define DEBUG_VIH OMIT
+
+
+
+/*! Ensure there is a home for a given vector index
+ */
 static bool
-dir_vec_int_add(dir_t *dir, parser_state_t *state,
-                size_t index, const value_t *value)
+dir_vec_int_home(dir_t *dir, parser_state_t *state, number_t index)
 {   dir_vec_t *vecdir = (dir_vec_t *)dir;
     bool ok = PTRVALID(vecdir);
 
     if (ok)
     {   const value_t **bindvec = vecdir->bindvec;
+        number_t base = vecdir->base;
+        size_t old_maxn = vecdir->maxn;
 
-        if (index >= vecdir->maxn)
-        {   size_t old_maxn = vecdir->maxn;
-            size_t new_maxn = old_maxn == 0? DIR_VEC_N_INIT: 2*old_maxn;
+        DEBUG_VIH(fprintf(stderr, "start vec base %" F_NUMBER_T
+                          " used [%d..%d] alloc %d\n",
+                          base, (int)vecdir->firstn, (int)vecdir->n,
+                          (int)vecdir->maxn););
+        if (bindvec == NULL || old_maxn == 0)
+        {   size_t new_maxn = DIR_VEC_N_INIT;
             value_t **newbind;
 
-            if (new_maxn < index+1)
-                new_maxn = index+1;
-
-            OMIT(printf("extend vec from %d to %d (index %d)\n",
-                          old_maxn, new_maxn, index);)
             newbind = (value_t **)FTL_MALLOC(new_maxn*sizeof(value_t *));
+            DEBUG_VIH(fprintf(stderr, "create vec size %d (index %d) %s\n",
+                             (int)new_maxn, (int)index,
+                             newbind==NULL?"FAIL":"OK"););
             if (PTRVALID(newbind))
-            {   memcpy(newbind, bindvec, old_maxn*sizeof(value_t *));
-                memset(newbind+old_maxn, 0,
+            {   memset(&newbind[0], 0, new_maxn*sizeof(value_t *));
+                vecdir->bindvec = (const value_t **)newbind;
+                vecdir->base = index;
+                vecdir->firstn = 0;
+                vecdir->n = 1;
+                vecdir->maxn = new_maxn;
+                base = index;
+            } else
+                ok = FALSE;
+        }
+        else if (index < base)
+        {   /* extend area before the current allocation */
+            size_t new_maxn = 2*old_maxn;
+            value_t **newbind;
+
+            if (index < base - (new_maxn - old_maxn)) 
+                /* in case doubling insufficient */
+                new_maxn = base + old_maxn - index + 1;
+
+            newbind = (value_t **)FTL_MALLOC(new_maxn*sizeof(value_t *));
+            DEBUG_VIH(fprintf(stderr, "extend vec size from %d to %d "
+                              "(index %d) at start %s\n",
+                              (int)old_maxn, (int)new_maxn, (int)index,
+                              newbind==NULL?"FAIL":"OK"););
+            if (PTRVALID(newbind))
+            {   size_t growth = new_maxn - old_maxn;
+                number_t new_base = base - (number_t)growth;
+                memset(&newbind[0], 0, growth*sizeof(value_t *));
+                memcpy(&newbind[growth], bindvec, old_maxn*sizeof(value_t *));
+                vecdir->bindvec = (const value_t **)newbind;
+                vecdir->firstn += growth;
+                vecdir->n += growth;
+                vecdir->maxn = new_maxn;
+                vecdir->base = new_base;
+                base = new_base;
+                if (PTRVALID(bindvec))
+                    FTL_FREE((value_t **)bindvec);
+            } else
+                ok = FALSE;
+        }
+        else if (index >= base + vecdir->maxn)
+        {   /* extend area after the current allocation */
+            size_t old_maxn = vecdir->maxn;
+            size_t new_maxn = 2*old_maxn;
+            value_t **newbind;
+
+            if (base+new_maxn < index+1)
+                /* in case doubling insufficient */
+                new_maxn = index+1-base;
+
+            newbind = (value_t **)FTL_MALLOC(new_maxn*sizeof(value_t *));
+            DEBUG_VIH(fprintf(stderr, "extend vec allocation %d to %d "
+                              "(index %d) at end %s\n",
+                              (int)old_maxn, (int)new_maxn, (int)index,
+                              newbind==NULL?"FAIL":"OK");)
+            if (PTRVALID(newbind))
+            {   memcpy(&newbind[0], bindvec, old_maxn*sizeof(value_t *));
+                memset(&newbind[old_maxn], 0,
                        (new_maxn-old_maxn)*sizeof(value_t *));
                 vecdir->bindvec = (const value_t **)newbind;
                 vecdir->maxn = new_maxn;
@@ -10901,16 +10994,47 @@ dir_vec_int_add(dir_t *dir, parser_state_t *state,
                 ok = FALSE;
         }
         if (ok)
-        {   vecdir->bindvec[index] = value;
-            if (index+1 > vecdir->n)
-                vecdir->n = index+1;
+        {   OMIT(fprintf(stderr, "[%" F_NUMBER_T "=] base=%" F_NUMBER_T
+                       ", firstn=%d, n=%d\n", index, base,
+                         (int)vecdir->firstn, (int)vecdir->n););
+            if (index >= base + (number_t)vecdir->n)
+                vecdir->n = index+1 - base;
+            else if (index < base + (number_t)vecdir->firstn)
+                vecdir->firstn = index - base;
+            DEBUG_VIH(fprintf(stderr, "end vec base %" F_NUMBER_T
+                              " used [%d..%d] alloc %d\n",
+                              base, (int)vecdir->firstn, (int)vecdir->n,
+                              (int)vecdir->maxn););
         }
-        OMIT(else printf("Failed to add index %d - max is %d\n",
-                           (int)index, (int)vecdir->maxn);)
+        DEBUG_VIH(else printf("Failed to add index %d - max is %d\n",
+                              (int)index, (int)vecdir->maxn);)
     }
 
     return ok;
 }
+
+
+
+
+
+/*! Set the value of a given index in a dir_vec_t
+ */
+static bool
+dir_vec_int_add(dir_t *dir, parser_state_t *state,
+                number_t index, const value_t *value)
+{   dir_vec_t *vecdir = (dir_vec_t *)dir;
+    bool ok = PTRVALID(vecdir) && dir_vec_int_home(dir, state, index);
+
+    if (ok)
+    {   OMIT(fprintf(stderr, "vec int %p set [%d] at offset %d\n",
+                     value, (int)index, (int)(index - vecdir->base)););
+        vecdir->bindvec[index - vecdir->base] = value;
+    }
+    return ok;
+}
+
+
+
 
 
 
@@ -10919,19 +11043,29 @@ dir_vec_add(dir_t *dir, parser_state_t *state,
             const value_t *name, const value_t *value)
 {   return (value_istype(name, type_int) &&
             dir_vec_int_add(dir, state,
-                            (size_t)value_int_number(name), value));
+                            value_int_number(name), value));
 }
 
 
 
 
-STATIC_INLINE const value_t **
-dir_vec_int_lookup(dir_t *dir, size_t index)
-{   dir_vec_t *vecdir = (dir_vec_t *)dir;
-    const value_t **bindvec = vecdir->bindvec;
 
-    if (PTRVALID(bindvec) && (int)index >= 0 && index < vecdir->n)
-        return &bindvec[index];
+/*! Locate the place where a given index is without extending the current
+ *  vector
+ */
+STATIC_INLINE const value_t **
+dir_vec_int_lookup(dir_t *dir, number_t index)
+{   dir_vec_t *vecdir = (dir_vec_t *)dir;
+    number_t base = vecdir->base;
+    bool ok = PTRVALID(vecdir) && PTRVALID(vecdir->bindvec) &&
+              index >= base + vecdir->firstn &&
+              index < base + vecdir->n;
+
+    OMIT(fprintf(stderr, "vec int lookup %d in [%d .. %d] %s\n",
+                 (int)index, (int)vecdir->firstn, (int)vecdir->n,
+                 ok? "OK": "FAILS"););
+    if (ok)
+        return &(vecdir->bindvec)[index - base];
     else
         return NULL;
 }
@@ -10940,18 +11074,16 @@ dir_vec_int_lookup(dir_t *dir, size_t index)
 
 
 
-
-
+/*! Locate the place where a given index value is without extending the current
+ *  vector
+ */
 static const value_t **
 dir_vec_lookup(dir_t *dir, const value_t *name)
-{   dir_vec_t *vecdir = (dir_vec_t *)dir;
-    const value_t **found = NULL;
-    const value_t **bindvec = vecdir->bindvec;
+{   const value_t **found = NULL;
 
-    if (value_type_equal(name, type_int) && PTRVALID(bindvec))
-    {   size_t index = (size_t)value_int_number(name);
-        if ((int)index >= 0 && index < vecdir->n)
-            found = &bindvec[index];
+    if (value_type_equal(name, type_int))
+    {   number_t index = value_int_number(name);
+        found = dir_vec_int_lookup(dir, index);
     }
 
     return found;
@@ -10969,16 +11101,19 @@ dir_vec_forall(dir_t *dir, parser_state_t *state,
     void *result = NULL;
 
     if (PTRVALID(bindvec))
-    {   size_t i = 0;
+    {   size_t i = vecdir->firstn;
+        size_t n = vecdir->n;
+        number_t base = vecdir->base;
 
-        OMIT(printf("vec has %d entries\n", vecdir->n);)
-        while (NULL == result && i < vecdir->n)
-        {   const value_t *newint = value_int_lnew(state, i);
+        OMIT(fprintf(stderr, "vec forall entries [%d .. %d]\n",
+                     (int)i, (int)n););
+        while (NULL == result && i < n)
+        {   const value_t *newint = value_int_lnew(state, base+i);
             result = (*enumfn)(dir, newint, bindvec[i], arg);
             value_unlocal(newint);
             i++;
         }
-    }
+    } OMIT(fprintf(stderr, "vec forall NULL vector %p\n", bindvec););
 
     return result;
 }
@@ -10996,6 +11131,8 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
 
     if (PTRVALID(value))
     {
+        OMIT(fprintf(stderr, "vec int [%d] print expect %d\n",
+                     (int)index, (int)pr->index_expect););
         if (pr->first)
             pr->first = FALSE;
         else
@@ -11012,7 +11149,8 @@ value_dir_vec_print(dir_t *dir, const value_t *name,
                                             value, pr->detailed);
 
         pr->index_expect = index+1;
-    }
+    } OMIT(else fprintf(stderr, "vec int %p print unknown int\n", name););
+        
     return NULL;
 }
 
@@ -11065,6 +11203,8 @@ dir_vec_init(dir_vec_t *vecdir, bool on_heap)
     vecdir->bindvec = NULL;
     vecdir->n = 0;
     vecdir->maxn = 0;
+    vecdir->firstn = 0;
+    vecdir->base = 0;
     return val;
 }
 
@@ -11113,10 +11253,12 @@ typedef int compareval_fn_t(const value_t **, const value_t **);
 
 static void
 dir_vec_sort(dir_vec_t *vec, compareval_fn_t *compare)
-{   const value_t **bindings = vec->bindvec;
-    size_t items = vec->n;
-    qsort((void *)bindings, items, sizeof(bindings[0]),
-          (int (*)(const void *, const void *))(compare));
+{   if (PTRVALID(vec->bindvec))
+    {   const value_t **bindings = &vec->bindvec[vec->firstn];
+        size_t items = vec->n - vec->firstn;
+        qsort((void *)bindings, items, sizeof(bindings[0]),
+              (int (*)(const void *, const void *))(compare));
+    }
 }
 
 
@@ -11405,7 +11547,7 @@ dir_dyn_new(parser_state_t *state, const char *errprefix,
 
 /* Composed directories are ones that combine two other directories: and index
  * and a value directory.
- * A valiue looked up in the composed directory is first looked up in the index
+ * A value looked up in the composed directory is first looked up in the index
  * and the resulting value is then used as the index into the value directory.
  */
 
@@ -11595,7 +11737,9 @@ dir_join_lnew(parser_state_t *state, dir_t *ixdir, dir_t *valdir)
 
 #if 0
 
-/* This won't work because values are queued using their "next" field */
+/* This won't work because values are queued using their "next" field, so the
+ * static values couldn't be shared among multiple closures as unbound
+ * variables */
 
 
 typedef char builtin_argname_str_t[16];
@@ -11635,7 +11779,7 @@ values_string_argname_init(void)
 
 
 STATIC_INLINE value_t *
-value_string_argname_lnew(parser_state_t *state, unsigned argno)
+value_builtin_argname_lnew(parser_state_t *state, unsigned argno)
 {
 #if 0
     if (argno <= FTL_ARGNAMES_CACHED)
@@ -15849,6 +15993,25 @@ value_env_unbound(value_env_t *env)
 
 
 
+/*! Return a new dir containing values of the given type
+ *  Return NULL if there is no directory available to store indeces of
+ *  the requested type.
+ */
+static dir_t *dir_native_lnew(type_t domain_type, parser_state_t *state)
+{   if (type_equal(domain_type, type_string))
+        return dir_id_lnew(state);
+    else if (type_equal(domain_type, type_int))
+        return dir_vec_lnew(state);
+    else
+        return NULL;
+}
+
+
+
+
+
+
+
 /*! return a envdir which has the first unbound variable set to the given value
  */
 extern value_t * /*local*/
@@ -15862,7 +16025,7 @@ value_env_bind_lnew(parser_state_t *state, value_env_t *envdir,
         DEBUG_CLI_LNEW(LOCS(state,value_env_value(newenvdir)));
 
         if (PTRVALID(newenvdir))
-        {   dir_t *localbind = dir_id_lnew(state);
+        {   dir_t *localbind = dir_native_lnew(value_type(unbound), state);
 
             DEBUG_CLI_LNEW(LOCS(state,dir_value(localbind)));
             /* construct an environment with one fewer unbound names */
@@ -20268,7 +20431,7 @@ value_mod_cmd(parser_state_t *state, const value_t *helpstrval,
     (void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
 
     for (i=1; i<=args; i++)
-    {   value_t *argname = value_string_argname_lnew(state, i);
+    {   value_t *argname = value_builtin_argname_lnew(state, i);
         argnext = value_closure_pushunbound(closure, argnext, argname);
         value_unlocal(argname);
     }
@@ -20931,6 +21094,9 @@ STATIC_INLINE bool parsew_argv_pling(const char **ref_line, const char *lineend)
 
 
 
+
+
+
 /*! Parse the body of a environment value (following the initial '[')
  *
  * parses: [<indexname>=<substitution>,]* [<indexname>,]* 
@@ -20969,11 +21135,20 @@ parsew_env(const char **ref_line, const char *lineend, parser_state_t *state,
                 if (parsew_substitution(ref_line, lineend, state,
                                         &val))
                 {   if (NULL == env)
-                    {   dir_t *iddir = dir_id_lnew(state);
-                        env = value_env_lnew(state);
-                        value_env_pushdir(env, iddir,
-                                          /*env_end*/FALSE);
-                        value_unlocal(dir_value(iddir));
+                    {   dir_t *iddir =
+                            dir_native_lnew(value_type(index), state);
+                        if (iddir == NULL)
+                        {   fprintf(stderr, "%s: %s values can't be used as "
+                                    "environment indeces\n",
+                                    codeid(), value_type_name(index));
+                            ok = false;
+                        } else
+                        {
+                            env = value_env_lnew(state);
+                            value_env_pushdir(env, iddir,
+                                              /*env_end*/FALSE);
+                            value_unlocal(dir_value(iddir));
+                        }
                     }
                     if (NULL != env)
                         dir_lset((dir_t *)env, state, index, val);
@@ -21034,15 +21209,15 @@ typedef bool parse_val_fn_t(const char **ref_line, const char *lineend,
 
 
 /* Parse vector arguments
- * Syntax <expr>[, <expr>] .. <expr> | <expr>*
+ * Syntax <expr>[, <expr>] .. <expr> | [[<ixexpr>=]<expr>]*
  * This function may cause a garbage collection
  */
 extern bool
 parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
               const char *delim, const value_t **out_lval)
 {   dir_t *vec = NULL;
-    int index = 0;
-    const value_t *vectmp[2];
+    number_t index = 0;
+    const value_t *vectmp[2]; /* fist two items of a series definition */
     bool ok = TRUE;
     bool series = FALSE;
     parse_val_fn_t *expr_fn = (delim == NULL)? &parsew_base:
@@ -21059,7 +21234,8 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
 
     while (ok && !complete && !series && parsew_space(ref_line, lineend) &&
            !parsew_empty(ref_line, lineend) && *ref_line[0] != '>')
-    {   if (index <= 2 && parsew_key(ref_line, lineend, "..") &&
+    {   if (series_possible && index >= 0 && index <= 2 && 
+            parsew_key(ref_line, lineend, "..") &&
             parsew_space(ref_line, lineend))
             series = TRUE;
         else if (!first && NULL != delim &&
@@ -21075,20 +21251,26 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
             {   if (!series && parsew_become(ref_line, lineend) &&
                     parsew_space(ref_line, lineend))
                 {   if (value_type_equal(element, type_int))
-                    {   index = (int)value_int_number(element);
+                    {   index = value_int_number(element);
                         value_unlocal(element); /* about to be overwritten */
                         ok = (*expr_fn)(ref_line, lineend, state,
                                         &element/*lnew*/) &&
                              parsew_space(ref_line, lineend);
                     } else
                         fprintf(stderr, "%s: names in a vector must be an "
-                                "integer not a %s\n",
-                                codeid(),
+                                "integer not a %s\n", codeid(),
                                 element==NULL? "absent":
                                                value_type_name(element));
                 }
                 if (ok)
-                {   if (index >= 0 && index < 2)
+                {   OMIT(fprintf(stderr, "[%" F_NUMBER_T "=] series %s, "
+                                 "possible %s, t0 %sset, t1 %sset\n", index,
+                                 series? "Yes":"No",
+                                 series_possible? "Yes":"No",
+                                 vectmp[0]==NULL? "un":"",
+                                 vectmp[0]==NULL? "un":""););
+                               
+                    if (series_possible && index >= 0 && index < 2)
                        vectmp[index] = element;
                        /* may be part of series defn. */
                     else
@@ -21098,14 +21280,18 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
                             if (NULL != vectmp[0])
                             {   dir_int_lset(vec, state, 0, vectmp[0]);
                                 value_unlocal(vectmp[0]);
+                                OMIT(fprintf(stderr, "[0=] set (t0)\n"););
                             }
                             if (NULL != vectmp[1])
                             {   dir_int_lset(vec, state, 1, vectmp[1]);
                                 value_unlocal(vectmp[1]);
+                                OMIT(fprintf(stderr, "[1=] set (t1)\n"););
                             }
                             series_possible = FALSE;
                         }
                         dir_int_lset(vec, state, index, element);
+                        OMIT(fprintf(stderr, "[%" F_NUMBER_T "=] set\n",
+                                     index););
 
                         OMIT(fprintf(stderr, "set index %d to ", index);
                                value_state_fprint(
@@ -21120,7 +21306,8 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
             } else
                 ok = FALSE;
         }
-    }
+    } /* end while */
+
     if (ok)
     {   if (series)
         {   const value_t *final = NULL;
@@ -21140,14 +21327,14 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
                 value_unlocal(final);
             }
         } else
-        {   if (index <= 2)
-            {   /* series will have been possible, but not converted yet */
+        {   if (series_possible)
+            {   /* series may have been possible, but not converted yet */
                 vec = dir_vec_lnew(state);
-                if (index > 0)
+                if (vectmp[0] != NULL)
                 {   dir_int_lset(vec, state, 0, vectmp[0]);
                     value_unlocal(vectmp[0]);
                 }
-                if (index > 1)
+                if (vectmp[1] != NULL)
                 {   dir_int_lset(vec, state, 1, vectmp[1]);
                     value_unlocal(vectmp[1]);
                 }
@@ -26198,24 +26385,6 @@ genfn_scan_noret(const value_t *this_fn, parser_state_t *state,
 
 
 
-#if 0 //GRAY delete
-static const value_t * /* true, false, null */
-fn_scan_empty(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan_noret(this_fn, state, 1, &parse_empty);
-}
-
-
-static const value_t * /* true, false, null */
-fn_scan_white(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan_noret(this_fn, state, 1, &parse_white);
-}
-
-
-static const value_t * /* true, false, null */
-fn_scan_space(const value_t *this_fn, parser_state_t *state)
-{   return genfn_scan_noret(this_fn, state, 1, &parse_space);
-}
-#endif
 
 
 

@@ -149,3 +149,34 @@ ftl $*console*:+69: failed to evaluate expression
 > eval <4, 8 .. 24>.5 
 24
 > 
+> # new features from v1.28
+> 
+> eval <-1=0>
+<-1=0>
+> eval <999999999=0> # no longer takes forever
+<999999999=0>
+> eval <-999999999=0>
+<-999999999=0>
+> eval <-2=1, 0=2> # index comparison parse fix
+<-2=1, 0=2>
+> eval <-10=1, 20=2, 60=3, 130=4> # multiple expansions
+<-10=1, 20=2, 60=3, 130=4>
+> 
+> eval [0=1, 1=2, 2=3]
+[0=1,1=2,2=3]
+> eval [0=1, 1=2, 2]
+[0=1,1=2, 2]
+> eval [0=1, 1=2, 2] 3
+[2=3,0=1,1=2]
+> 
+> set myadd[1,2]:{ .1 + .2 }
+> myadd 30 12
+42
+> eval myadd 4
+[2]:{ .1 + .2 }
+> 
+> set f [1,2]:{ echo "${.1} - ${.2}"! }
+> f "first" "rest"
+first - rest
+> 
+> 

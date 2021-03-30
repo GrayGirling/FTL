@@ -68,3 +68,23 @@ eval <4, 8 .. 23>.3
 eval <4, 8 .. 23>.4
 eval <4, 8 .. 23>.5 # undefined
 eval <4, 8 .. 24>.5 
+
+# new features from v1.28
+
+eval <-1=0>
+eval <999999999=0> # no longer takes forever
+eval <-999999999=0>
+eval <-2=1, 0=2> # index comparison parse fix
+eval <-10=1, 20=2, 60=3, 130=4> # multiple expansions
+
+eval [0=1, 1=2, 2=3]
+eval [0=1, 1=2, 2]
+eval [0=1, 1=2, 2] 3
+
+set myadd[1,2]:{ .1 + .2 }
+myadd 30 12
+eval myadd 4
+
+set f [1,2]:{ echo "${.1} - ${.2}"! }
+f "first" "rest"
+
