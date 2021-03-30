@@ -115,18 +115,18 @@ parsew_json_object_body(const char **ref_line, const char *lineend,
         char strbuf[JSON_NAME_MAX];
         size_t namelen = 0;
 
-        parsew_space(&line, lineend-line);
-        if (parsew_string(&line, lineend-line,
+        parsew_space(&line, lineend);
+        if (parsew_string(&line, lineend,
                           &strbuf[0], sizeof(strbuf), &namelen))
-        {   parsew_space(&line, lineend-line);
-            if (!parsew_key(&line, lineend-line, ":"))
+        {   parsew_space(&line, lineend);
+            if (!parsew_key(&line, lineend, ":"))
             {   parser_error(state, "expected ':' after JSON name string\n");
                 ok = FALSE;
             } else {
                 const value_t *val = NULL;
-                parsew_space(&line, lineend-line);
+                parsew_space(&line, lineend);
                 ok = parsew_json_value(&line, lineend, state, &val);
-                parsew_space(&line, lineend-line);
+                parsew_space(&line, lineend);
                 *ref_line = line;
                 if (ok)
                 {
@@ -138,7 +138,7 @@ parsew_json_object_body(const char **ref_line, const char *lineend,
                         /* syntax OK though so don't update 'ok' */
                     }
                     *ref_line = line;
-                    expect_name = parsew_key(&line, lineend-line, ",");
+                    expect_name = parsew_key(&line, lineend, ",");
                 }
             }
         }
@@ -173,9 +173,9 @@ parsew_json_array_body(const char **ref_line, const char *lineend,
     do
     {
         const value_t *val = NULL;
-        parsew_space(&line, lineend-line);
+        parsew_space(&line, lineend);
         ok = parsew_json_value(&line, lineend, state, &val);
-        parsew_space(&line, lineend-line);
+        parsew_space(&line, lineend);
         if (ok)
         {
             if (!dir_int_set(dirval, index, val))
@@ -185,7 +185,7 @@ parsew_json_array_body(const char **ref_line, const char *lineend,
             }
             index++;
             *ref_line = line;
-            expect_value = parsew_key(&line, lineend-line, ",");
+            expect_value = parsew_key(&line, lineend, ",");
         }
         else if (expect_value)
         {   parser_error(state, "expected value in JSON array after ','\n");
@@ -215,41 +215,41 @@ parsew_json_value(const char **ref_line, const char *lineend,
     char stringbuf[JSON_STRING_MAX];
     size_t stringbufused = 0;
 
-    parsew_space(&line, lineend-line);
-    if (parsew_key(&line, lineend-line, "{"))
-    {   ok = parsew_space(&line, lineend-line) &&
+    parsew_space(&line, lineend);
+    if (parsew_key(&line, lineend, "{"))
+    {   ok = parsew_space(&line, lineend) &&
              parsew_json_object_body(&line, lineend, state, out_val);
-        parsew_space(&line, lineend-line);
-        if (ok && !parsew_key(&line, lineend-line, "}"))
+        parsew_space(&line, lineend);
+        if (ok && !parsew_key(&line, lineend, "}"))
         {   parser_error(state, "expected '}' at end of JSON object\n");
             ok = FALSE;
         }
         *ref_line = line;
     } else
-    if (parsew_key(&line, lineend-line, "["))
-    {   ok = parsew_space(&line, lineend-line) &&
+    if (parsew_key(&line, lineend, "["))
+    {   ok = parsew_space(&line, lineend) &&
              parsew_json_array_body(&line, lineend, state, out_val);
-        parsew_space(&line, lineend-line);
-        if (ok && !parsew_key(&line, lineend-line, "]"))
+        parsew_space(&line, lineend);
+        if (ok && !parsew_key(&line, lineend, "]"))
         {   parser_error(state, "expected ']' at end of JSON array\n");
             ok = FALSE;
         }
         *ref_line = line;
     } else
-    if (parsew_int_val(&line, lineend-line, &numb))
+    if (parsew_int_val(&line, lineend, &numb))
     {   *out_val = value_int_new(numb);
     } else
-    if (parsew_string(&line, lineend-line,
+    if (parsew_string(&line, lineend,
                       &stringbuf[0], sizeof(stringbuf), &stringbufused))
     {   *out_val = value_string_new(&stringbuf[0], stringbufused);
     } else
-    if (parsew_key(&line, lineend-line, "null"))
+    if (parsew_key(&line, lineend, "null"))
     {   *out_val = &value_null;
     } else
-    if (parsew_key(&line, lineend-line, "true"))
+    if (parsew_key(&line, lineend, "true"))
     {   *out_val = value_true;
     } else
-    if (parsew_key(&line, lineend-line, "false"))
+    if (parsew_key(&line, lineend, "false"))
     {   *out_val = value_false;
     } else
         ok = FALSE;
@@ -263,12 +263,12 @@ parsew_json_value(const char **ref_line, const char *lineend,
 
 
 static const value_t *
-fnparse_json_value(const char **ref_line, size_t linelen,
+fnparse_json_value(const char **ref_line, const char * lineend,
                    parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;
-    bool ok = parsew_json_value(ref_line, &(*ref_line)[linelen], state, &val);
+    bool ok = parsew_json_value(ref_line, lineend, state, &val);
     return ok? value_true: value_false;
 }
 
@@ -276,13 +276,12 @@ fnparse_json_value(const char **ref_line, size_t linelen,
 
 
 static const value_t *
-fnparse_json_object(const char **ref_line, size_t linelen,
+fnparse_json_object(const char **ref_line, const char *lineend,
                     parser_state_t *state, void *arg)
 {
     /* doesn't make use of arg */
     const value_t *val = NULL;
-    bool ok = parsew_json_object_body(ref_line, &(*ref_line)[linelen], state,
-                                      &val);
+    bool ok = parsew_json_object_body(ref_line, lineend, state, &val);
     return ok? value_true: value_false;
 }
 
@@ -333,8 +332,8 @@ genfn_json_parse(const value_t *this_fn,
             const char *line = jsontext;
             const char *lineend = &line[jsontextlen];
             bool ok = (*json_scan)(&line, lineend, state, &val) &&
-                      parsew_space(&line, lineend-line) &&
-                      parsew_empty(&line, lineend-line);
+                      parsew_space(&line, lineend) &&
+                      parsew_empty(&line, lineend);
             if (!ok)
             {
                 size_t len = strlen(line);

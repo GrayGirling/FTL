@@ -562,7 +562,7 @@ parsew_xml_attributes(parser_state_t *state, const char **ref_line,
         if (*line++ == '=') {
             size_t attr_len = 0;
             parse_space(&line);
-            ok = parsew_string(&line, lineend-line, &attribute_value[0],
+            ok = parsew_string(&line, lineend, &attribute_value[0],
                                sizeof(attribute_value), &attr_len);
             if (ok && dir != NULL) {
                 const value_t *attrname =
@@ -698,8 +698,8 @@ parsew_xml_decl_body(const char **ref_line, const char *lineend,
                      char *dec, size_t declen, char *buf, size_t len)
 {   const char *line = *ref_line;
     bool ok = (*line++ == '!' && line < lineend && 
-               parsew_id(&line, lineend-line, dec, declen) &&
-               parsew_space(&line, lineend-line));
+               parsew_id(&line, lineend, dec, declen) &&
+               parsew_space(&line, lineend));
 
     if (ok) {
         int indent = 1;
@@ -745,7 +745,7 @@ parsew_xml_etag_body(const char **ref_line, const char *lineend,
               parsew_xml_name(&line, lineend, buf, len);
 
     if (ok) {
-        parsew_space(&line, lineend-line);
+        parsew_space(&line, lineend);
         *ref_line = line;
     }
     return ok;
@@ -767,7 +767,7 @@ parsew_xml_tag_body(parser_state_t *state,
     bool ok = parsew_xml_name(&line, lineend, buf, len);
 
     if (ok) {
-        parsew_space(&line, lineend-line);
+        parsew_space(&line, lineend);
         ok = parsew_xml_attributes(state, &line, lineend, out_dirval);
 
         if ((*out_is_mttag = (line < lineend && *line == '/')))
@@ -788,12 +788,11 @@ parsew_xml_tag_body(parser_state_t *state,
  *  and the arguments from the parse
  */
 static const value_t * /*local*/
-fnparse_xml_itemfn(const char **ref_line, size_t linelen,
+fnparse_xml_itemfn(const char **ref_line, const char *lineend,
                    parser_state_t *state, void *arg)
 {   dir_t *xmlobj = (dir_t *)arg;
     const value_t *parsefn = NULL; /* to be a fn to parse the next item */
     const char *line = *ref_line;
-    const char *lineend = &line[linelen];
     bool ok = (*line != '\0');
     bool action_found = FALSE;
 
@@ -1008,10 +1007,10 @@ fn_scan_xml_itemfn(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fnparse_xml_name(const char **ref_line, size_t linelen,
+fnparse_xml_name(const char **ref_line, const char *lineend,
                  parser_state_t *state, void *arg)
 {   char buf[128];
-    if (parsew_xml_name(ref_line, &(*ref_line)[linelen], buf, sizeof(buf)))
+    if (parsew_xml_name(ref_line, lineend, buf, sizeof(buf)))
         return value_string_lnew_measured(state, buf);
     else
         return &value_null;
