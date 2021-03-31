@@ -17618,7 +17618,7 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
                         ch = instack_getc(in);
                     }
                 } else
-                if (ch  == '_'  || isalnum(ch))
+                if (ch  == '_'  || isalpha(ch))
                 {   /* parse $name - macro expansion */
                     do {
                         if (len > 1)
@@ -17628,8 +17628,11 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
 
                     instack_ungetc(in, ch);
                 } else
-                if (ch  == '@')
+                if (isdigit(ch) || ch  == '@')
                 {   /* parse $@<n> - what is this supposed to do? */
+                    if (ch == '@')
+                        ch = instack_getc(in);
+                    *mac++ = '.';  /* so we look up .<n> */
                     do {
                         if (len > 1)
                             *mac++ = ch;
@@ -24850,7 +24853,7 @@ parser_argv_exec(parser_state_t *state, const char ***ref_argv, int *ref_argn,
             if (executing_prefix && val == NULL)
                 syntax_ok = FALSE;
         }
-        if (out_ends_with_delim != NULL)
+        if (executing_prefix && out_ends_with_delim != NULL)
             *out_ends_with_delim = FALSE;
         if (executing_prefix)
         {   DEBUG_EXECV(VALUE_SHOW("MOD EXECV report val: ", val););
@@ -25222,10 +25225,37 @@ argv_cli_ending(parser_state_t *state, const char *code_name,
                           /*with_results_arg*/NULL,
                           /*lnew*/&value, out_ends_with_comma);
     /*we ignore the value returned*/ value_unlocal(value);
-    if (ok && argc > 0)
-    {   parser_error(state, "%d command line argument%s unused - %s%s\n",
-                     argc, argc>1? "s":"", argv[0], argc>1? " ...":"");
-        ok = FALSE;
+    if (ok)
+    {
+        const value_t *pcmdsval = /*lnew*/
+            dir_stringl_get(dir_stack_dir(state->env),
+                            FTLDIR_PARSE, strlen(FTLDIR_PARSE));
+
+        if (pcmdsval != NULL && value_type_equal(pcmdsval, type_dir))
+        {   dir_t *pcmds = (dir_t *)pcmdsval;
+            dir_t *argvec =
+                argc > 0? dir_argvec_lnew(state, argc, argv):
+                          dir_vec_lnew(state);
+        
+            smod_add_dir(state, pcmds, "argv", argvec);
+            /* note: updates parse.argv, but not parse.execargv */
+            value_unlocal(dir_value(argvec));
+        }
+        if (argc > 0)
+        {
+#if 0
+            parser_error(state, "%d command line argument%s unused - %s%s\n",
+                         argc, argc>1? "s":"", argv[0], argc>1? " ...":"");
+            ok = FALSE;
+#else
+            /* storing the arguments will be of no use unless we run something
+             * and there may be nothing to run if we don't resort to the console
+             * (which is what *out_ends_with_comma is used for)
+             */
+            if (out_ends_with_comma != NULL)
+                *out_ends_with_comma = TRUE;
+#endif
+        }
     }
     return ok;
 }
@@ -27712,7 +27742,8 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
               &fn_opeval, 2);
     smod_add_dir(state, pcmds, "op", parser_opdefs(state));
     smod_add_dir(state, pcmds, "assoc", opassoc);
-    smod_add_dir(state, pcmds, "argv", argvec);
+    smod_add_dir(state, pcmds, "argv", argvec); /* may be updated */
+    smod_add_dir(state, pcmds, "execargv", argvec); /* original argv */
     smod_add_val(state, pcmds, FN_UNDEF_HOOK, &value_null);
 
     value_unlocal(dir_value(opassoc));
