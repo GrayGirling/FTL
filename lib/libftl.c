@@ -203,7 +203,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 28
+#define VERSION_MIN 27
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -5230,15 +5230,8 @@ static void value_chain_list(value_chain_head_t *head, int heap_version)
    When LOCAL_GARBAGE is set all newly allocated heap objects are marked as
    local.
 
-   TODO: When complex values are built from simpler local ones in C functions
-   the assignment is handled by value_local_assign() (e.g. using HOME()). This
-   function assigns the local value to a field in a compound value and stops it
-   being local (in that order, perhaps (one day) in a thread-safe way). It will
-   often be the case that the compound value being built is already local, and
-   that fact will keep it live during garbage collection.
-
    TODO: Local values built but known to be unused by a C function can be
-   removed from the local list by using the function value_local_unlocal() -
+   removed from the local list by using the function value_unlocal() -
    they will be removed when garbage collection next occurs.
 
    There are two calls to the garbage collector.
@@ -5399,8 +5392,37 @@ extern value_t *value_malloc_lnew(parser_state_t *state, size_t size)
  */
 static void value_static_lnew(parser_state_t *state, value_t *val)
 {   OMIT(DPRINTF("%s: value %p marked as static local\n", codeid(), val););
+#ifdef LOCAL_GARBAGE
     if (state != NULL)
         value_chain_push(parser_locals(state), val);
+#endif
+}
+
+
+
+
+/*! Ensure that an existing variable is on a locals list (the one associated
+ *  with the parser state).  To allow for safe asynchronous garbage collection
+ *  these values should be \c value_unlocal'ed before they go out scope.
+ *
+ *  Takes no action if the values is already local.
+ */
+static void value_local(parser_state_t *state, value_t *val)
+{   
+#ifdef LOCAL_GARBAGE
+    /*TODO: when multithreading one thread may have used value_local() during
+     *      the evaluation of an expression.  If this thread couldn't perform
+     *      a value_local because it was already local, but the other thread
+     *      subsequently re-localled the variable
+     */
+    if (state != NULL && val != NULL && val->loc_last_ref == NULL)
+    {   OMIT(parser_report(root_state, "value %p marked as local\n", val););  
+        value_chain_push(parser_locals(state), val);
+    } OMIT(else parser_report(root_state, "value %p %s marked as local\n",
+                              val, val == NULL? "NULL so not":
+                              val->loc_last_ref != NULL? "already":
+                              "COULDN'T be"););
+#endif
 }
 
 
@@ -5411,8 +5433,7 @@ static void value_static_lnew(parser_state_t *state, value_t *val)
 #define value_unlocal(_val) \
     do { const value_t *v = (_val); \
          _value_unlocal(v, __LINE__);  \
-         fprintf(stderr, "%s: unlocal %p line %d\n", \
-                 codeid(), v, __LINE__); \
+         parser_report(root_state, "unlocal %p line %d\n", v, __LINE__); \
     } while (0)
 #endif
 
@@ -5628,11 +5649,22 @@ value_state_fprint_detail(parser_state_t *state, FILE *out,
 
 
 
-
+/*! Delete function for any simple value (normally called only when on heap)
+ *  (By "simple" we mean a value that contains no reference to other values)
+ */
 extern void
 value_delete_alloced(value_t *value)
 {   if (value != NULL && HEAPVALID(value))
-    {
+    {   OMIT(const char *typen = "(corrupt type)";
+             const char *heaps = value->on_heap == TRUE? "heap":
+                                 value->on_heap == FALSE? "NON-HEAP":
+                                 value->on_heap == 'D'? "ALREADY DELETED":
+                                 "UNKNOWN HEAP STATUS";
+             value->on_heap = 'D';
+             if (VALVALID(&value->kind->val))
+                 typen = type_name(value->kind);
+             parser_report(root_state, "del %s %s val %p\n",
+                           heaps, typen, value););
         FTL_FREE(value);
     }
 }
@@ -5716,22 +5748,25 @@ value_cmp(const value_t *v1, const value_t *v2)
 static void
 value_mark_version(value_t *val, int heap_version)
 {   if (PTRVALID(val) && !value_marked(val, heap_version))
-    {   val->heap_version = heap_version;
-        DEBUG_GC(DPRINTF("Mark %s value %p ver %d %s\n",
+    {   DEBUG_GC(DPRINTF("Mark %s value %p ver %d %s\n",
                         value_type_name(val), val, heap_version,
                         val->kind == NULL ||
                          val->kind->mark_version == NULL?"": "(recurse)"););
         DO(
             if (!VALVALID(val))
-            {   DPRINTF("%s: Error - invalid value %p marked as not garbage "
-                        "(heap ver %d)\n", codeid(), val, heap_version);
+            {   /* Warning: root_state is not always correct */
+                parser_report(root_state, "Error - invalid value %p "
+                              "being marked as used (heap ver %d)\n", 
+                              val, heap_version);
                 assert(VALVALID(val));
             }
             else
         )//GRAY
-        if (PTRVALID(val->kind) &&
-            PTRVALID(val->kind->mark_version))
-        {   (*val->kind->mark_version)(val, heap_version);
+        {   val->heap_version = heap_version;
+            if (PTRVALID(val->kind) &&
+                PTRVALID(val->kind->mark_version))
+            {   (*val->kind->mark_version)(val, heap_version);
+            }
         }
     }
 }
@@ -6225,7 +6260,7 @@ value_int_number(const value_t *value)
 /*! Parse a sequence of digits optionally interspersed with a
  *  separator character
  *    @param ref_line  - pointer to position in string being parsed (updated)
- *    @param linelen   - current length of line
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param base      - numeric base of digits
  *    @param sepch     - negative number or separator character
  *
@@ -6410,7 +6445,7 @@ parsew_int_expr(const char **ref_line, const char *lineend,
  *                                 [0b|0B]<intbase2> | <intbase10>]
  *
  *    @param ref_line  - pointer to position in string being parsed (updated)
- *    @param linelen   - current length of line
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param out_int   - location for parsed value to be written to
  *
  *    @returns TRUE only if the parse succeeds
@@ -7636,7 +7671,7 @@ value_string_delete(value_t *value)
     {   value_string_t *str = (value_string_t *)value;
         if (NULL != str->string)
             FTL_FREE((void *)str->string);
-        FTL_FREE(str);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -8250,7 +8285,7 @@ value_code_delete(value_t *value)
 {   if (value_istype(value, type_code))
     {   value_code_t *code = (value_code_t *)value;
         code->string = NULL; /* should be garbage collected */
-        FTL_FREE(code);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -8521,7 +8556,7 @@ value_handle_delete(value_t *value)
 {   value_handle_t *handleval = (value_handle_t *)value;
     if (handleval->autoclose)
         value_handle_close(handleval);
-    FTL_FREE((void *)value);
+    value_delete_alloced(value);
 }
 
 
@@ -8617,7 +8652,7 @@ value_stream_delete(value_t *value)
             charsource_delete(&stream->source);
         if (NULL != stream->sink && NULL != stream->sink_delete)
             (*stream->sink_delete)(&stream->sink);
-        FTL_FREE(stream);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -10043,7 +10078,20 @@ dir_state_fprint(parser_state_t *state, FILE *out, const value_t *root,
 
 
 
-
+/*! Associate a name and value in a directory.
+ *
+ *  A directory may have associated lookup and add functions.  The lookup
+ *  function finds the location where an already existing value for the name is
+ *  stored.  The add function either updates an existing name, value pair or
+ *  creates a new one.
+ *
+ *  If there is no add function this is taken as a signal that additions
+ *  should not be made to the directory (i.e. that it is locked).
+ *
+ *  If there is a lookup function that is used first, and the add function
+ *  is used only if it fails.
+ *
+ */
 extern bool
 dir_lset(dir_t *dir, parser_state_t *state,
          const value_t *nameval, const value_t *value)
@@ -10052,7 +10100,7 @@ dir_lset(dir_t *dir, parser_state_t *state,
     DEBUG_DIR(printf("%s: dir - set name %p to %p (%s) in dir %p\n",
                     codeid(), nameval, value, value_type_name(value), dir);)
     if (PTRVALID(dir))
-    {   if (PTRVALID(dir->lookup))
+    {   if (PTRVALID(dir->lookup) && PTRVALID(dir->add))
         {   const value_t **ref_value = (*dir->lookup)(dir, nameval);
 
             if (PTRVALID(ref_value))
@@ -10114,7 +10162,10 @@ dir_get(dir_t *dir, const value_t *name)
 
 
 
-
+/*! Use the directory's lookup function to implement "get"
+ *  (Note: used, in particular, when the directory type includes no
+ *   "get" function of its own.)
+ */
 static const value_t *
 dir_get_from_lookup(dir_t *dir, const value_t *name)
 {   const value_t **ref_value = NULL;
@@ -10182,7 +10233,12 @@ dir_count_from_forall(dir_t *dir, parser_state_t *state)
 
 
 
-
+/*! Install a directory's locked state from a dir_lock_state_t
+ *      @param dir      - directory to be changed
+ *      @param old_lock - previous lock state to be installed or NULL
+ *      @return           the previous lock state
+ *  If \c old_lock is NULL lock the directory against any further additions
+ */
 extern dir_lock_state_t *
 dir_lock(dir_t *dir, dir_lock_state_t *old_lock)
 {   if (PTRVALID(dir))
@@ -10410,8 +10466,8 @@ typedef void list_thing_delete_fn_t(void *thing);
 
 
 /*! function used to enumerate things in a list during list_enum
- *      !param arg   - argument passed in to list_enum
- *      !param thing - the thing the list element contained
+ *      @param arg   - argument passed in to list_enum
+ *      @param thing - the thing the list element contained
  *  enumerations continue until the value returned is not NULL
  *  (if the enumeration stops because of a non-NULL return this value
  *   will be returned as the result of list_enum)
@@ -10668,9 +10724,11 @@ static void dir_id_delete(value_t *value)
         while (PTRVALID(bind))
         {   binding_t *doomed = bind;
             bind = bind->link;
+            /* allow the names and values to be garbage collected separately */
             FTL_FREE(doomed);
         }
-        FTL_FREE(value);
+        iddir->bindlist = NULL;
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -10753,8 +10811,17 @@ dir_id_forall(dir_t *dir, parser_state_t *state,
     void *result = NULL;
 
     while (PTRVALID(bind) && NULL == result)
-    {   result = (*enumfn)(dir, bind->name, bind->value, arg);
-        bind = bind->link;
+    {
+        if (TRUE) // VALVALID(bind->name))
+        {   result = (*enumfn)(dir, bind->name, bind->value, arg);
+            bind = bind->link;
+        } else
+        {   parser_report(state, "corrupt name %p (for value %p) found "
+                          "when scanning ID directory %p\n",
+                          bind->name, bind->value, dir);
+            assert(VALVALID(bind->name));
+            bind = NULL;
+        }
     }
 
     return result;
@@ -10862,7 +10929,7 @@ dir_vec_delete(value_t *value)
         {   FTL_FREE((value_t *)/*unconst*/vecdir->bindvec);
             vecdir->bindvec = NULL;
         }
-        FTL_FREE(value);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -11578,7 +11645,7 @@ static void dir_join_delete(value_t *value)
     {   dir_join_t *joindir = (dir_join_t *)value;
         joindir->ixdir = NULL; /* should be garbage collected */
         joindir->valdir = NULL; /* should be garbage collected */
-        FTL_FREE(value);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -12124,7 +12191,7 @@ dir_struct_get(dir_t *dir, const value_t *nameval)
                     (*field->field.get)(structdir->structmem, ref_value);
                     found = *ref_value;
                     if (dir_islocked(dir) && value_to_dir(found, &subdir))
-                        (void)dir_lock(subdir, NULL);
+                        (void)dir_lock(subdir, NULL/*no updates*/);
                 }
             } else
             {   (*field->field.get)(structdir->structmem, ref_value);
@@ -12753,7 +12820,7 @@ static void dir_dynseq_delete(value_t *value)
         {   FTL_FREE(dynseq->rdr);
             dynseq->rdr = NULL;
         }
-        FTL_FREE(value);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -14957,7 +15024,7 @@ dir_regkeyval_delete(value_t *value)
 {   if (value_istype(value, type_dir))
     {   dir_regkeyval_t *keydir = (dir_regkeyval_t *)value;
         win_regkeyval_close(&keydir->key);
-        FTL_FREE(value);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -15093,9 +15160,18 @@ dir_stack_markver(const value_t *value, int heap_version)
 
 
 /*! Insert a directory in a directory stack at the given position
+ *    @param pos         - stack position where directory is to be pushed
+ *    @param newdir      - directory to be pushed
+ *    @param env_end     - disallow access to stack content beyond newdir 
+ *
  *  When it returns TRUE \c newdir will have been incorporated into the stack
  *  and can be unlocalled, e.g. with
  *       value_unlocal(dir_value(newdir));
+ *  If it returns FALSE no change has been made.
+ *
+ *  If \c env_end is TRUE the directory pushed will be the last used for
+ *  looking up values - effectively hiding the values in directories from the
+ *  stack beyond it.
  */
 static bool
 dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
@@ -15136,9 +15212,20 @@ dir_stack_delete_at_pos(dir_stack_pos_t pos)
 
 
 /*! Push a directory on to a directory stack
- *  When it returns TRUE \c newdir will have been incorporated into the stack
- *  and can be unlocalled, e.g. with
+ *    @param dir         - stack directory that is to be pushed on to
+ *    @param newdir      - directory to be pushed
+ *    @param env_end     - disallow access to stack content beyond newdir
+ *
+ *    @return The position to pop the stack to to remove the pushed directory.
+ *
+ *  When it returns non-NULL \c newdir will have been incorporated into the
+ *  stack and can be unlocalled, e.g. with
  *       value_unlocal(dir_value(newdir));
+ *  When it returns NULL no change has been made.
+ *
+ *  If \c env_end is TRUE the directory pushed will be the only one used for
+ *  looking up values - effectively hiding the values in directories from the
+ *  stack beyond it.
  */
 extern dir_stack_pos_t /*return*/
 dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end)
@@ -15189,7 +15276,7 @@ dir_stack_last_pos(dir_stack_t *dir)
 
 extern dir_stack_pos_t
 dir_stack_pos_enclosing(dir_stack_t *dir, dir_t *innerdir)
-{   if (NULL != innerdir)
+{   if (PTRVALID(innerdir))
         return &innerdir->value.link;
     else
         return NULL;
@@ -15226,7 +15313,9 @@ dir_at_stack_pos_set(dir_stack_pos_t pos, dir_t *dir)
 
 
 
-
+/*! adjust the top of the stack to the position indicated by pos
+ *  Don't make an alteration if pos is NULL
+ */
 extern void
 dir_stack_return(dir_stack_t *dir, dir_stack_pos_t pos)
 {   /* we could check that pos is in the directory stack here - it always
@@ -15271,7 +15360,10 @@ dir_stack_pop(dir_stack_t *dir)
 
 
 
-
+/*! If possible add a name and value to the directory at the top of the stack
+ *  Otherwise push a new directory onto the stack and set the name & value
+ *  there.
+ */
 static bool
 dir_stack_add(dir_t *basedir, parser_state_t *state, 
               const value_t *name, const value_t *value)
@@ -15299,7 +15391,14 @@ dir_stack_add(dir_t *basedir, parser_state_t *state,
 
 
 
-
+/*! Search the stack of directories for a name by searching each directory
+ *  on the stack.  Continue the search only until a directory with dir_env_end()
+ *  set.
+ *
+ *  Note: this function is used, when available, whenever a value is set in the
+ *        (compound stacked) directory; and when a value is set if no separate
+ *        "get" function is included in the directory.
+ */
 static const value_t **
 dir_stack_lookup(dir_t *basedir, const value_t *name)
 {   dir_stack_t *dirstack = (dir_stack_t *)basedir;
@@ -15336,6 +15435,13 @@ dir_stack_lookup(dir_t *basedir, const value_t *name)
 
 
 
+/*! Search the stack of directories for a name by searching each directory
+ *  on the stack.  Continue the search only until a directory with dir_env_end()
+ *  set.
+ *
+ *  On setting a variable only those in directories prior to the dir_env_end
+ *  will be udated - otherwise a new name-value pair will be set. 
+ */
 static const value_t *
 dir_stack_get(dir_t *basedir, const value_t *name)
 {   dir_stack_t *dirstack = (dir_stack_t *)basedir;
@@ -15888,6 +15994,11 @@ value_env_copy_lnew(parser_state_t *state, value_env_t *envdir_from)
 
 
 
+/*! Push a directory on to a directory stack
+ *    @param env         - environment containing stack to be pushed on to
+ *    @param newdir      - directory to be pushed
+ *    @param env_end     - disallow access to stack content beyond newdir
+ */
 extern void
 value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
 {   if (PTRVALID(env))
@@ -15906,20 +16017,21 @@ value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
 
 
 
-/* make a new value_env dir_t with only one directory on it
+/*! Make a new value_env dir_t with only one directory on it
+ *    @param state       - current parser state
+ *    @param env         - environment containing stack to be pushed on to
+ *    @param newdir      - only directory to be pushed on environment stack
  *
  *  e.g. valuable in providing a dir_t with a spare link field albeit with the
  *  same values as the pushed directory
- *
- *  Mark directory as last visible directory at the top of the list if env_end
- *  is TRUE
  */
 extern value_env_t *
-value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir,
-                       bool env_end, value_t *unbound)
+value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound)
 {   value_env_t *env = value_env_lnew(state);
     env->unbound = unbound;
-    value_env_pushdir(env, newdir, env_end);
+    value_env_pushdir(env, newdir, /*env_end*/FALSE);
+    /* env_end: when there are no directories beyond the one being pushed
+       it doesn't matter what env_end is set to */
     return env;
 }
 
@@ -15928,6 +16040,14 @@ value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir,
 
 
 
+/*! Push a new environmment on to an environment's directory stack
+ *    @param env         - environment containing stack to be pushed on to
+ *    @param newdir      - environment to be pushed
+ *    @param env_end     - disallow access to stack content beyond newdir
+ *
+ *  Pushes both the stack of the new environment and merges the unbound
+ *  variables.
+ */
 extern bool
 value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
 {   bool ok = TRUE;
@@ -15946,9 +16066,9 @@ value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
 
 
 
-/* Add a new unbound variable to environment or to end of environment
-   queue (returned by a previous invocation)
-   Return position where new variables should be added
+/*! Add a new unbound variable to environment or to end of environment
+    queue (returned by a previous invocation)
+    Return position where new variables should be added
  */
 extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name)
@@ -16277,7 +16397,7 @@ value_closure_delete(value_t *value)
     {   value_closure_t *closure = (value_closure_t *)value;
         closure->code = NULL; /* should be garbage collected */
         closure->env = NULL;  /* should be garbage collected */
-        FTL_FREE(closure);
+        value_delete_alloced(value);
     }
     /* else type error */
 }
@@ -16878,7 +16998,7 @@ value_coroutine_delete(value_t *value)
     list_delete(&state->left_envs, /*delete_fn*/NULL);
     /* close source down */
     if (PTRVALID(state))
-        FTL_FREE(state);
+        value_delete_alloced(value);
 }
 
 
@@ -17160,16 +17280,32 @@ parser_builtin_arg(parser_state_t *parser_state, int argno)
 }
 
 
+/*! Push a directory on to a directory stack
+ *    @param parser_state  - current parser state
+ *    @param newdir        - directory to be pushed
+ *    @param outer_visible - allow access to stack content beyond newdir
+ *
+ *    @return The position to pop the stack to to remove the pushed directory.
+ *
+ *  When it returns non-NULL \c newdir will have been incorporated into the
+ *  stack and can be unlocalled, e.g. with
+ *       value_unlocal(dir_value(newdir));
+ *  When it returns NULL no change has been made.
+ *
+ *  If \c env_end is TRUE the directory pushed will be the only one used for
+ *  looking up values - effectively hiding the values in directories from the
+ *  stack beyond it.
+ */
 extern dir_stack_pos_t
 parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool outer_visible)
-{   return dir_stack_push((parser_state)->env, newdir, outer_visible);
+{   return dir_stack_push((parser_state)->env, newdir, !outer_visible);
 }
 
 
 extern bool /* ok */
 parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
                        dir_t *newdir, bool outer_visible)
-{   return dir_stack_push_at_pos(pos, newdir, outer_visible);
+{   return dir_stack_push_at_pos(pos, newdir, !outer_visible);
 }
 
 
@@ -17179,6 +17315,9 @@ parser_env_delete_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos)
 }
 
 
+/*! Adjust the top of the environment stack to the position indicated by pos
+ *  Don't make an alteration if pos is NULL
+ */
 extern void
 parser_env_return(parser_state_t *parser_state, dir_stack_pos_t pos)
 {   dir_stack_return((parser_state)->env, pos);
@@ -17522,6 +17661,10 @@ parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok)
 
 
 
+#define DEBUG_PTC OMIT
+
+
+
 
 static void
 parser_thread_collect(parser_state_t *state, bool keep_locals)
@@ -17530,12 +17673,18 @@ parser_thread_collect(parser_state_t *state, bool keep_locals)
                                 keep_locals? "async": "sync"););
     heap_value = value_heap_nextversion();
     if (!keep_locals)
+    {   DEBUG_PTC(parser_report_line(state, "pre-collect discard locals\n"););
         value_locals_discard(state);
+    }
     /*TODO: when multithreading we need a list of coroutines that we mark? */
+    DEBUG_PTC(parser_report_line(state, "pre-collect mark used\n"););
     value_mark_version(parser_state_value(state), heap_value);
     OMIT(value_locals_list(state));
+    DEBUG_PTC(parser_report_line(state, "collect unmarked\n"););
     value_heap_collect(state);
+    DEBUG_PTC(parser_report_line(state, "garbage collection complete\n"););
 }
+
 
 
 extern void
@@ -18820,6 +18969,7 @@ parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
 /*! Use operator definitions to parse a line of text at a given level of
  *  operator precidence (and below) and return the resulting term.
  *    @param ref_line  - pointer to position in string being parsed
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param ops       - definition of operators
  *    @param prec      - precidence level of parse
  *    @param out_newterm - (probably local) value created by parse
@@ -19037,6 +19187,7 @@ parsew_op_expr(const char **ref_line, const char *lineend, op_state_t *ops,
 /*! Parse for operators using parsew_base to parse the lowest level of
  *  precidence 
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param parsew_base_fn  - lowest level argument parse function 
  *    @param parsew_base_arg - anonymous value passed to parsew_base_fn
@@ -19076,7 +19227,7 @@ parsew_opterm(const char **ref_line, const char *lineend, parser_state_t *state,
 
 /*! Parse an basic element composed by a set of operations
  *    @param ref_line  - pointer to position in string being parsed (updated)
- *    @param linelen   - current length of line
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param ops       - operation parsing definition (including base defn)
  *    @param out_lval  - (probably local) value created by parse
  */
@@ -19121,7 +19272,8 @@ dir_opassoc_lnew(parser_state_t *state)
                           value_int_lnew(state, assoc_def->assoc));
     }
 
-    (void)dir_lock(assoc, NULL); /* prevents additions to this directory */
+    (void)dir_lock(assoc, NULL/*no updates*/);
+    /* prevents additions to this directory */
 
     return assoc;
 }
@@ -19220,8 +19372,8 @@ static void
 value_cmd_delete(value_t *value)
 {   if (PTRVALID(value))
     {   if (value_istype(value, type_cmd))
-        {   value_cmd_t *cmd = (value_cmd_t *)value;
-            FTL_FREE(cmd);
+        {   /* value_cmd_t *cmd = (value_cmd_t *)value; */
+            value_delete_alloced(value);
         }
         /* else type error */
     }
@@ -19385,8 +19537,8 @@ static void
 value_func_delete(value_t *value)
 {   if (PTRVALID(value))
     {   if (value_istype(value, type_func))
-        {   value_func_t *func = (value_func_t *)value;
-            FTL_FREE(func);
+        {   /*value_func_t *func = (value_func_t *)value;*/
+            value_delete_alloced(value);
         }
         /* else type error */
     }
@@ -21367,6 +21519,7 @@ parsew_vecarg(const char **ref_line, const char *lineend, parser_state_t *state,
 
 /* Parse an <indexname> ::= <int> | <string> | <id>
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -21428,6 +21581,7 @@ parsew_indexname(const char **ref_line, const char *lineend,
 
 /* Parse an <index> ::= [<env>] | '<' <vecarg> '>' | <indexname>
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *                       either a simple value or a directory
@@ -21484,6 +21638,7 @@ parsew_index(const char **ref_line, const char *lineend, parser_state_t *state,
 
 /* Parse index expression <expr> | (<index>)
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -21518,6 +21673,7 @@ parsew_index_expr(const char **ref_line, const char *lineend,
 
 /*! Parse a name used as a directory index <expr> | (<indexname>)
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -21803,6 +21959,7 @@ parsew_index_path(const char **ref_line, const char *lineend,
 /*! parse an indexname followed by a series of index expressions
  *  parse: <indexname>[.<index>]*
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param env       - initial environment
  *    @param out_parent- directory in which left hand value will reside
@@ -21972,6 +22129,7 @@ parsew_code(const char **ref_line, const char *lineend, parser_state_t *state,
 /* If *out_isenv is TRUE the value assigned to out_val is based on a
  * value_env_t (otherwise it might be any other type of value_t)
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *    @param out_isenv - true when value returned is a directory which is an
@@ -22065,6 +22223,7 @@ parsew_base_env(const char **ref_line, const char *lineend,
 
 /*! Parse a base value in an expression
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -22125,7 +22284,7 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         {   /* new_env is a dir_t */
             dir_t *new_dir = (dir_t *)new_env;
             value_env_t *new_env =
-                value_env_pushdir_lnew(state, new_dir, FALSE, NULL);
+                value_env_pushdir_lnew(state, new_dir, /*unbound*/NULL);
             /* need a "copy" of dir to get a free link ptr */
             value_env_pushdir(env, value_env_dir(new_env), /*env_end*/FALSE);
             value_unlocal(value_env_value(new_env));
@@ -22147,6 +22306,7 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
 
 /*! Parse [[<base>|<code>]:[:]]*[<base>|<code>] | <base>
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param autorun   - whether completed bindings should be executed 
  *    @param out_lval  - (probably local) closure value created by parse
@@ -22258,7 +22418,6 @@ parsew_closure(const char **ref_line, const char *lineend,
                         if (argdir != NULL || existing_unbound != NULL)
                         {
                             newenv = value_env_pushdir_lnew(state, def_env,
-                                                            /*env_end*/FALSE,
                                                             existing_unbound);
                             DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,newenv));
                             /* must push to a value_env_t */
@@ -22278,7 +22437,6 @@ parsew_closure(const char **ref_line, const char *lineend,
                         value_unlocal(value_env_value(env));
                     /* only an environment can have state added to it */
                     env = value_env_pushdir_lnew(state, (dir_t *)lhs,
-                                                 /*env_end*/FALSE,
                                                  /*unbound*/NULL);
                     env_is_local = TRUE;
                     DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,env));
@@ -22487,6 +22645,7 @@ parsew_indexed_lhvalue(const char **ref_line, const char *lineend,
 
 /*! Parse [@<index>|<closure>][.<index>]*
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *  This function may cause a garbage collection
@@ -22714,7 +22873,50 @@ substitute(const value_t *code, const value_t *arg,
  *    @param code      - code value to invoke
  *    @param state     - current parser state
  *    @return          - (usually local) result from code invocation
- * 
+ *
+ *  Note about localness:
+ *    - any value can be marked as "local", and every new value is marked local
+ *    - "local" values are temporary in nature, they should always be
+ *      "unlocalled" before they fall out of use
+ *    - they are included in the things to be saved from garbage collection
+ *      along with anything else accessible from the parser's environment
+ *    - a value which is not accessible (e.g. stored and named in some
+ *      directory) must be made local if it is not to be garbage collected
+ *    - ideally we would like garbage collection to be able to occur at any
+ *      time - so we need values used as temporary elements of expressions
+ *      either to be part of the parser's environment or to be made local
+ *
+ *  In built-in commands
+ *    - the value returned should be local
+ *  In built-in functions:
+ *    - each arguments is unlocalled after the invocation
+ *    - the value returned should be local
+ *
+ *  In a closure a pre-defined environment (a list including some singleton
+ *  environments created for each originally unbound variables) is established
+ *  for the built-in command/function or code body is executed.  Some elements
+ *  in that environment will themselves be local (e.g. the values provided for
+ *  the unbound variables), and so will be safe from garbage collection.
+ *
+ *  Like built-in commands and functions the arguments (unbound variables) used
+ *  in the code execution must be unlocalled following execution.  The value
+ *  returned must also be made local, even if it was bound to a variable in the
+ *  new execution environment set up for the closure's invocation.
+ *
+ *  For example, returning a variable in the execution environment by name as
+ *  in []:{[a]:{a}!}! would be handled by dir_get(<env>, "a") which will
+ *  usually return a global (i.e. not "local") value.  Usually that is the safe
+ *  thing to do because <env> is either local or part of the parser's
+ *  environment and so is safe from garbage collection.
+ *
+ *  However, because all or parts of the closure's environment are potentially
+ *  lost to garbage collection following its invocation, and the return value
+ *  might rely on it, it is not safe to allow the return value to remain
+ *  global.  So it should be made local explicitly.
+ *
+ *  Essentially any return value must be made local just prior to any
+ *  parser_env_return().
+ *
  *  This function may cause a garbage collection
  */
 extern const value_t *
@@ -22725,33 +22927,14 @@ invoke(const value_t *code, parser_state_t *state)
     charsource_lineref_t line;
 
     if (NULL != code)
-    {   if (value_type_equal(code, type_code))
-        {   const char *buf;
-            size_t len;
-
-            DEBUG_MOD(DPRINTF("%s: invoke - code\n", codeid());)
-            value_code_place(code, &placename, &lineno);
-            value_code_buf(code, &buf, &len);
-            linesource_push(parser_linesource(state),
-                            charsource_lineref_init(&line, /*delete*/NULL,
-                                                    /*rewind*/FALSE,
-                                                    placename, lineno, &buf));
-            /* will garbage collection the discarded value */
-            lval = &value_null;
-            if (!parsew_cmdlist(&buf, &buf[len], state, &lval/*lnew*/))
-            {   parser_error(state, "badly formed code\n");
-                lval = NULL;
-            }
-            linesource_pop(parser_linesource(state));
-        } else
-        if (value_type_equal(code, type_closure))
+    {   if (value_type_equal(code, type_closure))
         {   const char *buf;
             size_t len;
             const value_t *codeval = NULL;
             const value_t *unbound = NULL;
-            dir_t *dir = NULL;
+            dir_t *envdir = NULL;
 
-            value_closure_get(code, &codeval, &dir, &unbound);
+            value_closure_get(code, &codeval, &envdir, &unbound);
             if (NULL != unbound)
             {   parser_error(state, "can't invoke closure - "
                                     "no argument for ");
@@ -22764,20 +22947,19 @@ invoke(const value_t *code, parser_state_t *state)
                 {   dir_stack_pos_t pos;
                     dir_stack_pos_t left_env_top = NULL;
                     dir_stack_pos_t final_left_env_top = NULL;
+                    dir_t *spare_env = NULL;
 
                     bool has_outer = list_element_start(&state->left_envs,
                                                         (void *)&left_env_top);
 
                     DEBUG_MOD(DPRINTF("%s: invoke - code closure\n", codeid());)
                     value_code_buf(codeval, &buf, &len);
-                    /* we will garbage collect the discarded value */
-                    if (NULL == dir)
-                    {   dir = dir_id_lnew(state);
-                        pos = parser_env_push(state, dir,
+                    if (NULL == envdir)
+                    {   spare_env = dir_id_lnew(state);
+                        pos = parser_env_push(state, spare_env,
                                               /*outer_visible*/TRUE);
-                        value_unlocal(dir_value(dir));
                     } else
-                        pos = parser_env_push(state, dir,
+                        pos = parser_env_push(state, envdir,
                                               /*outer_visible*/TRUE);
                     value_code_place(codeval, &placename, &lineno);
                     linesource_push(parser_linesource(state),
@@ -22787,12 +22969,18 @@ invoke(const value_t *code, parser_state_t *state)
                                                             placename, lineno,
                                                             &buf));
                     lval = &value_null; /* if code is empty */
-                    if (!parsew_cmdlist(&buf, &buf[len], state, &lval/*lnew*/))
-                    {   parser_error(state,
-                                     "error in closure code body\n");
-                    }
+                    if (parsew_cmdlist(&buf, &buf[len], state, &lval/*lnew*/))
+                    {   value_local(state, (value_t *)/*un-const*/lval);
+                        /* ensure local - in case reliant on env returned */
+                    } else
+                        parser_error(state, "error in closure code body\n");
                     linesource_pop(parser_linesource(state));
                     parser_env_return(state, pos);
+
+                    if (spare_env != NULL)
+                        value_unlocal(dir_value(spare_env));
+
+                    /* Cope with enter/leave imballance in code body */
                     if (has_outer !=
                             list_element_start(&state->left_envs,
                                                (void *)&final_left_env_top) ||
@@ -22820,12 +23008,12 @@ invoke(const value_t *code, parser_state_t *state)
                                      codeid()););
                 } else
                 if (value_type_equal(codeval, type_cmd))
-                {   /* execute command */
+                {   /* execute (often built-in) command */
                     const char *buf = NULL;
                     size_t len;
                     value_cmd_t *cmd = (value_cmd_t *)codeval;
                     const value_t *boundarg = /*lnew*/
-                        dir_get_builtin_arg(dir, 1);
+                        dir_get_builtin_arg(envdir, 1);
 
                     DEBUG_MOD(DPRINTF("%s: invoke - cmd closure\n", codeid());)
                     if (value_type_equal(boundarg, type_code))
@@ -22837,7 +23025,10 @@ invoke(const value_t *code, parser_state_t *state)
                     {   charsink_string_t expandline;
                         charsink_t *expandsink =
                             charsink_string_init(&expandline);
+                        dir_stack_pos_t pos;
 
+                        pos = parser_env_push(state, envdir,
+                                              /*outer_visible*/TRUE);
                         /* expand string (buf, len) into expandsink */
                         parser_expand(state, expandsink, buf, len);
 
@@ -22845,6 +23036,9 @@ invoke(const value_t *code, parser_state_t *state)
                         charsink_string_buf(expandsink, &buf, &len);
                         lval = value_cmd_exec(cmd)(&buf, code, state)/*lnew*/;
 
+                        value_local(state, (value_t *)/*un-const*/lval);
+                        /* ensure local */
+                        parser_env_return(state, pos);
                         charsink_string_close(expandsink);
                     }
                     else
@@ -22852,18 +23046,20 @@ invoke(const value_t *code, parser_state_t *state)
                     value_unlocal(boundarg);
                 } else
                 if (value_type_equal(codeval, type_func))
-                {   /* execute function */
+                {   /* execute (often built-in) function */
                     value_func_t *fn = (value_func_t *)codeval;
                     dir_stack_pos_t pos;
 
                     OMIT(
                         printf("top : %p\n", parser_env_stack(state)->stack);
-                        DIR_SHOW_ST("push: ", state, dir);
+                        DIR_SHOW_ST("push: ", state, envdir);
                     )
-                    pos = parser_env_push(state, dir, /*outer_visible*/TRUE);
+                    pos = parser_env_push(state, envdir, /*outer_visible*/TRUE);
                     DEBUG_MOD(DPRINTF("%s: invoke - fn closure with %sreturn\n",
                                       codeid(), pos==NULL?"no ":""););
                     lval = /*lnew*/(*value_func_exec(fn))(code, state);
+                    value_local(state, (value_t *)/*un-const*/lval);
+                    /* ensure local */
                     parser_env_return(state, pos);
                 } else
                 {   parser_error(state,
@@ -22873,6 +23069,25 @@ invoke(const value_t *code, parser_state_t *state)
                     lval = NULL;
                 }
             }
+        } else
+        if (value_type_equal(code, type_code))
+        {   const char *buf;
+            size_t len;
+
+            DEBUG_MOD(DPRINTF("%s: invoke - code\n", codeid());)
+            value_code_place(code, &placename, &lineno);
+            value_code_buf(code, &buf, &len);
+            linesource_push(parser_linesource(state),
+                            charsource_lineref_init(&line, /*delete*/NULL,
+                                                    /*rewind*/FALSE,
+                                                    placename, lineno, &buf));
+            /* will garbage collect the discarded value */
+            lval = &value_null;
+            if (!parsew_cmdlist(&buf, &buf[len], state, &lval/*lnew*/))
+            {   parser_error(state, "badly formed code\n");
+                lval = NULL;
+            }
+            linesource_pop(parser_linesource(state));
         } else
         {   parser_error(state, "a %s value is not executable:\n",
                           value_type_name(code));
@@ -22918,6 +23133,7 @@ extern bool value_istype_invokable(const value_t *val)
 /*! Parse a sequence of explicit and implicit run requests
  *  parse '!'* [<op_expression> '!'*]*
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param autorun_defeat - ignore function's autorun setting
  *    @param ref_lval  - initially the closure to be substituted
@@ -22954,11 +23170,11 @@ parsew_substitution_args(const char **ref_line, const char *lineend,
                 parsew_space(ref_line, lineend))
            )
           )
-    {   const value_t *callableval = *ref_lval;
-        *ref_lval = /*lnew*/invoke(callableval, state);
+    {   const value_t *invokable = *ref_lval;
+        *ref_lval = /*lnew*/invoke(invokable, state);
         DEBUG_CLI_LNEW(LOCS(state,*ref_lval));
         if (lval_is_local)
-            value_unlocal(callableval); /* *ref_lval replaced */
+            value_unlocal(invokable); /* *ref_lval replaced */
         lval_is_local = TRUE;
         DEBUG_SUBST(DPRINTF(" pre invoke\n"););
     }
@@ -22994,16 +23210,17 @@ parsew_substitution_args(const char **ref_line, const char *lineend,
                         parsew_space(ref_line, lineend))
                    )
                   )
-            {   const value_t *callableval = *ref_lval;
-                *ref_lval = /*lnew*/invoke(callableval, state);
+            {   const value_t *invokable = *ref_lval;
+                *ref_lval = /*lnew*/invoke(invokable, state);
                 DEBUG_CLI_LNEW(LOCS(state,*ref_lval));
-                value_unlocal(callableval); /* *ref_lval replaced */
+                value_unlocal(invokable); /* *ref_lval replaced */
                 DEBUG_SUBST(DPRINTF(" post invoke\n"););
             }
         }
         if (code_is_local)
             value_unlocal(code);
-        value_unlocal(newarg);
+        if (newarg != *ref_lval)
+            value_unlocal(newarg);
     }
 
     if (NULL == *ref_lval)
@@ -23029,6 +23246,7 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
                         const value_t **ref_lval)
 {   /* '^'* [<retrieval> '^'*]* */
     bool ok = TRUE;
+    bool updated = FALSE;
     const value_t *newarg = NULL;
     bool complete = FALSE; /* run out of requirement for arguments */
     bool do_invoke = FALSE;
@@ -23059,11 +23277,14 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
             do_invoke = false;
 
         if (do_invoke)
-        {
+        {   const value_t *invokable = *ref_lval;
             DEBUG_ARGV(DPRINTF("%s: invoke argv '%s' %scomplete\n",
                                codeid(), fnname==NULL? "function": fnname,
                                complete? "": "not "););
-            *ref_lval = /*lnew*/invoke(*ref_lval, state);
+            *ref_lval = /*lnew*/invoke(invokable, state);
+            if (updated)
+                value_unlocal(invokable);
+            updated = TRUE;
         }
     } while (do_invoke && !complete);
     
@@ -23099,9 +23320,11 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
                 DEBUG_CLI_LNEW(LOCS(state,*ref_lval));
                 while (value_closure_autorun(*ref_lval))
                 {   const value_t *invokable = *ref_lval;
-                    *ref_lval = /*lnew*/invoke(*ref_lval, state);
+                    *ref_lval = /*lnew*/invoke(invokable, state);
                     DEBUG_CLI_LNEW(LOCS(state,*ref_lval));
-                    value_unlocal(invokable);
+                    if (updated)
+                        value_unlocal(invokable);
+                    updated = true;
                 }
 
                 if (NULL == *ref_lval)
@@ -23137,13 +23360,16 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
                     }
 
                     if (do_invoke)
-                    {
+                    {   const value_t *invokable = *ref_lval;
                         DEBUG_MOD(DPRINTF("%s: invoke argv '%s' fn after subst\n",
                                          codeid(),
                                           fnname==NULL? "function": fnname););
-                        *ref_lval = /*lnew*/invoke(*ref_lval, state);
+                        *ref_lval = /*lnew*/invoke(invokable, state);
                         DEBUG_MOD(DPRINTF("%s: returns '%s' value\n", codeid(),
                                           type_name((*ref_lval)->kind)););
+                        if (updated)
+                            value_unlocal(invokable);
+                        updated = true;
                     }
                 }
             }
@@ -23159,11 +23385,15 @@ parse_substitution_argv(const char *fnname, argv_token_t *args,
     if (ok  && value_type_equal(*ref_lval, type_closure))
     {
         if (NULL == value_closure_unbound(*ref_lval))
-        {   DEBUG_MOD(DPRINTF("%s: invoke argv %s function after substitute\n",
+        {   const value_t *invokable = *ref_lval;
+            DEBUG_MOD(DPRINTF("%s: invoke argv %s function after substitute\n",
                              codeid(), fnname==NULL? "a": fnname););
             DEBUG_ARGV(DPRINTF("%s: invoke argv '%s' final\n",
                                codeid(), fnname==NULL? "function": fnname););
-            *ref_lval = /*lnew*/invoke(*ref_lval, state);
+            *ref_lval = /*lnew*/invoke(invokable, state);
+            if (updated)
+                value_unlocal(invokable);
+            updated = true;
         }
         else
         {   DEBUG_MOD(
@@ -23257,6 +23487,7 @@ parsew_substitution(const char **ref_line, const char *lineend,
 
 /*! Parse an expression from a line and return its value
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -23328,8 +23559,9 @@ parsew_expr(const char **ref_line, const char *lineend, parser_state_t *state,
 
 
 /*! Parse [<expr>[;[<expr>]]*] 
- *  ; discards the previous value
+ *  ';' treated as an operation which discards the previous value
  *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
  *    @param out_lval  - (probably local) value created by parse
  *
@@ -23345,25 +23577,23 @@ parsew_cmdlist(const char **ref_line, const char *lineend,
 
     parsew_space(ref_line, lineend);
 
-    DEBUG_TRACE(DPRINTF("(cmdlist: '%s'\n", *ref_line);)
+    DEBUG_TRACE(DPRINTF("(cmdlist: '%s'\n", *ref_line););
 
-        ok = (parsew_empty(ref_line, lineend) ||
-              *ref_line[0]=='}' || *ref_line[0]==';')
-         ||
-        (parsew_expr(ref_line, lineend, state, out_lval/*lnew*/) &&
-         parsew_space(ref_line, lineend));
-
-    while (ok && parsew_key(ref_line, lineend, ";") &&
+    while ((ok = ( parsew_empty(ref_line, lineend) ||
+                   (*ref_line)[0]=='}' ||
+                   (*ref_line)[0]==';'
+                 )
+                 ||
+                 ( parsew_expr(ref_line, lineend, state, out_lval/*lnew*/) &&
+                   parsew_space(ref_line, lineend)
+                 )
+           ) &&
+           parsew_key(ref_line, lineend, ";") &&
            parsew_space(ref_line, lineend))
-    {   /* garbage collect old value eventually */
+    {   /* allow eventual garbage collection of old value */
         value_unlocal(*out_lval);
         GC_EVERY_EXPR(parser_collect_async(state));
         *out_lval = &value_null;
-        ok = (parsew_empty(ref_line, lineend) ||
-              *ref_line[0]=='}' || *ref_line[0]==';')
-             ||
-             (parsew_expr(ref_line, lineend, state, out_lval/*lnew*/) &&
-              parsew_space(ref_line, lineend));
     }
 
     if (parsew_space(ref_line, lineend) && !parsew_empty(ref_line, lineend))
@@ -23504,7 +23734,7 @@ dir_copy(parser_state_t *state, dir_t *dir)
             newdir = dir_id_lnew(state);
 
         if (dir_islocked((dir_t *)dir))
-            (void)dir_lock(newdir, NULL);
+            (void)dir_lock(newdir, NULL/*no updates*/);
 
         if (NULL == newarg.dir_build)
             value_unlocal(newdir);
@@ -24004,8 +24234,9 @@ mod_execv(const value_t **out_lval, argv_token_t *args,
 static const value_t * /* sometimes local */
 mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
                parser_state_t *state)
-{   DEBUG_TRACE(DPRINTF("mod exec: %s %s\n",
-                       value_type_name(value), *ref_line);)
+{   const char *line = *ref_line;
+    DEBUG_TRACE(DPRINTF("mod exec: %s %.*s\n",
+                        value_type_name(value), (int)(lineend-line), line);)
     DEBUG_ENV(VALUE_SHOW("mod exec env: ", dir_value(parser_env(state)));)
 
     if (value_type_equal(value, type_closure))
@@ -24024,24 +24255,36 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
         } else
         if (value_type_equal(code, type_cmd))
         {   /* special case - commands do their own parsing */
-            const value_t *cmd_res;
+            const value_t *retval;
+#if 0
+            dir_stack_pos_t pos =
+                parser_env_push(state, env, /*outer_visible*/TRUE);
+                OMIT(DPRINTF("%s: push enclosing env %p\n", codeid(), value););
+#endif
             DEBUG_MOD(DPRINTF("%s: invoke closure code\n", codeid()););
-            cmd_res = /*lnew*/mod_invoke_cmd(ref_line, lineend, code, state);
-            DEBUG_CLI_LNEW(LOCS(state,cmd_res));
-            return cmd_res;
+            retval = /*lnew*/mod_invoke_cmd(ref_line, lineend, code, state);
+            DEBUG_CLI_LNEW(LOCS(state,retval));
+            /* return to external environment */
+            value_local(state, (value_t *)/*un-const*/retval);
+#if 0
+            (void)parser_env_return(state, pos);
+            DEBUG_MOD(DPRINTF("%s: popped enclosing directory\n", codeid());)
+#endif
+            return retval;
         } else
         {   const value_t *closure = value;
             if (parsew_substitution_args(ref_line, lineend, state,
                                          /*autorun_defeat*/false,
                                          &closure/*lnew*/))
-            {   DEBUG_CLI_LNEW(LOCS(state,closure));
+            {   /* closure should now be without remaining unbound variables */
+                DEBUG_CLI_LNEW(LOCS(state,closure));
                 if (autorun)
-                {   DEBUG_MOD(DPRINTF("%s: invoke autorun closure non-code\n",
+                {   DEBUG_MOD(DPRINTF("%s: invoke autorun closure non-cmd\n",
                                       codeid()););
                     /* the substitution should have performed an invocation */
                     return value_nl(closure);
                 } else
-                {
+                {   /* make the invocation ourselves */
                     value_closure_fn_get(closure, &code, &env, &unbound,
                                          &autorun);
                     DEBUG_MOD(DPRINTF("%s: invoke closure non-code\n",
@@ -24050,10 +24293,10 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
                     {   /* don't try to execute it - just return it */
                         return value_nl(closure);
                     } else
-                    {   value = /*lnew*/invoke(closure, state);
-                        DEBUG_CLI_LNEW(LOCS(state,value));
-                        value_unlocal(closure);
-                        return value_nl(value);
+                    {   const value_t *retval = /*lnew*/invoke(closure, state);
+                        if (value != closure)
+                            value_unlocal(closure);
+                        return value_nl(retval);
                     }
                 }
             } else
@@ -24066,16 +24309,14 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
     {   value_cmd_t *cmd = (value_cmd_t *)value;
         const value_t *cmd_res;
         DEBUG_MOD(DPRINTF("%s: invoke direct cmd at '%.10s...'\n",
-                          codeid(), *ref_line););
-        /* NB: the line being executed must be nul-terminated */
+                          codeid(), line););
+        /* TODO fix NB: the line being executed must be nul-terminated */
         cmd_res = /*lnew*/(*cmd->exec)(ref_line, value, state);
         DEBUG_CLI_LNEW(LOCS(state,cmd_res));
         return cmd_res;
     } else
     if (value_type_equal(value, type_code))
-    {   const char *start = *ref_line;
-
-        if (parsew_space(ref_line, lineend) && parsew_empty(ref_line, lineend))
+    {   if (parsew_space(ref_line, lineend) && parsew_empty(ref_line, lineend))
         {   const char *buf;
             size_t len;
 
@@ -24094,36 +24335,38 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
             }
         } else
         {   parser_error(state, "code value can have no arguments\n");
-            *ref_line = start;
+            *ref_line = line;
             return &value_null;
         }
     } else
     if (value_type_equal(value, type_func))
     {   if (parsew_substitution_args(ref_line, lineend, state,
                                      /*autorun_defeat*/FALSE, &value/*lnew*/))
-        {   const value_t *subval;
+        {   const value_t *retval;
             DEBUG_MOD(DPRINTF("%s: invoke direct function\n", codeid());)
                 DEBUG_CLI_LNEW(LOCS(state,value));
-            subval = /*lnew*/invoke(value, state);
-            DEBUG_CLI_LNEW(LOCS(state,subval));
+            retval = /*lnew*/invoke(value, state);
+            DEBUG_CLI_LNEW(LOCS(state,retval));
             value_unlocal(value);
-            return subval;
+            return retval;
         } else
         {   parser_error(state, "error in parsing closure arguments\n");
             return &value_null;
         }
     } else
     if (value_type_equal(value, type_dir))
-    {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
-                                              /*outer_visible*/FALSE);
+    {   const value_t *retval;
+        dir_stack_pos_t pos =
+            parser_env_push(state, (dir_t *)value, /*outer_visible*/TRUE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
         DEBUG_MOD(DPRINTF("%s: push enclosing directory\n", codeid()););
-        value = /*lnew*/ mod_exec(ref_line, lineend, state);
-        DEBUG_CLI_LNEW(LOCS(state,value));
+        retval = /*lnew*/ mod_exec(ref_line, lineend, state);
+        DEBUG_CLI_LNEW(LOCS(state,retval));
         /* return to external environment */
+        value_local(state, (value_t *)/*un-const*/retval);
         (void)parser_env_return(state, pos);
         DEBUG_MOD(DPRINTF("%s: popped enclosing directory\n", codeid());)
-        return value;
+        return retval;
     }
     else
         return value;
@@ -24290,13 +24533,14 @@ mod_invoke_argv_lnew(const char *fnname, argv_token_t *args,
     } else
     if (value_type_equal(value, type_dir))
     {   dir_stack_pos_t pos = parser_env_push(state, (dir_t *)value,
-                                              /*outer_visible*/FALSE);
+                                              /*outer_visible*/TRUE);
         OMIT(DPRINTF("%s: push enclosing directory %p\n", codeid(), value););
         DEBUG_MOD(DPRINTF("%s: push enclosing argv directory\n", codeid()););
         if (!mod_execv(/*lnew*/&value, args, execpath, parser_env(state),
                        state))
             value = &value_null;
         /* return to external environment */
+        value_local(state, (value_t *)/*un-const*/value);
         (void)parser_env_return(state, pos);
         DEBUG_MOD(DPRINTF("%s: popped enclosing argv directory\n", codeid());)
         return value;
@@ -25096,8 +25340,9 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
                     );
 
                 if (NULL != val)
-                    value_unlocal(val); /* val is about to be replaced */
-
+                {   value_unlocal(val); /* val is about to be replaced */
+                    val = NULL;
+                }
                 /* parse and execute the line */
                 if (interactive)
                 {   wbool ran_ok = TRUE;
@@ -25509,7 +25754,7 @@ value_fprintfmt(parser_state_t *state, charsink_t *sink,
             len += charsink_write(sink, plain, format-plain);
 
         if (format+1 < endf && format[1] == '%')
-        {   format += 2;
+        {   format += 2;  /* %% simply outputs '%' */
             len += charsink_putc(sink, '%');
         } else
         if (format+1 < endf)
@@ -25917,10 +26162,10 @@ fn_expand(const value_t *this_fn, parser_state_t *state)
             value_t *val1;
 
             if (dirval != &value_null)
-            {   parser_env_push(state, env, /*outer_visible*/false);
+            {   parser_env_push(state, env, /*outer_visible*/TRUE);
             }
             if (closure_env != NULL)
-            {   parser_env_push(state, closure_env, /*outer_visible*/false);
+            {   parser_env_push(state, closure_env, /*outer_visible*/TRUE);
             }
             DEBUG_EXPD(printf("%s: expand '%.*s'\n", codeid(),
                       (int)len, buf););
@@ -26031,8 +26276,13 @@ fn_stack(const value_t *this_fn, parser_state_t *state)
     while (n < DIR_STACK_DEPTH_REPORT_LIMIT && pos != NULL)
     {   dir_t *subdir = dir_at_stack_pos(pos);
         if (NULL != subdir)
-            dir_int_lset(vec, state, n++, dir_value(subdir));
-        pos = dir_stack_pos_enclosing(stack, subdir);
+        {   dir_int_lset(vec, state, n++, dir_value(subdir));
+            if (!dir_env_end(subdir))
+                pos = dir_stack_pos_enclosing(stack, subdir);
+            else
+                pos = NULL;
+        } else
+            pos = NULL;
     }
     return dir_value(vec);
 }
@@ -26156,7 +26406,7 @@ genfn_rdexec(const value_t *this_fn, parser_state_t *state,
                      collection */
 
             OMIT(DIR_SHOW_ST("Invoke env: ", state, parser_env(state)););
-            pos = parser_env_push(state, new_dir, /*outer_visible*/FALSE);
+            pos = parser_env_push(state, new_dir, /*outer_visible*/TRUE);
             OMIT(DIR_SHOW_ST("Dir after push: ", state, parser_env(state)););
             res = /*lnew*/parser_expand_exec(state, source, initcmds,
                                              /*rcfile_id*/NULL,
@@ -26640,7 +26890,8 @@ parse_ouc_genassign(parse_opbase_using_closure_arg_t *ftl_arg,
  *  defined by \c ops which contains details of an FTL function used to
  *  perform the parsing (in ops->parsew_base_arg)
  *
- *    @param ref_line  - pointer to position in NUL-ended string being parsed
+ *    @param ref_line  - pointer to position in a string being parsed
+ *    @param lineend   - pointer 1 char past the last char of the line
  *    @param ops       - definition of operators
  *    @param out_val   - (possibly local) value created by parse
  *
@@ -28315,7 +28566,8 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     smod_addfn(state, fscmds, "ls",
               "<dir> - directory content as name=[dir=<bool>] pairs",
               &fn_fs_ls, 1);
-    (void)dir_lock(fscmds, NULL); /* prevents additions to this directory */
+    (void)dir_lock(fscmds, NULL/*no updates*/);
+    /* prevents additions to this directory */
 
     smod_addfn(state, libcmds, "load",
               "<lib> <sym_vec> - load dynamic lib giving directory of symbol values",
@@ -28323,7 +28575,8 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     smod_addfn(state, libcmds, "extend",
               "<ftlext> - load FTL extension returning directory of functions",
               &fn_lib_extend, 1);
-    (void)dir_lock(libcmds, NULL); /* prevents additions to this directory */
+    (void)dir_lock(libcmds, NULL/*no updates*/);
+    /* prevents additions to this directory */
 
     sep[0] = OS_PATH_SEP;
     sep[1] = '\0';
@@ -28332,7 +28585,8 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     smod_add_lval(state, shcmds, "pathsep", value_string_lnew_measured(state, sep));
     smod_addfn(state, shcmds, "path", "<path> <file> - return name of file on path",
               &fn_path, 2);
-    (void)dir_lock(shcmds, NULL); /* prevents additions to this directory */
+    (void)dir_lock(shcmds, NULL/*no updates*/);
+    /* prevents additions to this directory */
 
     smod_add_dir(state, cmds, "sys", scmds);
     smod_add_dir(state, scmds, "fs", fscmds);
@@ -29385,7 +29639,7 @@ cmd_type(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
     if (value_as_dir(typesval, &root_types))
     {
         dir_stack_pos_t pos = parser_env_push(state, root_types,
-                                              /*outer_visible*/FALSE);
+                                              /*outer_visible*/TRUE);
         result_typeval = /*lnew*/dir_string_get(root_types, typename);
         if (result_typeval == NULL)
              result_typeval = &value_null;
@@ -31879,13 +32133,13 @@ dir_value_copy(parser_state_t *state, const value_t *dir)
             {   /* create a copy of the closure */
                 value_env_t *env = value_env_lnew(state);
                 if (NULL != env)
-                {   value_env_pushdir(env, newdir, /*end*/FALSE);
+                {   value_env_pushdir(env, newdir, /*env_end*/FALSE);
                     val = value_closure_lnew(state, code, env);
                     newdir = value_env_dir(env);
                 }
             }
             if (dir_islocked((dir_t *)dir))
-                (void)dir_lock(newdir, NULL);
+                (void)dir_lock(newdir, NULL/*no updates*/);
         }
     }
 
@@ -31994,7 +32248,8 @@ fn_lock(const value_t *this_fn, parser_state_t *state)
     dir_t *env;
 
     if (value_as_dir(dir, &env))
-        (void)dir_lock(env, NULL); /* stop new fields being added */
+        (void)dir_lock(env, NULL/*no updates*/);
+         /* stop new fields being added */
     else
         parser_report_help(state, this_fn);
 
@@ -32103,7 +32358,7 @@ parser_leave_dir(const value_t *this_fn, parser_state_t *state)
 /*! enters the argument environment without hiding the previous one */
 static const value_t *
 fn_enter(const value_t *this_fn, parser_state_t *state)
-{   return parser_enter_dir(this_fn, state, /*outer_visible*/FALSE);
+{   return parser_enter_dir(this_fn, state, /*outer_visible*/TRUE);
 }
 
 
@@ -32113,7 +32368,7 @@ fn_enter(const value_t *this_fn, parser_state_t *state)
 /*! enters the argument environment hiding the previous one */
 static const value_t *
 fn_restrict(const value_t *this_fn, parser_state_t *state)
-{   return parser_enter_dir(this_fn, state, /*outer_visible*/TRUE);
+{   return parser_enter_dir(this_fn, state, /*outer_visible*/FALSE);
 }
 
 
@@ -32507,15 +32762,17 @@ fn_select(const value_t *this_fn, parser_state_t *state)
         selectval.dir_build = NULL;
         OMIT(VALUE_SHOW("select beselecte environment: ",
                           dir_value(parser_env(state)));)
-        pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
+        pos = parser_env_push(state, argdir, /*outer_visible*/TRUE);
         OMIT(VALUE_SHOW("select environment: ",
                           dir_value(parser_env(state)));)
         (void)dir_state_forall(env, state, &select_exec, &selectval);
-        (void)parser_env_return(state, pos);
         if (selectval.dir_build == NULL)
             val = &value_null;
         else
-            val = dir_value(selectval.dir_build);
+        {   val = dir_value(selectval.dir_build);
+            value_local(state, (value_t *)/*un-const*/val);
+        }
+        (void)parser_env_return(state, pos);
     } else
     {   parser_report_help(state, this_fn);
         val = &value_null;
@@ -32727,7 +32984,7 @@ cmds_generic_dir(parser_state_t *state, dir_t *cmds)
               "<env> - prevent new names being added to <env>",
               &fn_lock, 1, scope);
     smod_addfn(state, cmds, "inenv",
-              "<env> <name> - returns TRUE unless string <name> is in <env>",
+              "<env> <name> - returns TRUE if string <name> is in <env>",
               &fn_inenv, 2);
     smod_addfnscope(state, cmds, "enter",
               "<env> - add commands from <env> to current environment",
@@ -33145,7 +33402,7 @@ genfn_forall(const value_t *this_fn, parser_state_t *state,
         forval.code = code;
         OMIT(VALUE_SHOW("for before environment: ",
                           dir_value(parser_env(state)));)
-        pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
+        pos = parser_env_push(state, argdir, /*outer_visible*/TRUE);
         OMIT(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
         all_true = NULL == dir_state_forall(env, state, enum_fn, &forval);
         (void)parser_env_return(state, pos);
@@ -33244,7 +33501,7 @@ genfn_for(const value_t *this_fn, parser_state_t *state, dir_enum_fn_t enum_fn)
             forval.code = code;
             OMIT(VALUE_SHOW("for before environment: ",
                               dir_value(parser_env(state)));)
-            pos = parser_env_push(state, argdir, /*outer_visible*/FALSE);
+            pos = parser_env_push(state, argdir, /*outer_visible*/TRUE);
             OMIT(VALUE_SHOW("for environment: ",
                             dir_value(parser_env(state))););
             all_true = NULL == dir_state_forall(env, state, enum_fn, &forval);
@@ -34195,7 +34452,7 @@ fn_cmd(const value_t *this_fn, parser_state_t *state)
         if (NULL != helpval && helpval != &value_null)
             if (value_istype(helpval, type_string))
                 dir_cstring_lset(helpenv, state, BUILTIN_HELP, helpval);
-        (void)value_closure_pushdir(closure, helpenv, /*outer_visible*/FALSE);
+        (void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
         sprintf(&argname[0], "%s%d", BUILTIN_ARG, 1);
         /*argnext =*/(void)value_closure_pushunbound(
                               closure, NULL,

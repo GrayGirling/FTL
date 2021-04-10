@@ -511,7 +511,8 @@ printf_addformat(type_t for_type, const char *fmtchar,
 
 #define VALVALID(_val) \
     (PTRVALID(_val) && \
-     ( (_val)->on_heap == TRUE || (_val)->on_heap == FALSE )  )
+     ( (_val)->on_heap == TRUE || (_val)->on_heap == FALSE ) && \
+       PTRVALID((_val)->kind) )
 
 
 

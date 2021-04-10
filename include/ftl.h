@@ -611,7 +611,7 @@ extern void value_extract(value_t *val);
  *  another data structure it can be "un-localled" by removing it from this
  *  list.
  *  Ideally every new value will be un-localed before it leaves the scope of the
- *  routine that consumes it (value_local_assign() can be used, below).
+ *  routine that consumes it (value_unlocal() can be used, below).
  *  The hope here is to enable the garbage collector to be run relatively
  *  asynchronously (e.g. when memory is low).
  *  Note that once a variable is un-localled - if asynchronous garbage
@@ -635,17 +635,6 @@ _value_unlocal(const value_t *val, int lineno)
 }
 
 #define value_unlocal(val) _value_unlocal(val, __LINE__)
-
-/*! Assign a (local) value to a field in a value structure
- *  This macro includes an implicit value_unlocal once the assignment is
- *  complete.
- *  It behaves as if it had the proforma:
- *  void value_local_assign(value_t **ref_val, const value_t *local_val)
- */
-#define value_local_assign(ref_val, local_val) \
-    {   *(ref_val) = (value_t *)/*unconst*/(local_val); \
-        value_unlocal(local_val);              \
-    }
 
 
 /* forward references */
@@ -1713,12 +1702,11 @@ extern value_t * /*pos*/
 value_env_pushunbound(value_env_t *env, value_t *pos, value_t *name);
 
 extern value_env_t *
-value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir,
-                          bool env_end, value_t *unbound);
+value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound);
 
 /*! Deprecated: Legacy use only - don't use in new code */
 #define value_env_newpushdir(newdir, env_end, unbound) \
-    value_env_pushdir_lnew(root_state, newdir, env_end, unbound)
+    value_env_pushdir_lnew(root_state, newdir, unbound)
 
 extern bool
 value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end);
