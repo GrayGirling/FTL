@@ -60,8 +60,6 @@
    Increase efficiency of memory allocation - e.g. fixed size allocation blocks
    of sufficient size to cover all common types - instead of malloc/free.
 
-   (new class!)::instance to inherit features from class. (May work now.)
-
    More parsing functions to support the commands (e.g. generate ftl functions
    from the parsew_* functions)
 
@@ -171,13 +169,26 @@
    C data structures - perhaps given a specification of the datastructure
    itself in C.
 
-   File directory as an environment type.
-
    Support for generating a C-section for linking into the library from a
    specification of an available C interface (a specification which is a C
    header - perhaps with restricted syntax - would be nice).
 
-   fix 'new  [a=8, b=8]::<4,6>'
+   fix '[].0=2' and 'new [a=8]::<4>' - e.g. implemented multi-domain-type
+   directory
+
+   Implement radix printf and scanf format %r<base>[,<n>|_<n>|.<n>]r - where
+   <base> is the radix, and optional repeating separators (, _ or .) occur
+   every <n> digits.  e.g. printf "%r2_4r" <0x99> would give 1001_1001.
+
+   Implement real number type.
+
+   Provide a new feature of a closure "private": private closures have no
+   visible environment part (e.g. fn.arg is invalid syntax if fn is a private
+   closure).  Add function "private" that marks either a single closure or an
+   environment containing some closure values as private and returns the value
+   it has amended.  This will allow classes to hide their internal details.
+   e.g. an idiom might involve "private self!" during construction.  Private
+   closures should also be prevented from being 'enter'ed and enumerated.
 */
 
 
@@ -5703,6 +5714,10 @@ value_cmp(const value_t *v1, const value_t *v2)
         DEBUG_CMP(DPRINTF("cmp: v1 not NULL v2 NULL\n", v2 == NULL? "":"not "););
         return 1;
     } else if (!type_equal(v1->kind, v2->kind)) {
+        /* TODO: is there anything we can do to make dir_clone's comparible with
+                 other dirs? (comparing the cloned dir)
+                 e.g. use a value kind method in place of type_equal
+        */
         DEBUG_CMP(DPRINTF("cmp: v1 (%s) v2 (%s) type differs\n",
                          type_name(v1->kind), type_name(v2->kind)););
         return v1->kind == v2->kind? 0: v1->kind > v2->kind? 1: -1;
@@ -10125,9 +10140,9 @@ dir_lset(dir_t *dir, parser_state_t *state,
                            codeid()););
         }
         else
-        {   fprintf(stderr, "%s: name ", codeid());
-            value_state_fprint(state, stderr, /*root*/NULL, nameval);
-            fprintf(stderr, " has a constant value\n");
+        {   OMIT(fprintf(stderr, "%s: name ", codeid());
+                 value_state_fprint(state, stderr, /*root*/NULL, nameval);
+                 fprintf(stderr, " has a constant value\n"););
         }
     } OMIT(
         else fprintf(stderr, "%s: invalid directory (%p) to set value in\n",
@@ -10673,6 +10688,163 @@ static void *list_enum(list_t *list,
 
 /*****************************************************************************
  *                                                                           *
+ *          Directory Reference Copy                                         *
+ *          ========================                                         *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+/* A dir_t is also a value_t with a link field that can be part of another
+   list (normally for directories it is a directory stack in an envirionment).
+   If a dir_t's link is also needed on a different stack one possibility is to
+   create a dir_clone_t - a directory echoing the referenced directory without
+   making use of it's link field.
+*/
+
+
+
+
+
+
+typedef struct
+{   dir_t dir;
+    dir_t *refdir;
+} dir_clone_t;
+
+
+
+
+static value_type_t type_dir_clone_val;
+type_t type_dir = &type_dir_clone_val;
+
+
+
+
+
+#define dir_clone_dir(_clonedir) (&((_clonedir)->dir))
+#define dir_clone_value(_clonedir) dir_value(dir_clone_dir(_clonedir))
+
+
+
+
+
+
+static void dir_clone_markver(const value_t *value, int heap_version)
+{   dir_clone_t *clonedir = (dir_clone_t *)value;
+    value_mark_version(dir_value(clonedir->refdir), heap_version);
+}
+
+
+
+
+
+static bool
+dir_clone_add(dir_t *dir, parser_state_t *state,
+           const value_t *name, const value_t *value)
+{   dir_clone_t *clonedir = (dir_clone_t *)dir;
+    dir_add_fn_t *add = clonedir->refdir->add;
+    return add == NULL? FALSE: (*add)(clonedir->refdir, state, name, value);
+}
+
+
+
+
+
+static const value_t **
+dir_clone_lookup(dir_t *dir, const value_t *name)
+{   dir_clone_t *clonedir = (dir_clone_t *)dir;
+    dir_lookup_fn_t *lookup = clonedir->refdir->lookup;
+    return lookup == NULL? NULL: (*lookup)(clonedir->refdir, name);
+}
+
+
+
+
+
+
+static const value_t *
+dir_clone_get(dir_t *dir, const value_t *name)
+{   dir_clone_t *clonedir = (dir_clone_t *)dir;
+    dir_get_fn_t *get = clonedir->refdir->get;
+    return get == NULL? NULL: (*get)(clonedir->refdir, name);
+}
+
+
+
+
+
+
+static void *
+dir_clone_forall(dir_t *dir, parser_state_t *state, 
+              dir_enum_fn_t *enumfn, void *arg)
+{   dir_clone_t *clonedir = (dir_clone_t *)dir;
+    dir_forall_fn_t *forall = clonedir->refdir->forall;
+    return forall == NULL? NULL: (*forall)(clonedir->refdir, state, enumfn, arg);
+}
+
+
+
+
+
+/* value_print_fn_t */
+static int
+dir_clone_print(parser_state_t *state, outchar_t *out, const value_t *root,
+                const value_t *value, bool detailed)
+{   dir_clone_t *clonedir = (dir_clone_t *)value;
+    value_t *cloneval = dir_value(clonedir->refdir);
+    const value_type_t *clonetype = cloneval->kind;
+    return clonetype == NULL || clonetype->print == NULL? 0:
+           (clonetype->print)(state, out, root, cloneval, detailed);
+}
+
+
+
+
+
+static void
+dir_clone_init(dir_clone_t *clonedir, dir_t *refdir, bool on_heap)
+{
+    dir_init(&clonedir->dir, &type_dir_clone_val,
+             refdir->add    == NULL? NULL: &dir_clone_add,
+             refdir->lookup == NULL? NULL: &dir_clone_lookup,
+             refdir->get    == NULL? NULL: &dir_clone_get,
+             refdir->lookup == NULL? NULL: &dir_clone_forall,
+             on_heap);
+    clonedir->refdir = refdir;
+}
+
+
+
+
+
+/**/extern dir_t *
+dir_clone_lnew(parser_state_t *state, dir_t *refdir)
+{   if (refdir == NULL)
+        return (dir_t *)NULL;
+    else
+    {   dir_clone_t *clonedir = (dir_clone_t *)
+                                value_malloc_lnew(state, sizeof(dir_clone_t));
+
+        if (PTRVALID(clonedir))
+            dir_clone_init(clonedir, refdir, /*on_heap*/TRUE);
+
+        return &clonedir->dir;
+    }
+}
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
  *          Identifier Directories                                           *
  *          ======================                                           *
  *                                                                           *
@@ -10702,7 +10874,6 @@ typedef struct
 
 
 static value_type_t type_dir_id_val;
-type_t type_dir = &type_dir_id_val;
 
 
 
@@ -15172,6 +15343,10 @@ dir_stack_markver(const value_t *value, int heap_version)
  *  If \c env_end is TRUE the directory pushed will be the last used for
  *  looking up values - effectively hiding the values in directories from the
  *  stack beyond it.
+ *
+ *  Note: The \c newdir pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
  */
 static bool
 dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
@@ -15195,7 +15370,7 @@ dir_stack_push_at_pos(dir_stack_pos_t pos, dir_t *newdir, bool env_end)
 
 
 
-
+#if 0 /* bad functionality */
 static bool
 dir_stack_delete_at_pos(dir_stack_pos_t pos)
 {   if (PTRVALID(pos))
@@ -15205,7 +15380,7 @@ dir_stack_delete_at_pos(dir_stack_pos_t pos)
     } else
         return FALSE;
 }
-
+#endif
 
 
 
@@ -15226,6 +15401,10 @@ dir_stack_delete_at_pos(dir_stack_pos_t pos)
  *  If \c env_end is TRUE the directory pushed will be the only one used for
  *  looking up values - effectively hiding the values in directories from the
  *  stack beyond it.
+ *
+ *  Note: The \c newdir pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
  */
 extern dir_stack_pos_t /*return*/
 dir_stack_push(dir_stack_t *dir, dir_t *newdir, bool env_end)
@@ -15998,6 +16177,12 @@ value_env_copy_lnew(parser_state_t *state, value_env_t *envdir_from)
  *    @param env         - environment containing stack to be pushed on to
  *    @param newdir      - directory to be pushed
  *    @param env_end     - disallow access to stack content beyond newdir
+ *
+ *  Has no effect if \c env is NULL
+ *  Note: We must be sure the value given is a closure before using this
+ *  Note: The \c newdir pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
  */
 extern void
 value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
@@ -16024,6 +16209,10 @@ value_env_pushdir(value_env_t *env, dir_t *newdir, bool env_end)
  *
  *  e.g. valuable in providing a dir_t with a spare link field albeit with the
  *  same values as the pushed directory
+ *
+ *  Note: The \c newdir pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
  */
 extern value_env_t *
 value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound)
@@ -16041,6 +16230,7 @@ value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound)
 
 
 /*! Push a new environmment on to an environment's directory stack
+ *    @param state       - current parser state
  *    @param env         - environment containing stack to be pushed on to
  *    @param newdir      - environment to be pushed
  *    @param env_end     - disallow access to stack content beyond newdir
@@ -16049,14 +16239,18 @@ value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound)
  *  variables.
  */
 extern bool
-value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end)
+value_env_pushenvdir(parser_state_t *state, value_env_t *env,
+                     value_env_t *newenv, bool env_end)
 {   bool ok = TRUE;
     if (PTRVALID(env))
     {   if (PTRVALID(env->unbound))
             ok = FALSE; /* can't add to env with unbound variables */
         else
-        {   dir_stack_push(&env->dirs, value_env_dir(newenv), env_end);
+        {   /* can't use the same directory in two stacks */
+            dir_t *newenv_clone = dir_clone_lnew(state, value_env_dir(newenv));
+            dir_stack_push(&env->dirs, newenv_clone, env_end);
             env->unbound = newenv->unbound;
+            value_unlocal(dir_value(newenv_clone));
         }
     }
     return ok;
@@ -16178,7 +16372,6 @@ value_env_bind_lnew(parser_state_t *state, value_env_t *envdir,
 
 
 
-
 #if 0 != DEBUG_VALINIT(1+)0
 #define value_env_bind_lnew(state, envdir, value)                \
     value_info((value_env_bind_lnew)(state, envdir, value), __LINE__)
@@ -16190,11 +16383,16 @@ value_env_bind_lnew(parser_state_t *state, value_env_t *envdir,
 /*! Accumulate sum of two envionments in the first
  *    @param state       - current parser state
  *    @param ref_baseenv - updateable pointer to initial environment
- *    @param out_base_env_lnew - updated TRUE when (*ref_baseenv)->env lnew'ed
+ *    @param readonly    - *ref_baseenv must not be altered
+ *    @param out_base_env_updated - set TRUE when (*ref_baseenv) changed
+ *    @param out_base_env_lnew - set TRUE when (*ref_baseenv) replaced & lnew'ed
  *    @param plusenv     - environment that we wish to add
+ *
+ *  Note: this function can alter the environment variable supplied unless
+ *        readonly is supplied.
  */
 static bool
-value_env_sum(parser_state_t *state, value_env_t **ref_baseenv,
+value_env_sum(parser_state_t *state, value_env_t **ref_baseenv, bool readonly,
               bool *out_base_env_updated, bool *out_base_env_lnew,
               value_env_t *plusenv)
 {   bool ok = TRUE;
@@ -16204,31 +16402,42 @@ value_env_sum(parser_state_t *state, value_env_t **ref_baseenv,
     {   *out_base_env_updated = TRUE;
         *ref_baseenv = plusenv;
     } else {
-        *out_base_env_updated = FALSE;
-
         if (PTRVALID(plusenv))
         {
-            dir_t *env = value_env_dir(plusenv);
-            dir_t *baseenv_env = value_env_dir(*ref_baseenv);
+            dir_t *envdir = value_env_dir(plusenv);
+            dir_t *baseenv_envdir = value_env_dir(*ref_baseenv);
             value_t *unbound = value_env_unbound(plusenv);
             value_t *baseenv_unbound = value_env_unbound(*ref_baseenv);
 
             DEBUG_ENV(DPRINTF("env sum: (%s+%s) + (%s+%s)\n",
-                             baseenv_env==NULL?"":"dir",
+                             baseenvdir_envdir==NULL?"":"dir",
                              baseenv_unbound==NULL?"":"unbound",
-                             env==NULL?"":"dir", unbound==NULL?"":"unbound"););
-            if (baseenv_env == NULL && baseenv_unbound == NULL)
+                             envdir==NULL?"":"dir", unbound==NULL?"":"unbound"););
+            if (baseenv_envdir == NULL && baseenv_unbound == NULL)
             {   *ref_baseenv = value_env_copy_lnew(state, plusenv);
                 *out_base_env_updated = TRUE;
                 *out_base_env_lnew = TRUE;
                 /* nothing in the new environment! */
-            } else if (PTRVALID(unbound) &&
-                     PTRVALID(baseenv_unbound)) {
-                ok = FALSE; /* can't have unbound variables in both */
-            } else {
-                value_env_pushdir(*ref_baseenv, env, /*env_end*/FALSE);
+            } else if (PTRVALID(unbound) && PTRVALID(baseenv_unbound))
+            {   ok = FALSE; /* can't have unbound variables in both */
+                /* *ref_baseenv remains the same */
+            } else
+            {   dir_t *envdir_clone = dir_clone_lnew(state, envdir);
+                /* envdir is part of plusenv dir stack, it can't be put on
+                   another stack too.  We have to clone it.
+                */
+                if (readonly)
+                {   *ref_baseenv = value_env_copy_lnew(state, *ref_baseenv);
+                    *out_base_env_updated = TRUE;
+                    *out_base_env_lnew = TRUE;
+                }
+                else
+                    *out_base_env_updated = FALSE;
+
+                value_env_pushdir(*ref_baseenv, envdir_clone, /*env_end*/FALSE);
                 if (baseenv_unbound == NULL)
                     (*ref_baseenv)->unbound = unbound;
+                value_unlocal(dir_value(envdir_clone));
             }
         }
     }
@@ -16257,7 +16466,12 @@ values_dir_init(void)
 {
     type_id_t dir_type_id = type_id_new();
 
-    /* type_dir correspond to dir_id */
+    /* type_dir correspond to dir_clone */
+    type_init(&type_dir_clone_val, /*on_heap*/FALSE, dir_type_id, "dir",
+              &dir_clone_print, NULL /* &dir_parse */,
+              &dir_compare, &value_delete_alloced,
+              &dir_clone_markver);
+
     type_init(&type_dir_id_val, /*on_heap*/FALSE, dir_type_id, "dir",
               &dir_print, NULL /* &dir_parse */,
               &dir_compare, &dir_id_delete,
@@ -16624,7 +16838,16 @@ value_closure_unbound(const value_t *value)
 
 
 
-/*! we must be sure the value given is a closure before using this */
+/*! Push an (unstacked) directory on to a closure's directory stack
+ *    @param value       - closure containing environment stack to be pushed on to
+ *    @param dir         - directory to be pushed
+ *    @param env_end     - disallow access to stack content beyond \c dir
+ *
+ *  Note: We must be sure the value given is a closure before using this
+ *  Note: The \c dir pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
+ */
 extern bool
 value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end)
 {   bool ok = FALSE;
@@ -16647,7 +16870,7 @@ value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end)
 
 
 
-
+/*! Provided only for external code */ 
 extern bool
 value_closure_spushenv(parser_state_t *state, const value_t *value,
                        value_env_t *env, bool env_end)
@@ -16659,7 +16882,7 @@ value_closure_spushenv(parser_state_t *state, const value_t *value,
         if (NULL == closure->env)
         {   closure->env = value_env_copy_lnew(state, env);
         } else
-            ok = value_env_pushenv(closure->env, env, env_end);
+            ok = value_env_pushenvdir(state, closure->env, env, env_end);
     }
     OMIT(else printf("%s: NULL value onto closure failed\n", codeid());)
 
@@ -16892,9 +17115,14 @@ values_closure_init(void)
 
 /*! Assuming a value has some representation as a directory, return the
  *  directory it refers to
+ *
  *  Return TRUE iff successful
+ *
  *  Note the value returned may be local if the value passed in is a local dir
  *  Writes to *out_dir only if TRUE is returned.
+ *
+ *  Note also that, if val is a closure the directory returned is already
+ *  stacked, so should not be pushed onto another stack.
  */
 extern bool
 value_to_dir(const value_t *val, dir_t **out_dir)
@@ -16907,7 +17135,9 @@ value_to_dir(const value_t *val, dir_t **out_dir)
         const value_t *code;
         dir_t *env = NULL;
         (void)value_closure_get(val, &code, &env, &unbound);
-        *out_dir = env; /* NB: this may be NULL */
+        *out_dir = env; /* NB: (a) this may be NULL
+                               (b) this directory is already stacked
+                         */
         OMIT(if (NULL == *out_dir)
                    printf("%s: closure has empty env dir\n", codeid());)
         return TRUE;
@@ -17027,6 +17257,7 @@ value_coroutine_markver(const value_t *value, int heap_version)
     valuelist_mark_version(&state->left_envs, heap_version);
     value_mark_version(dir_value(state->root), heap_version);
     value_mark_version(dir_value(state->opdefs), heap_version);
+    value_mark_version((value_t */*unconst*/)state->catch_arg, heap_version);
     value_locals_mark_version(state, heap_version);
 }
 
@@ -17082,6 +17313,9 @@ value_coroutine_print(parser_state_t *state, outchar_t *out,
 /*! Initialize a new coroutine value
  *  The variables \c env and \c root are incporporated into the new value
  *  returned
+ *  Note: The \c root environment must not be part of an existing directory stack
+ *        (since it has only one "link" field(. Before adding a directory
+ *        that is also used on a different stack a clone should be taken.
  */
 static const value_t *
 value_coroutine_init(parser_state_t *state, dir_stack_t *env, dir_t *root,
@@ -17295,6 +17529,10 @@ parser_builtin_arg(parser_state_t *parser_state, int argno)
  *  If \c env_end is TRUE the directory pushed will be the only one used for
  *  looking up values - effectively hiding the values in directories from the
  *  stack beyond it.
+ *
+ *  Note: The \c root environment must not be part of an existing directory stack
+ *        (since it has only one "link" field(. Before adding a directory
+ *        that is also used on a different stack a clone should be taken.
  */
 extern dir_stack_pos_t
 parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool outer_visible)
@@ -17302,6 +17540,29 @@ parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool outer_visible)
 }
 
 
+
+
+/*! Push a directory on to the root directory stack at the given stack position
+ *    @param parser_state  - current parser state
+ *    @param pos           - place where newdir is to be inserted in stack 
+ *    @param newdir        - directory to be pushed
+ *    @param outer_visible - allow access to stack content beyond newdir
+ *
+ *    @return The position to pop the stack to to remove the pushed directory.
+ *
+ *  When it returns non-NULL \c newdir will have been incorporated into the
+ *  stack and can be unlocalled, e.g. with
+ *       value_unlocal(dir_value(newdir));
+ *  When it returns NULL no change has been made.
+ *
+ *  If \c env_end is TRUE the directory pushed will be the only one used for
+ *  looking up values - effectively hiding the values in directories from the
+ *  stack beyond it.
+ *
+ *  Note: The \c newdir directory must not be part of an existing directory stack
+ *        (since it has only one "link" field(. Before adding a directory
+ *        that is also used on a different stack a clone should be taken.
+ */
 extern bool /* ok */
 parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
                        dir_t *newdir, bool outer_visible)
@@ -17309,10 +17570,13 @@ parser_env_push_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos,
 }
 
 
+#if 0 /* bad functionality */
 extern bool /* ok */
 parser_env_delete_at_pos(parser_state_t *parser_state, dir_stack_pos_t pos)
 {   return dir_stack_delete_at_pos(pos);
 }
+#endif
+
 
 
 /*! Adjust the top of the environment stack to the position indicated by pos
@@ -17567,9 +17831,9 @@ parser_report_help(parser_state_t *parser_state, const value_t *cmd)
 
 
 static void
-parser_save(const parser_state_t *parser_state,
-            parser_state_t *out_saved, dir_t **out_saved_stack)
-{   *out_saved = *parser_state;
+parser_exception_save(const parser_state_t *parser_state,
+                      parser_state_t *out_saved, dir_t **out_saved_stack)
+{   *out_saved = *parser_state; /* saves too much state, but simple */
     *out_saved_stack = dir_stack_top(parser_env_stack(parser_state));
 }
 
@@ -17577,12 +17841,20 @@ parser_save(const parser_state_t *parser_state,
 
 
 static void
-parser_restore(parser_state_t *parser_state,
-               const parser_state_t *saved, dir_t *saved_stack)
-{   int errors = parser_state->errors;
-    /*dir_stack_t *stack; */
-    *parser_state = *saved;
-    parser_state->errors = errors;
+parser_exception_restore(parser_state_t *parser_state,
+                         const parser_state_t *saved, dir_t *saved_stack)
+{   /*dir_stack_t *stack; */
+    /* *parser_state = *saved; - too much restoration */
+    /* don't restore: value, errors, locals */
+    parser_state->source = saved->source;
+    parser_state->env = saved->env;
+    parser_state->left_envs = saved->left_envs;
+    parser_state->root = saved->root;
+    parser_state->opdefs = saved->opdefs;
+    parser_state->sleep = saved->sleep;
+    parser_state->echo_log = saved->echo_log;
+    parser_state->catch_arg = saved->catch_arg;
+    
     /*stack = parser_env_stack(parser_state); */
     /*stack->stack = saved_stack; */
     parser_env_return(parser_state, (dir_stack_pos_t)&saved_stack);
@@ -17591,6 +17863,10 @@ parser_restore(parser_state_t *parser_state,
 
 
 
+
+/*! longjump to the parser's current catch location registering an exception
+    value for receipt 
+*/
 extern bool
 parser_throw(parser_state_t *parser_state, const value_t *exception)
 {   bool ok = (PTRVALID(parser_state->catch_pos));
@@ -17615,7 +17891,7 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
     int event;
     const value_t *val = &value_null;
 
-    parser_save(state, &saved_state, &saved_stack);
+    parser_exception_save(state, &saved_state, &saved_stack);
 
     state->catch_pos = &except_place;
     state->catch_arg = NULL;
@@ -17631,9 +17907,12 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
         state->catch_arg = saved_state.catch_arg;
         *out_ok = TRUE;
     } else {
-        /* longjmp() was called somewhere in the body of execute_code */
-        val = state->catch_arg;
-        parser_restore(state, &saved_state, saved_stack);
+        /* longjmp() was called somewhere in the body of execute_code
+                (*call)(state, call_arg)
+           above
+         */
+        val = state->catch_arg; /* probably still local */
+        parser_exception_restore(state, &saved_state, saved_stack);
         *out_ok = FALSE;
     }
     return val;
@@ -17708,7 +17987,7 @@ parser_collect_async(parser_state_t *state)
  *
  * This function may cause a garbage collection
  */
-static outchar_t *
+static bool /*ok*/
 parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
                            charsource_t *inmain, int string_char,
                            bool omit_braced)
@@ -17827,9 +18106,8 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
                         charsink_t *sink = charsink_string_init(&charbuf);
                         const value_t *macval_print;
 
-                        value_state_print(state, sink,
-                                          dir_value(parser_root(state)),
-                                          macval);
+                        value_state_print(
+                            state, sink, dir_value(parser_root(state)), macval);
                         charsink_string_buf(sink, &body, &blen);
                         OMIT(printf("mac body: '%s'[%d]\n", body, blen););
                         macval_print = value_string_lnew(state, body, blen);
@@ -17856,7 +18134,7 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
         lastch = ch;
     }
 
-    return out;
+    return !((omit_braced && brace_depth != 0) || instring);
 }
 
 
@@ -17868,7 +18146,7 @@ parser_macro_expand_stream(parser_state_t *state, outchar_t *out,
  *
  * This function may cause a garbage collection
  */
-static outchar_t *
+static bool /*ok*/
 parser_macro_expand_string(parser_state_t *state, outchar_t *out,
                            const char *phrase, size_t len,
                            int string_char, bool omit_braced)
@@ -17876,14 +18154,14 @@ parser_macro_expand_string(parser_state_t *state, outchar_t *out,
     charsource_t *inmain = charsource_string_init(&instring, /*delete*/NULL,
                                                   "<expanded_line>",
                                                   phrase, len);
-    outchar_t *expout;
+    bool ok;
     DEBUG_EXPD(printf("%s: expanding '%s'[%d]\n", codeid(), phrase,
                       (int)len););
-    expout = parser_macro_expand_stream(state, out, inmain, string_char,
-                                        omit_braced);
+    ok = parser_macro_expand_stream(state, out, inmain, string_char,
+                                    omit_braced);
     DEBUG_EXPD(printf("%s: expansion %s\n", codeid(),
                       out == NULL?"FAILED":"OK"););
-    return expout;
+    return ok;
 }
 
 
@@ -17894,7 +18172,7 @@ parser_macro_expand_string(parser_state_t *state, outchar_t *out,
 /* Deal with '$' variable expansion and write the resulting line to \c out
  * This function may cause a garbage collection
  */
-extern outchar_t *
+extern bool /*ok*/
 parser_expand(parser_state_t *state, outchar_t *out,
               const char *phrase, size_t len)
 {
@@ -19748,11 +20026,17 @@ value_func_lhv_lnew(parser_state_t *state, const value_t *lv_name,
 
 /*! Create a closure with a new value_func_lhv_t in it which sets the value
  *  \c id in the closure's environment.
+ *
  *  The closure has the directory \c parent has the main part of its
  *  environment.
+ *
  *  If \c get_fn is non-NULL incorporate a function that will retrieve the
  *  value of the value_func_lhv_t object with that name.
  *  The function returns either NULL (memory problem) or the closure value.
+ *
+ *  Note: The \c parent pushed must not be part of an existing directory stack
+ *        since it has only one "link" field. Before adding a directory
+ *        that is on a different stack a clone should be taken.
  */
 static const value_t * /*local*/
 value_func_lhv_assignment(const value_t *parent, const value_t *id,
@@ -19767,10 +20051,9 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
         value_t *argval = value_cstring_lnew_measured(state, arg);
         value_t *closure =
             value_closure_lnew(state, lhvfn, (value_env_t *)NULL);
-        value_env_t *env = value_env_lnew(state);
         DEBUG_LNO(printf("%s: new code lhv at line %d\n",
                          codeid(), parser_lineno(state));); 
-        value_env_pushdir(env, (dir_t *)parent, /*env_end*/FALSE);
+        /* TODO: safe only if \c parent is not on another directory stack */
         (void)value_closure_pushdir(closure, (dir_t *)parent,
                                     /*env_end*/FALSE);
         if (get_fn_name != NULL)
@@ -19778,6 +20061,7 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
             dir_t *infodir = dir_id_lnew(state);
             value_t *code;
             value_t *get_fn;
+            value_env_t *env = value_env_lnew(state);
 
             /* making a code block containing {.<id>} */
             value_t *codestr;
@@ -19796,7 +20080,12 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
             OMIT(printf("%s: creating closure for id\n", codeid());
                VALUE_SHOW_ST("ID dir closure: ", state, codestr);
             );
-            
+
+            /* TODO: even if it was unstacked on entry we shouldn't use \c parent
+             *       as part of another stack following its use in \c closure.
+             *       It will work only when parent links to NULL on both stacks.
+             */
+            value_env_pushdir(env, (dir_t *)parent, /*env_end*/FALSE);
             code = value_code_lnew(state, codestr,
                                    "<lhv>", parser_lineno(state));
             get_fn = value_closure_lnew(state, code, env);
@@ -19811,13 +20100,13 @@ value_func_lhv_assignment(const value_t *parent, const value_t *id,
             value_unlocal(codestr);
             value_unlocal(code);
             value_unlocal(dir_value(infodir));
+            value_unlocal(value_env_value(env));
         }
         OMIT(VALUE_SHOW_ST("@parent: ", state, parent);
            printf("at %p\n", (void *)parent););
         (void)value_closure_pushunbound(closure, /*pos*/NULL, argval);
         value_unlocal(lhvfn);
         lhvfn = closure;
-        value_unlocal(value_env_value(env));
         value_unlocal(argval);
     } 
 
@@ -21300,8 +21589,7 @@ parsew_env(const char **ref_line, const char *lineend, parser_state_t *state,
                         } else
                         {
                             env = value_env_lnew(state);
-                            value_env_pushdir(env, iddir,
-                                              /*env_end*/FALSE);
+                            value_env_pushdir(env, iddir, /*env_end*/FALSE);
                             value_unlocal(dir_value(iddir));
                         }
                     }
@@ -22278,8 +22566,8 @@ env_add(parser_state_t *state, value_env_t **ref_env, const value_t *new_env,
         }
         if (new_is_env_t)
             /* we know the new_env is a value_env_t */
-            (void)value_env_pushenv(env, (value_env_t *)new_env,
-                                    /*env_end*/FALSE);
+            (void)value_env_pushenvdir(state, env, (value_env_t *)new_env,
+                                       /*env_end*/FALSE);
         else
         {   /* new_env is a dir_t */
             dir_t *new_dir = (dir_t *)new_env;
@@ -22316,15 +22604,15 @@ static bool
 parsew_closure(const char **ref_line, const char *lineend,
                parser_state_t *state, bool autorun, const value_t **out_lval)
 {   bool ok;
-    bool is_closure = TRUE;   /* value (so far) can be represented as closure */
+    bool is_closure = TRUE;   /* we can use the value (so far) as a closure */
     bool lhs_is_env = FALSE;  /* i.e. lhs was '['...']' & value_env_t */
     bool inherit = TRUE; /* ':' not '::' */
 
     /* if we can express the result as a directory we use these: */
         const value_t *lhs = NULL;
-        bool lhs_is_dir_nonenv = FALSE;  /* i.e. lhs is dir */
+        bool lhs_is_dir_nonenv = FALSE;  /* i.e. lhs is dir, not value_env_t  */
     /* otherwise if lhs_is_dir_nonenv is FALSE we use these */
-        value_env_t *env = NULL; /* we are constructing this */
+        value_env_t *env = NULL; /* we are constructing this by accumulation */
         const value_t *code = NULL; /* we construct this too */
         bool env_is_local = FALSE;  /* TRUE if env has become lnew */
         bool env_returned = FALSE;  /* TRUE when 'env' used as return value */
@@ -22356,10 +22644,11 @@ parsew_closure(const char **ref_line, const char *lineend,
 
     OMIT(printf("is%s closure\n", is_closure?"":" not"););
     if (!is_closure)
-    {
+    {   /* we can't make a closure out of this, just return expression parsed */
         *out_lval = lhs;
     } else
-    {   bool changed = lhs_is_env;  /* we want to change to a closure */
+    {   bool changed = lhs_is_env; /* we want to change to a closure */
+        bool env_is_orig = TRUE;   /* env is potentially part of argument value */
 
         while (ok &&
                parsew_space(ref_line, lineend) &&
@@ -22372,6 +22661,8 @@ parsew_closure(const char **ref_line, const char *lineend,
             ok = parsew_base_env(ref_line, lineend, state,
                                  &rhs/*lnew*/, &rhs_is_env);
             DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,rhs));
+
+            /* parsed: <lhs>::<rhs> (!inherit) or <lhs>:<rhs> (inherit) */
 
             if (!ok)
                 parser_error(state, "right of '%s' could not be parsed\n",
@@ -22396,48 +22687,50 @@ parsew_closure(const char **ref_line, const char *lineend,
                 changed = TRUE;
 
                 if (inherit)
-                {   dir_t *def_env = /*lnew*/parser_env_copy(state);
-                    DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,def_env));
+                {   dir_t *global_env = /*lnew*/parser_env_copy(state);
+                    DEBUG_PARSE_CLOSURE_LNEW(LOCS(state, global_env));
 
-                    if (NULL != def_env) {
+                    if (NULL != global_env) {
                         value_env_t *newenv;
-                        value_t *existing_unbound = NULL;
-                        dir_t *argdir;
+                        value_t *lhs_unbound = NULL;
+                        dir_t *lhs_dir;
 
                         if (promote_to_env && lhs_is_dir_nonenv)
-                        {
-                            argdir = (dir_t *)lhs;
+                        {   lhs_dir = (dir_t *)lhs;
                             lhs_is_dir_nonenv = FALSE;
                             lhs_is_env = TRUE;
                         } else if (env != NULL) {
-                            argdir = value_env_dir(env);
-                            existing_unbound = env->unbound;
+                            lhs_dir = value_env_dir(env);
+                            lhs_unbound = env->unbound;
                         } else
-                            argdir = NULL;
+                            lhs_dir = NULL;
 
-                        if (argdir != NULL || existing_unbound != NULL)
-                        {
-                            newenv = value_env_pushdir_lnew(state, def_env,
-                                                            existing_unbound);
+                        if (lhs_dir != NULL || lhs_unbound != NULL ||
+                            code != NULL)
+                        {   /* make env a new environment to hold lhs details */
+                            newenv = value_env_pushdir_lnew(state, global_env,
+                                                            lhs_unbound);
                             DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,newenv));
                             /* must push to a value_env_t */
-                            value_env_pushdir(newenv, argdir,
-                                              /*env_end*/FALSE);
+                            value_env_pushdir(newenv, lhs_dir, /*env_end*/FALSE);
                             if (env_is_local)
                                 value_unlocal(value_env_value(env));
                             env = newenv;
+                            env_is_orig = FALSE;
                             env_is_local = true;
                         }
                     }
-                    value_unlocal(dir_value(def_env));
+                    value_unlocal(dir_value(global_env));
                 } else
                 if (promote_to_env && lhs_is_dir_nonenv)
                 {
                     if (env_is_local)
                         value_unlocal(value_env_value(env));
-                    /* only an environment can have state added to it */
+                    /* only an environment can have state added to it, that's
+                     * why we're here creating an environment from lhs */
                     env = value_env_pushdir_lnew(state, (dir_t *)lhs,
                                                  /*unbound*/NULL);
+                    env_is_orig = FALSE;
                     env_is_local = TRUE;
                     DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,env));
                     lhs_is_dir_nonenv = FALSE;
@@ -22447,17 +22740,18 @@ parsew_closure(const char **ref_line, const char *lineend,
                 if (rhs_is_code)
                     rhs_code = rhs;
                 else if (rhs_is_closure || rhs_is_dir)
-                {   /* we have always promoted to lhs_is_env */
+                {   /* we should have already promoted lhs to an env */
                     value_env_t *rhs_env = NULL;
                     dir_t *rhs_dir = NULL;
 
-                    if (rhs_is_closure) {
-                        const value_closure_t *closure =
+                    if (rhs_is_closure)
+                    {   const value_closure_t *closure =
                             (const value_closure_t *)rhs;
                         rhs_code = closure->code;
                         /* rhs_dir is NULL */
                         rhs_env  = closure->env;
-                    } else if (rhs_is_env)
+                    } else
+                    if (rhs_is_env)
                         /* rhs_dir is NULL */
                         rhs_env = (value_env_t *)rhs;
                     else
@@ -22465,26 +22759,32 @@ parsew_closure(const char **ref_line, const char *lineend,
                         /* rhs_env is NULL */
 
                     if (rhs_env == NULL && rhs_dir != NULL)
-                    {   value_env_pushdir(env, rhs_dir, /*env_end*/FALSE);
+                    {   /* just add rhs directory in to directory env */
+                        value_env_pushdir(env, rhs_dir, /*env_end*/FALSE);
                     } else
-                    {   bool env_env_lnew = FALSE;
-                        bool env_env_updated = FALSE;
+                    {   bool env_is_lnew = FALSE;
+                        bool env_is_updated = FALSE;
                         value_env_t *env_original = env;
+
                         ok = value_env_sum(state, &env,
-                                           &env_env_updated, &env_env_lnew,
+                                           /*readonly*/env_is_orig,
+                                           &env_is_updated, &env_is_lnew,
                                            rhs_env);
                         if (!ok)
-                            parser_error(state,
+                        {   parser_error(state,
                                          "can't join two environments with "
                                          "unbound variables - not yet "
                                          "supported\n");
-                        if (env_env_updated)
+                            ok = TRUE; /* continue without the extra rhs_env */
+                        }
+                        if (env_is_updated)
                         {   if (env_is_local)
                             {   DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,env));
                                 value_unlocal(value_env_value(env_original));
                                 /* new env value is still local */
                             }
-                            env_is_local = env_env_lnew;
+                            env_is_local = env_is_lnew;
+                            env_is_orig = FALSE;
                         }
                     }
                 } else
@@ -22533,7 +22833,7 @@ parsew_closure(const char **ref_line, const char *lineend,
                 /* did we parse a no colon but found a dir with unbound vars? */
                 if (NULL != unbound || NULL != code)
                 {   *out_lval = value_closure_fn_lnew(state, code, env,
-                                                     autorun);
+                                                      autorun);
                     DEBUG_PARSE_CLOSURE_LNEW(LOCS(state,*out_lval));
                 } else
                 {   /* don't need a closure after all */
@@ -22791,17 +23091,17 @@ static bool can_substitute(const value_t *code)
 
 
 
- 
-/* if 'unstrict' is set the substitution will not fail if there are not enough
-   unbound symbols for the substitution (the code value itself will be
-   returned)
-*/
-static const value_t * /*local*/
-substitute_simple(const value_t *code, const value_t *arg,
-                  parser_state_t *state, bool unstrict, bool *ref_auto_eval)
-{   const value_t *val = NULL;
 
-    *ref_auto_eval = FALSE;
+
+/*! Create a binding providing an argument to some code (resulting in a closure)
+ *  if 'unstrict' is set the substitution will not fail if there are not enough
+ *  unbound symbols for the substitution (the code value itself will be
+ *  returned) - i.e. unnecessary arguments will not be reported (or used).
+ */
+extern const value_t * /*local*/
+substitute(const value_t *code, const value_t *arg,
+           parser_state_t *state, bool unstrict)
+{   const value_t *val = NULL;
 
     if (NULL != code)
     {   if (value_type_equal(code, type_closure))
@@ -22832,9 +23132,6 @@ substitute_simple(const value_t *code, const value_t *arg,
                 } else
                     val = newbinding;
             }
-            if (value_type_equal(codeval, type_cmd) &&
-                value_type_equal(arg, type_code))
-                *ref_auto_eval = TRUE;
         } else
         {   parser_error(state, "no unbound symbols in a %s - "
                                 "substitution impossible\n",
@@ -22845,24 +23142,6 @@ substitute_simple(const value_t *code, const value_t *arg,
     return val;
 }
 
-
-
-
-
-
-/*! Create a binding providing an argument to some code (resulting in a closure)
- *  if 'unstrict' is set the substitution will not fail if there are not enough
- *  unbound symbols for the substitution (the code value itself will be
- *  returned) - i.e. unnecessary arguments will not be reported (or used)
- */
-extern const value_t * /*local*/
-substitute(const value_t *code, const value_t *arg,
-           parser_state_t *state, bool unstrict)
-{   bool auto_eval = FALSE;
-    const value_t *val = /*lnew*/
-        substitute_simple(code, arg, state, unstrict, &auto_eval);
-    return val;
-}
 
 
 
@@ -22947,20 +23226,27 @@ invoke(const value_t *code, parser_state_t *state)
                 {   dir_stack_pos_t pos;
                     dir_stack_pos_t left_env_top = NULL;
                     dir_stack_pos_t final_left_env_top = NULL;
-                    dir_t *spare_env = NULL;
+                    dir_t *empty_envdir = NULL;
 
                     bool has_outer = list_element_start(&state->left_envs,
                                                         (void *)&left_env_top);
 
                     DEBUG_MOD(DPRINTF("%s: invoke - code closure\n", codeid());)
                     value_code_buf(codeval, &buf, &len);
+                    /* push an environment to use - use outer_visible == FALSE
+                       because the environment associated with the closure
+                       is already complete
+                    */
                     if (NULL == envdir)
-                    {   spare_env = dir_id_lnew(state);
-                        pos = parser_env_push(state, spare_env,
-                                              /*outer_visible*/TRUE);
+                    {   empty_envdir = dir_id_lnew(state);
+                        pos = parser_env_push(state, empty_envdir,
+                                              /*outer_visible*/FALSE);
                     } else
+                        /* TODO: envdir is from a closure, it may be using
+                           its link directory - which this push will overwrite
+                        */
                         pos = parser_env_push(state, envdir,
-                                              /*outer_visible*/TRUE);
+                                              /*outer_visible*/FALSE);
                     value_code_place(codeval, &placename, &lineno);
                     linesource_push(parser_linesource(state),
                                     charsource_lineref_init(&line,
@@ -22977,8 +23263,8 @@ invoke(const value_t *code, parser_state_t *state)
                     linesource_pop(parser_linesource(state));
                     parser_env_return(state, pos);
 
-                    if (spare_env != NULL)
-                        value_unlocal(dir_value(spare_env));
+                    if (empty_envdir != NULL)
+                        value_unlocal(dir_value(empty_envdir));
 
                     /* Cope with enter/leave imballance in code body */
                     if (has_outer !=
@@ -23027,10 +23313,13 @@ invoke(const value_t *code, parser_state_t *state)
                             charsink_string_init(&expandline);
                         dir_stack_pos_t pos;
 
+                        /* TODO: envdir is from a closure, it may be using
+                           its link directory - which this push will overwrite
+                        */
                         pos = parser_env_push(state, envdir,
                                               /*outer_visible*/TRUE);
                         /* expand string (buf, len) into expandsink */
-                        parser_expand(state, expandsink, buf, len);
+                        (void)parser_expand(state, expandsink, buf, len);
 
                         /* execute command taking expandsink as parse input */
                         charsink_string_buf(expandsink, &buf, &len);
@@ -23054,6 +23343,9 @@ invoke(const value_t *code, parser_state_t *state)
                         printf("top : %p\n", parser_env_stack(state)->stack);
                         DIR_SHOW_ST("push: ", state, envdir);
                     )
+                    /* TODO: envdir is from a closure, it may be using
+                       its link directory - which this push will overwrite
+                    */
                     pos = parser_env_push(state, envdir, /*outer_visible*/TRUE);
                     DEBUG_MOD(DPRINTF("%s: invoke - fn closure with %sreturn\n",
                                       codeid(), pos==NULL?"no ":""););
@@ -23164,6 +23456,7 @@ parsew_substitution_args(const char **ref_line, const char *lineend,
                         value_closure_autorun(*ref_lval)? "":"no",
                         *ref_line););
 
+    /* parse ! invocations of previous value */
     while ((ok = (NULL != *ref_lval)) &&
            (   (value_closure_autorun(*ref_lval) && ignored_autoruns-- <= 0) ||
                (parsew_pling(ref_line, lineend) &&
@@ -23179,6 +23472,7 @@ parsew_substitution_args(const char **ref_line, const char *lineend,
         DEBUG_SUBST(DPRINTF(" pre invoke\n"););
     }
 
+    /* parse substitutions */
     DEBUG_SUBST(DPRINTF(" post invoke subst args: <%sauto> '%s' ok %s\n",
                         value_closure_autorun(*ref_lval)? "":"no",
                         *ref_line, ok? "TRUE":"FALSE"););
@@ -23199,6 +23493,7 @@ parsew_substitution_args(const char **ref_line, const char *lineend,
             lval_is_local = TRUE;
             DEBUG_CLI_LNEW(LOCS(state,*ref_lval));
 
+            /* collapse (execute) autorun closures */
             DEBUG_SUBST(
                 DPRINTF(" pre arg invoke subst args: <%sauto> '%s' ok %s\n",
                         value_closure_autorun(*ref_lval)? "":"no",
@@ -23465,7 +23760,7 @@ parsew_substitution(const char **ref_line, const char *lineend,
                                   (int)((*ref_line) - line), line, *ref_line););
         ok = parsew_substitution_args(ref_line, lineend, state, autorun_defeat,
                                       /*lnew*/&subout);
-        if (ok && subin != subout)
+        if (subin != subout)
         {   value_unlocal(subin);
             DEBUG_CLI_LNEW(LOCS(state, subin));
         }
@@ -23705,11 +24000,10 @@ new_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         else
             dir_new = dir_id_lnew(root_state);
 
-        newarg->dir_build = dir_new;
+        newarg->dir_build = dir_new /*lnew*/;
     }
     ok = dir_lset(dir_new, state, name, value);
     /* will stop on first non-null */
-    value_unlocal(dir_value(dir_new));
     return ok? NULL: (void *)name;
 }
 
@@ -23719,7 +24013,7 @@ new_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 
 #if 0 /* unused */
 /*! make a copy of a directory */
-static dir_t *
+static dir_t * /*lnew*/
 dir_copy(parser_state_t *state, dir_t *dir)
 {   dir_t *newdir = NULL;
     enum_new_arg_t newarg;
@@ -23728,16 +24022,13 @@ dir_copy(parser_state_t *state, dir_t *dir)
     newarg.dir_build = NULL;
 
     if (NULL == dir_state_forall(dir, state, &new_exec, &newarg))
-    {   newdir = newarg.dir_build;
+    {   newdir = newarg.dir_build /*lnew*/;
 
         if (NULL == newdir)
             newdir = dir_id_lnew(state);
 
         if (dir_islocked((dir_t *)dir))
             (void)dir_lock(newdir, NULL/*no updates*/);
-
-        if (NULL == newarg.dir_build)
-            value_unlocal(newdir);
     }
 
     return newdir;
@@ -24241,11 +24532,11 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
 
     if (value_type_equal(value, type_closure))
     {   const value_t *code;
-        dir_t *env;
+        dir_t *envdir;
         const value_t *unbound;
         bool autorun=false;
 
-        value_closure_fn_get(value, &code, &env, &unbound, &autorun);
+        value_closure_fn_get(value, &code, &envdir, &unbound, &autorun);
 
         if (NULL == code)
         {   parser_error(state, "closure has no code part to execute:");
@@ -24257,8 +24548,11 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
         {   /* special case - commands do their own parsing */
             const value_t *retval;
 #if 0
+            /* TODO: envdir is from a closure, it may be using
+               its link directory - which this push will overwrite
+            */
             dir_stack_pos_t pos =
-                parser_env_push(state, env, /*outer_visible*/TRUE);
+                parser_env_push(state, envdir, /*outer_visible*/TRUE);
                 OMIT(DPRINTF("%s: push enclosing env %p\n", codeid(), value););
 #endif
             DEBUG_MOD(DPRINTF("%s: invoke closure code\n", codeid()););
@@ -24285,7 +24579,7 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
                     return value_nl(closure);
                 } else
                 {   /* make the invocation ourselves */
-                    value_closure_fn_get(closure, &code, &env, &unbound,
+                    value_closure_fn_get(closure, &code, &envdir, &unbound,
                                          &autorun);
                     DEBUG_MOD(DPRINTF("%s: invoke closure non-code\n",
                                       codeid()););
@@ -24343,8 +24637,8 @@ mod_invoke_cmd(const char **ref_line, const char *lineend, const value_t *value,
     {   if (parsew_substitution_args(ref_line, lineend, state,
                                      /*autorun_defeat*/FALSE, &value/*lnew*/))
         {   const value_t *retval;
-            DEBUG_MOD(DPRINTF("%s: invoke direct function\n", codeid());)
-                DEBUG_CLI_LNEW(LOCS(state,value));
+            DEBUG_MOD(DPRINTF("%s: invoke direct function\n", codeid()););
+            DEBUG_CLI_LNEW(LOCS(state,value));
             retval = /*lnew*/invoke(value, state);
             DEBUG_CLI_LNEW(LOCS(state,retval));
             value_unlocal(value);
@@ -25310,7 +25604,7 @@ parser_expand_exec_int_poll(parser_state_t *state, charsource_t *source,
             OMIT(DPRINTF("%s: got line '%.*s'\n", codeid(),
                          (int)phraselen, phrase););
             /* expand macros in buffer writing to expandsink and get buffer */
-            parser_expand(state, expandsink, phrase, phraselen);
+            (void)parser_expand(state, expandsink, phrase, phraselen);
             charsink_string_buf(expandsink, &phrase, &phraselen);
             charsink_string_close(linesink);
 
@@ -26030,7 +26324,7 @@ fn_argnames(const value_t *this_fn, parser_state_t *state)
 static void
 cmds_generic_closure(parser_state_t *state, dir_t *cmds)
 {   smod_addfn(state, cmds, "closure",
-               "<bool> <dir> <code> - create closure from code and dir (inherit call context if <bool>)",
+               "<push> <dir> <code> - create closure from code and dir (+ stack if push)",
                &fn_closure, 3);
     smod_addfn(state, cmds, "bind",
                "<closure> <arg> - bind argument to unbound closure argument",
@@ -26158,20 +26452,46 @@ fn_expand(const value_t *this_fn, parser_state_t *state)
         if (buf != NULL)
         {   charsink_string_t expandline;
             charsink_t *expandsink = charsink_string_init(&expandline);
-            bool do_braced = (dobracedval != value_false);
+            bool expand_braced = (dobracedval != value_false);
+            bool outer_visible = FALSE; /* you can always provide an
+                                           environment that give visibility -
+                                           e.g. []:[] */
             value_t *val1;
+            int nobrace_quote;
+            dir_stack_pos_t pos = NULL;
+
+            if (dobracedval == value_true)
+            {   nobrace_quote = -1;
+                expand_braced = TRUE;
+            } else
+            if (dobracedval == value_false)
+            {   nobrace_quote = '"';
+                expand_braced = FALSE;
+            } else
+            {   nobrace_quote = '"';
+                expand_braced = FTL_MACRO_BRACED_EXPAND;
+            }
 
             if (dirval != &value_null)
-            {   parser_env_push(state, env, /*outer_visible*/TRUE);
+            {   /* TODO: if dirval is a closure env may be doubly used by this
+                 * push - clone? */
+                pos = parser_env_push(state, env, outer_visible);
+                outer_visible = true;
             }
             if (closure_env != NULL)
-            {   parser_env_push(state, closure_env, /*outer_visible*/TRUE);
+            {   dir_stack_pos_t clpos =
+                    parser_env_push(state, closure_env, outer_visible);
+                if (pos == NULL)
+                    pos = clpos;
             }
             DEBUG_EXPD(printf("%s: expand '%.*s'\n", codeid(),
                       (int)len, buf););
             /* expand string (buf, len) into expandsink */
-            parser_macro_expand_string(state, expandsink, buf, len, '"',
-                                       !do_braced);
+            parser_macro_expand_string(state, expandsink, buf, len,
+                                       nobrace_quote, !expand_braced);
+            if (pos != NULL)
+                parser_env_return(state, pos);
+
             /* return the string written to expandsink to buf/len */
             charsink_string_buf(expandsink, &buf, &len);
             val1 = value_string_lnew(state, buf, len);
@@ -26220,7 +26540,7 @@ fn_readline(const value_t *this_fn, parser_state_t *state)
 
         /* expand linesink into expandsink */
         charsink_string_buf(linesink, &phrase, &len);
-        parser_expand(state, expandsink, phrase, len);
+        (void)parser_expand(state, expandsink, phrase, len);
 
         /* create string from expansion */
         charsink_string_buf(expandsink, &phrase, &len);
@@ -27153,6 +27473,7 @@ fn_opset(const value_t *this_fn, parser_state_t *state)
                                                              ket, /*len*/1));
                     }
                 }
+                value_unlocal(dir_value(opdefn));
             } else
                parser_report(state, "invalid operator definitions at "
                             "precidence %d\n",
@@ -27886,7 +28207,7 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
                "initial <cmds> then stream",
                &fn_exec, 2);
     smod_addfnscope(state, pcmds, "expand",
-                    "<do_braced> <env> <val> - expand macros in string or code <val>",
+                    "<inc{}> <env> <val> - expand macros in string or code <val>",
                      &fn_expand, 3, scope);
     smod_addfn(state, pcmds, "readline",
               "- read and expand a line from the command input",
@@ -29128,38 +29449,6 @@ fn_ready(const value_t *this_fn, parser_state_t *state)
 
 
 
-#if 0
-static const value_t *
-fn_writexpand(const value_t *this_fn, parser_state_t *state)
-{   /* syntax: writexp <stream> <string> */
-    const value_t *stream = parser_builtin_arg(state, 1);
-    const value_t *obj = parser_builtin_arg(state, 2);
-    const value_t *val = &value_null;
-
-    if (value_istype(stream, type_stream) &&
-        value_istype(obj, type_string))
-    {   charsink_t *sink;
-        if (!value_stream_sink(stream, &sink))
-            parser_error(state, "stream not open for output\n");
-        else
-        {   const char *buf;
-            size_t len;
-            if (value_string_get(obj, &buf, &len))
-                parser_expand(state, sink, (char *)buf, len);
-        }
-    } else
-        parser_report_help(state, this_fn);
-
-    return val;
-}
-#endif
-
-
-
-
-
-
-
 
 static const value_t *
 fn_fprintf(const value_t *this_fn, parser_state_t *state)
@@ -29516,7 +29805,7 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
               "<stream> - return whether next write may not cause wait",
               &fn_ready, 1);
     smod_addfn(state, icmds, "fprintf",
-              "<stream> <format> <env> - write formatted string to stream",
+              "<stream> <fmt> <env> - write formatted string to stream",
               &fn_fprintf, 3);
     smod_addfn(state, icmds, "stringify",
               "<stream> <expr> - write FTL representation to stream",
@@ -29638,6 +29927,9 @@ cmd_type(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
 
     if (value_as_dir(typesval, &root_types))
     {
+        /* TODO: if typesval is a closure root_types might already be on a
+         *       different stack - clone?
+         */
         dir_stack_pos_t pos = parser_env_push(state, root_types,
                                               /*outer_visible*/TRUE);
         result_typeval = /*lnew*/dir_string_get(root_types, typename);
@@ -30559,6 +30851,35 @@ genfn_fmt_d(char *buf, size_t buflen, fprint_flags_t flags, int precision,
 
 
 static const value_t *
+genfn_fmt_o(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
+
+    if (value_istype(argval, type_int))
+    {   const char *format;
+        number_t arg = value_int_number(argval);
+        int len;
+
+        if (0 != (flags & (1<<ff_sign)))
+            format = "%+.*"FO_UNUMBER_T;
+        else
+            format = "%.*"FO_UNUMBER_T;
+
+        len = os_snprintf(buf, buflen, format, precision, arg);
+
+        if (len >= 0)
+            val = value_string_lnew(state, buf, len);
+    }
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
 genfn_fmt_u(char *buf, size_t buflen, fprint_flags_t flags, int precision,
             const value_t *argval, parser_state_t *state)
 {   const value_t *val = &value_null;
@@ -30852,6 +31173,12 @@ fn_fmt_d(const value_t *this_fn, parser_state_t *state)
 static const value_t *
 fn_fmt_u(const value_t *this_fn, parser_state_t *state)
 {   return fn_fmt_generic(this_fn, state, &genfn_fmt_u);
+}
+
+
+static const value_t *
+fn_fmt_o(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_o);
 }
 
 
@@ -31396,7 +31723,7 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             else
                 dir_new = dir_id_lnew(state);
 
-            choparg->dir_build = dir_new;
+            choparg->dir_build = dir_new; /*lnew*/
         }
 
         DEBUG_CHOP(printf("%s: for substr set substring (len %d)\n", codeid(),
@@ -31405,6 +31732,7 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
                                         &choparg->buf, &choparg->buflen,
                                         choparg->initbuf, stride);
         ok = dir_lset(dir_new, state, name, substr);
+        value_unlocal(substr);
         return ok? NULL: (void *)name;
         /* will stop on first non-null */
     }
@@ -31423,7 +31751,7 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
         for_return = dir_state_forall(shape_dir, state, &substr_exec, choparg);
 
         if (NULL == for_return) /* success */
-        {   dir_t *new_dir = choparg->dir_build;
+        {   dir_t *new_dir = choparg->dir_build; /*lnew*/
             /* substrings section of string now held in new_dir */
 
             if (NULL == new_dir)
@@ -31434,8 +31762,6 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
                     save_dir = dir_vec_lnew(root_state);
                 else
                     save_dir = dir_id_lnew(root_state);
-
-                choparg->dir_build = save_dir;
             }
             DEBUG_CHOP(printf("%s: for substr set dir %sNULL\n", codeid(),
                               value==NULL || value == &value_null?"": "non-"););
@@ -31443,10 +31769,11 @@ substr_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             {   for_return = (void *)&value_false; /* any non-NULL value */
                 DEBUG_CHOP(printf("%s: dir set failed\n", codeid()););
             }
+            value_unlocal(dir_value(new_dir));
         }
         DEBUG_CHOP(else printf("%s: dir enum failed\n", codeid()););
-        
-        choparg->dir_build = save_dir;
+
+        choparg->dir_build = save_dir; /* replace original content */
 
         return for_return;
     } else
@@ -31504,10 +31831,9 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
                         if (NULL != new_dir)
                             value_unlocal(dir_value(new_dir));
                     }
-                    if (use_dir != NULL)
-                    {   value_unlocal(dir_value(use_dir));
-                    }
                 }
+                if (choparg.dir_build != NULL)
+                    value_unlocal(dir_value(choparg.dir_build));
             }
             if (!n_infinite)
             {   const value_t *final =
@@ -31948,11 +32274,13 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
 
     printf_addformat(type_int, "d", "<f> <p> <val> - %d integer format",
                      &fn_fmt_d);
-    printf_addformat(type_int, "u", "<f> <p> <val> - %u unsinged format",
+    printf_addformat(type_int, "u", "<f> <p> <val> - %u unsigned format",
                      &fn_fmt_u);
-    printf_addformat(type_int, "x", "<f> <p> <val> - %x hex format",
+    printf_addformat(type_int, "o", "<f> <p> <val> - %u unsigned octal format",
+                     &fn_fmt_o);
+    printf_addformat(type_int, "x", "<f> <p> <val> - %x unsigned hex format",
                      &fn_fmt_x);
-    printf_addformat(type_int, "X", "<f> <p> <val> - %X hex format",
+    printf_addformat(type_int, "X", "<f> <p> <val> - %X unsigned hex format",
                      &fn_fmt_x_uc);
     printf_addformat(type_int, "s", "<f> <p> <val> - %s string format",
                      &fn_fmt_s);
@@ -32102,15 +32430,17 @@ cmds_generic_macaddr(parser_state_t *state, dir_t *cmds)
 
 
 /* make a copy of a value that is either a closure or a directory */
-static const value_t *
+static const value_t * /*lnew*/
 dir_value_copy(parser_state_t *state, const value_t *dir)
 {   const value_t *val = NULL;
     const value_t *code = NULL;
     bool is_closure = value_type_equal(dir, type_closure);
+    //const value_t *closure = NULL;
 
     if (is_closure)
     {   const value_t *unbound;
         dir_t *env = NULL;
+        //closure = dir;
         value_closure_get(dir, &code, &env, &unbound);
         dir = dir_value(env);
     }
@@ -32122,8 +32452,9 @@ dir_value_copy(parser_state_t *state, const value_t *dir)
         newarg.dir_build = NULL;
 
         if (NULL == dir_state_forall((dir_t *)dir, state, &new_exec, &newarg))
-        {   dir_t *newdir = newarg.dir_build;
-
+        {   dir_t *dir_build = newarg.dir_build/*lnew*/;
+            dir_t *newdir = dir_build;
+            
             if (NULL == newdir)
                 newdir = dir_id_lnew(state);
 
@@ -32133,15 +32464,21 @@ dir_value_copy(parser_state_t *state, const value_t *dir)
             {   /* create a copy of the closure */
                 value_env_t *env = value_env_lnew(state);
                 if (NULL != env)
-                {   value_env_pushdir(env, newdir, /*env_end*/FALSE);
+                {   dir_t *orig_dir = newdir;
+                    value_env_pushdir(env, newdir, /*env_end*/FALSE);
                     val = value_closure_lnew(state, code, env);
                     newdir = value_env_dir(env);
+                    value_unlocal(dir_value(orig_dir));
+                    value_unlocal(value_env_value(env));
                 }
             }
             if (dir_islocked((dir_t *)dir))
                 (void)dir_lock(newdir, NULL/*no updates*/);
         }
+
     }
+    //if (closure != NULL)
+    //    value_unlocal(closure);
 
     return val;
 }
@@ -32150,8 +32487,8 @@ dir_value_copy(parser_state_t *state, const value_t *dir)
 
 static const value_t *
 fn_new(const value_t *this_fn, parser_state_t *state)
-{   const value_t *dir = parser_builtin_arg(state, 1);
-    const value_t *val = dir_value_copy(state, dir);
+{   const value_t *dirval = parser_builtin_arg(state, 1);
+    const value_t *val = /*lnew*/dir_value_copy(state, dirval);
 
     if (val == NULL)
         parser_report_help(state, this_fn);
@@ -32266,10 +32603,10 @@ fn_lock(const value_t *this_fn, parser_state_t *state)
  *  FALSE
  *
  *  Before operation called:  <env>::<env>
- *  In this function (start): <env>::<env>::<argenv>
+ *  In this function (start): <env>::<env>::<arg1env>
  *                                        <-
  *                                         +------ calling pos
- *  In this function (end):   <env>::<env>::<new>::<argenv>
+ *  In this function (end):   <env>::<env>::<new>::<arg1env>
  *                                        <-
  *                                         +------ calling pos
  *  After operation returns:  <env>::<env>::<new>
@@ -32283,12 +32620,19 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state,
     if (value_as_dir(dir, &env))
     {   dir_stack_pos_t calling_pos = parser_env_calling_pos(state);
         const value_t *calling_dirval = *calling_pos;
+        dir_t *env_clone = NULL;
 
+        if (value_type_equal(dir, type_closure))
+            /* we can't push \c dir because it is already stacked, so make
+               a clone of it */
+            env_clone = dir_clone_lnew(state, env);
         /* insert the directory above our return position so that it is
            still there when we return */
-        parser_env_push_at_pos(state, calling_pos, env, outer_visible);
+        parser_env_push_at_pos(state, calling_pos,
+                               env_clone == NULL? env: env_clone, outer_visible);
         list_add_start(&state->left_envs, (void *)calling_dirval);
         /* (to check against any attempt to leave) */
+        value_unlocal(dir_value(env_clone));
     } else
         parser_report_help(state, this_fn);
 
@@ -32303,26 +32647,31 @@ parser_enter_dir(const value_t *this_fn, parser_state_t *state,
 /*! Remove an added envronment from the stack that was used for new variables.
  *
  *  Before operation called:  <env>::<env>::<new>
- *  In this function (start): <env>::<env>::<new>::<argenv>
+ *  In this function (start): <env>::<env>::<new>::<arg0env>
  *                                        <-     <-
  *                                         |      +------ calling pos
  *                                         +------------- leave pos
- *  In this function (end):   <env>::<env>::<argenv>
+ *  In this function (end):   <env>::<env>::<arg0env>
  *                                        <-
  *                                         +------ leave pos
  *  After operation returns:  <env>::<env>
  *
- *  Returns the environment that was deleted from the stack.
+ *  Returns the environment that was deleted from the stack (one still linked to
+ *  the stack).  Note that because it is still linked (as an alternative root)
+ *  to the stack you should consider cloning it before making it generally
+ *  available.
  */
 static const value_t *
 parser_leave_dir(const value_t *this_fn, parser_state_t *state)
 {
     const value_t *val = &value_null;
 
+    dir_stack_pos_t top_pos = parser_env_locals_pos(state);
     dir_stack_pos_t calling_pos = parser_env_calling_pos(state);
     dir_stack_pos_t leave_pos =
         dir_stack_pos_enclosing(parser_env_stack(state),
                                 dir_at_stack_pos(calling_pos));
+    const value_t *arg0envval = top_pos == NULL? NULL: *top_pos;
     const value_t *leave_envval = leave_pos == NULL? NULL: *leave_pos;
     const value_t *leave_dirval = calling_pos == NULL? NULL: *calling_pos;
     const value_t *enter_dirval = NULL;
@@ -32335,10 +32684,26 @@ parser_leave_dir(const value_t *this_fn, parser_state_t *state)
         enter_dirval != NULL && enter_dirval == leave_envval)
     {
         const value_t *lost_calling_env = NULL;
+        value_local(state, (value_t */*unconst*/)leave_dirval);
+        /*< ensure leave_dirval is not collected while not in stack */
         list_remove_start(&state->left_envs, (void **)&lost_calling_env);
-        /* remove record of entry */
+        /*< remove record of entry */
+#if 1
+        value_local(state, (value_t */*unconst*/)arg0envval);
+        parser_env_return(state, leave_pos);
+        if (arg0envval != NULL && value_type_equal(arg0envval, type_dir))
+        {   dir_t *arg0env_dir = (dir_t *)arg0envval;
+            parser_env_push(state, (dir_t *)arg0env_dir,
+                            /*outer visible*/!dir_env_end(arg0env_dir));
+        }
+        value_unlocal(arg0envval);
+#else
+        /* Don't do this - it will edit the stack given to new closures
+           in the enter/leave section.
+        */
         parser_env_delete_at_pos(state, calling_pos);
-        /* leave_dirval should be lost now */
+        /*< leave_dirval should be lost from the parser stack now */
+#endif
         val = leave_dirval;
     }
     else {
@@ -32377,7 +32742,14 @@ fn_restrict(const value_t *this_fn, parser_state_t *state)
 /*! returns the environment discarded */
 static const value_t *
 fn_leaving(const value_t *this_fn, parser_state_t *state)
-{   return parser_leave_dir(this_fn, state);
+{   const value_t *left = parser_leave_dir(this_fn, state);
+    if (left != NULL && left != &value_null)
+    {   dir_t *left_clone_dir = dir_clone_lnew(state, (dir_t *)left);
+        /* need to clone the directory to provide a fresh value link field */
+        value_unlocal(left);
+        left = dir_value(left_clone_dir);
+    }
+    return left;
 }
 
 
@@ -32386,7 +32758,8 @@ fn_leaving(const value_t *this_fn, parser_state_t *state)
 /*! returns no value - just removes previously entered environment */
 static const value_t *
 fn_leave(const value_t *this_fn, parser_state_t *state)
-{   parser_leave_dir(this_fn, state);
+{   const value_t *left = parser_leave_dir(this_fn, state);
+    value_unlocal(left);
     return &value_null;
 }
 
@@ -32601,7 +32974,7 @@ fn_sort_rngcmpwith(const value_t **ref_v1, const value_t **ref_v2)
             substitute(code, v1, state, /*unstrict*/TRUE);
         const value_t *code2 = /*lnew*/
             substitute(code1, v2, state, /*unstrict*/TRUE);
-        const value_t *ret = /*lnew*/invoke(code, state);
+        const value_t *ret = /*lnew*/invoke(code2, state);
         int cmpres = (int)value_int_number(ret);
 
         value_unlocal(v1);
@@ -32704,16 +33077,17 @@ select_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 
     if (NULL != codeargs && value != NULL)
     {   const value_t *code = selectval->code;
-        const value_t *code1 = NULL;
-        const value_t *code2 = NULL;
         const value_t *include;
 
         if (value_type_equal(code, type_closure))
-        {   code = code1 = /*lnew*/substitute(code, value, state,
-                                              /*unstrict*/TRUE);
-            if (NULL != code1 && value != NULL)
-                code = code2 = /*lnew*/substitute(code1, name, state,
-                                                  /*unstrict*/TRUE);
+        {   const value_t *code1 = code;
+            code = /*lnew*/substitute(code1, value, state, /*unstrict*/TRUE);
+            value_unlocal(code1);
+            if (NULL != code && value != NULL)
+            {   const value_t *code2 = code;
+                code = /*lnew*/substitute(code2, name, state, /*unstrict*/TRUE);
+                value_unlocal(code2);
+            }
         }
         include = /*lnew*/invoke(code, state);
 
@@ -32730,8 +33104,8 @@ select_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
             }
             dir_lset(new_dir, state, name, value);
         }
-        value_unlocal(code1);
-        value_unlocal(code2);
+        if (code != selectval->code)
+            value_unlocal(code);
         value_unlocal(include);
     }
 
@@ -32772,6 +33146,7 @@ fn_select(const value_t *this_fn, parser_state_t *state)
         {   val = dir_value(selectval.dir_build);
             value_local(state, (value_t *)/*un-const*/val);
         }
+        value_unlocal(dir_value(argdir));
         (void)parser_env_return(state, pos);
     } else
     {   parser_report_help(state, this_fn);
@@ -33229,17 +33604,19 @@ cmd_eval(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
     const char *lineend = &line[linelen];
     bool got_val = parsew_expr(ref_line, lineend, state, &val/*lnew*/);
 
-    if (!(got_val && parsew_space(ref_line, lineend)))
+    if (got_val && parsew_space(ref_line, lineend))
+    {   if (!parse_empty(ref_line))
+        {   parser_error_longstring(state, *ref_line,
+                                    "trailing text in expression -");
+            value_unlocal(val);
+            val = &value_null;
+        }
+    } else
     {   parser_error(state, "failed to evaluate expression\n");
         if (got_val)
             value_unlocal(val);
         val = &value_null;
-    } else if (!parse_empty(ref_line))
-    {   parser_error_longstring(state, *ref_line,
-                                "trailing text in expression -");
-        value_unlocal(val);
-        val = &value_null;
-    } /* else success */
+    }
     return val;
 }
 
@@ -33344,26 +33721,37 @@ forallwhile_exec(dir_t *dir,
 {   for_exec_args_t *forval = (for_exec_args_t *)arg;
     parser_state_t *state = forval->state;
     dir_t *codeargs = parser_env(state);
-    const value_t *result = NULL;
+    bool cont = TRUE;
 
     /* don't execute for values that are NULL - warning this may mean that
        the perceived domain of an environment is larger than the range
      */
     if (NULL != codeargs && value != NULL)
     {   const value_t *code = forval->code;
-
+        const value_t *result = NULL;
+    
         if (value_type_equal(code, type_closure))
-        {   code = substitute(code, value, state, /*unstrict*/TRUE);
+        {   const value_t *code1 = code;
+            code = /*lnew*/substitute(code1, value, state, /*unstrict*/TRUE);
+            value_unlocal(code1);
             if (NULL != code)
-                code = substitute(code, name, state, /*unstrict*/TRUE);
+            {   const value_t *code2 = code;
+                code = /*lnew*/substitute(code2, name, state, /*unstrict*/TRUE);
+                value_unlocal(code2);
+            }
         }
         result = /*lnew*/invoke(code, state);
+        cont = (result != value_false);
+        value_unlocal(result);
+        if (code != forval->code)
+            value_unlocal(code);
     }
     OMIT(if (result == value_false)
              printf("%s: forallwhile body FALSE\n", codeid()););
-    return result == value_false? (void*)value_false: NULL;
+    return cont? NULL: (void*)value_false;
     /* non-null stops the enumeration here */
 }
+
 
 
 
@@ -33406,6 +33794,7 @@ genfn_forall(const value_t *this_fn, parser_state_t *state,
         OMIT(VALUE_SHOW("for environment: ", dir_value(parser_env(state)));)
         all_true = NULL == dir_state_forall(env, state, enum_fn, &forval);
         (void)parser_env_return(state, pos);
+        value_unlocal(dir_value(argdir));
     } else
     {   parser_report_help(state, this_fn);
     }
@@ -33444,20 +33833,26 @@ forwhile_exec(dir_t *dir, const value_t *name, const value_t *value, void *arg)
 {   for_exec_args_t *forval = (for_exec_args_t *)arg;
     dir_t *codeargs = parser_env(forval->state);
     const value_t *result = NULL;
+    bool cont = TRUE;
 
     /* don't execute for values that are NULL - warning this may mean that
        the perceived domain of an environment is larger than the range
      */
     if (NULL != codeargs && value != NULL)
     {   const value_t *code = forval->code;
-        code = substitute(code, value, forval->state, /*unstrict*/FALSE);
-        if (code != NULL)
-            result = /*lnew*/invoke(code, forval->state);
+        const value_t *code1 = /*lnew*/substitute(code, value, forval->state,
+                                                  /*unstrict*/FALSE);
+        if (code1 != NULL)
+        {   result = /*lnew*/invoke(code1, forval->state);
+            value_unlocal(code1);
+            cont = (result != value_false);
+            value_unlocal(result);
+        }
     }
 
     OMIT(if (result == value_false)
              printf("%s: forwhile body FALSE\n", codeid()););
-    return result == value_false? (void *)value_false: NULL;
+    return cont? NULL: (void *)value_false;
     /* non-null stops the enumeration here */
 }
 
@@ -33506,9 +33901,9 @@ genfn_for(const value_t *this_fn, parser_state_t *state, dir_enum_fn_t enum_fn)
                             dir_value(parser_env(state))););
             all_true = NULL == dir_state_forall(env, state, enum_fn, &forval);
             (void)parser_env_return(state, pos);
+            value_unlocal(dir_value(argdir));
         } else
-        {
-            parser_error(state,
+        {   parser_error(state,
                          "for - closure must have one unbound value (not %d)\n",
                          n);
         }
@@ -34449,17 +34844,18 @@ fn_cmd(const value_t *this_fn, parser_state_t *state)
                                       &cmd_from_fn, fnval, /*help*/NULL);
         value_t *closure =
             value_closure_fn_lnew(state, cmd, env, FTL_LIB_AUTORUN_DEFAULT);
+        value_t *argnameval;
         if (NULL != helpval && helpval != &value_null)
             if (value_istype(helpval, type_string))
                 dir_cstring_lset(helpenv, state, BUILTIN_HELP, helpval);
         (void)value_closure_pushdir(closure, helpenv, /*env_end*/FALSE);
         sprintf(&argname[0], "%s%d", BUILTIN_ARG, 1);
-        /*argnext =*/(void)value_closure_pushunbound(
-                              closure, NULL,
-                              value_string_lnew_measured(state, argname));
+        argnameval = value_string_lnew_measured(state, argname);
+        /*argnext =*/(void)value_closure_pushunbound(closure, NULL, argnameval);
 
         val = closure;
         value_unlocal(cmd);
+        value_unlocal(argnameval);
         value_unlocal(value_env_value(env));
         value_unlocal(dir_value(helpenv));
     } else
@@ -34497,7 +34893,7 @@ static const value_t *
 fn_len(const value_t *this_fn, parser_state_t *state)
 {   const value_t *dir = parser_builtin_arg(state, 1);
     const value_t *val = &value_null;
-    dir_t *env;
+    dir_t *env = NULL;
 
     if (value_to_dir(dir, &env))
         val = value_int_lnew(state, dir_state_count(env, state));

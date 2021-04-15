@@ -1709,7 +1709,12 @@ value_env_pushdir_lnew(parser_state_t *state, dir_t *newdir, value_t *unbound);
     value_env_pushdir_lnew(root_state, newdir, unbound)
 
 extern bool
-value_env_pushenv(value_env_t *env, value_env_t *newenv, bool env_end);
+value_env_pushenvdir(parser_state_t *state, value_env_t *env,
+                     value_env_t *newenv, bool env_end);
+/*! Deprecated: Legacy use only - don't use in new code */
+#define value_env_pushenv(env, newenv, env_end) \
+        value_env_pushenvdir(root_state, env, newenv, env_end)
+
 
 extern value_t *
 value_env_bind_lnew(parser_state_t *state, value_env_t *envval,
@@ -1982,7 +1987,10 @@ parser_collect_async(parser_state_t *state);
 extern void
 parser_collect(parser_state_t *state);
 
-extern outchar_t *
+/*! Write the macro-expanded version of a phrase to an output
+ *  @return FALSE if the phrase was incomplete in terms of macro expansion
+ */
+extern bool /*ok*/
 parser_expand(parser_state_t *state, outchar_t *out,
               const char *phrase, size_t len);
 
