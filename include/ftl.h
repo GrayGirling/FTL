@@ -592,8 +592,7 @@ mem_dumpdiff(const void *buf1, const void *buf2, unsigned addr, int units,
 
 /*          Value Memory 				                     */
 
-typedef struct value_chain_head_s value_chain_head_t;
-typedef value_chain_head_t valpool_t;
+typedef struct valpool_s valpool_t;
 typedef struct value_s value_t;
 
 
@@ -1842,6 +1841,9 @@ parser_state_lnew(parser_state_t *owner_state, dir_t *root);
 
 extern void
 parser_state_free(parser_state_t *state);
+
+extern valpool_t *
+parser_locals(parser_state_t *parser_state);
 
 extern valpool_t *
 parser_locals(parser_state_t *parser_state);

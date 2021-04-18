@@ -5097,7 +5097,21 @@ typedef struct value_chain_head_s {
 } value_chain_head_t;
 
 
-/* typedef value_chain_head_t valpool_t; */
+
+
+
+/*! Forget contents of chain
+ */
+static void value_chain_init(value_chain_head_t *head)
+{   /* It is not necessary to delete the chained areas of memory explicitly
+       they should be collected during garbage collection.
+       This is the safest approach - in case we have forgotten to unlocal
+       the variable and have gone on to use it..)
+    */
+    head->first = NULL;
+}
+
+
 
 
 
@@ -5121,6 +5135,76 @@ static void value_chain_push(value_chain_head_t *head, value_t *val)
 
 
 
+
+/*static*/ size_t value_chain_count(value_chain_head_t *head)
+{   value_t *val = head->first;
+    size_t len = 0;
+
+    while (PTRVALID(val))
+    {   len++;
+        val = val->loc_next;
+    }
+    return len;
+}
+
+
+
+
+
+#define DEBUG_VCM OMIT
+
+
+
+/*! move all values in one chain to another
+ *  (usage note: we're expecting \c to to contain few entries, if any)
+ *  After the operation the values in toadd should be in the order
+ *      <values from to> <original values from from>
+ */
+static void
+value_chain_merge(value_chain_head_t *to, value_chain_head_t *from)
+{
+    value_t **last = &to->first;
+    DEBUG_VCM(DPRINTF("%s: merge new %d-locals with %d-locals\n", codeid(),
+                      (int)value_chain_count(to),
+                      (int)value_chain_count(from)););
+    if (*last != NULL /*i.e. to is not empty*/)
+    {   /*find last element in to */
+        while (*last != NULL)
+            last = &(*last)->loc_next;
+        *last = from->first; /* add all of the from chain on to to */
+        if (from->first != NULL)
+            from->first->loc_last_ref = last;
+            /* point the starting entry of from back to end of to */
+        from->first = NULL;  /* it's been moved to the end of to */
+    }
+    DEBUG_VCM(DPRINTF("%s: merge holds %d-locals\n", codeid(),
+                      (int)value_chain_count(from)););
+    value_chain_init(from); /* wipe from */
+}
+
+
+
+
+
+#if 0 /*unused*/
+/*! move the head of a chain to an alternative location
+ *  (the chain in to is discarded)
+ */
+static void
+value_chain_move(value_chain_head_t *to, value_chain_head_t *from)
+{
+    to->first = from->first;
+    if (from->first != NULL)
+    {   from->first->loc_last_ref = &to->first;
+    }
+    from->first = NULL;
+}
+#endif
+
+
+
+
+    
 /*! Remove the given value from any chain it might be part of
  */
 extern void value_extract(value_t *val)
@@ -5136,6 +5220,8 @@ extern void value_extract(value_t *val)
     }
 #endif
 }
+
+
 
 
 
@@ -5158,22 +5244,23 @@ static void value_chain_mark_version(value_chain_head_t *head,
 
 
 
-/*! Forget contents of chain
- */
-static void value_chain_init(value_chain_head_t *head)
-{   /* It is not necessary to delete the chained areas of memory explicitly
-       they should be collected during garbage collection.
-       This is the safest approach - in case we have forgotten to unlocal
-       the variable and have gone on to use it..)
-    */
-    head->first = NULL;
+
+static void value_chain_empty(value_chain_head_t *head)
+{   value_t *next = head->first;
+    while (next != NULL)
+    {   value_t *doomed = next;
+        next = next->loc_next;
+        doomed->loc_next = NULL;
+        doomed->loc_last_ref = NULL;
+    }
+    head->first = next;/*NULL*/
 }
 
 
 
 
 
-
+#if 0 /*unused*/
 static void value_chain_list(value_chain_head_t *head, int heap_version)
 {   value_t *val = head->first;
 
@@ -5189,6 +5276,7 @@ static void value_chain_list(value_chain_head_t *head, int heap_version)
         val = val->loc_next;
     }
 }
+#endif
 
 
 
@@ -5266,6 +5354,16 @@ static void value_chain_list(value_chain_head_t *head, int heap_version)
    parser_collect() must mark the locals in each of the allocated threads but
    forget those (only) in the current thread.
 */
+
+
+
+
+
+typedef struct valpool_s {
+    struct valpool_s *outer; /*< outer valpool ring */
+    value_chain_head_t ring;
+} valpool_t;
+
 
 
 
@@ -5375,12 +5473,15 @@ extern value_t *value_malloc_lnew(parser_state_t *state, size_t size)
 {   value_t *val = FTL_MALLOC(size);
 #ifdef LOCAL_GARBAGE
     if (state != NULL)
-        value_chain_push(parser_locals(state), val);
+    {   valpool_t *locals = parser_locals(state);
+        value_chain_push(&locals->ring, val);
+    }
 #endif
     DO(if (val == NULL)
              fprintf(stderr, "%s: out of value memory requesting %d bytes\n",
                      codeid(), (int)size);
     );
+    
     return val;
 }
 
@@ -5405,7 +5506,7 @@ static void value_static_lnew(parser_state_t *state, value_t *val)
 {   OMIT(DPRINTF("%s: value %p marked as static local\n", codeid(), val););
 #ifdef LOCAL_GARBAGE
     if (state != NULL)
-        value_chain_push(parser_locals(state), val);
+        value_chain_push(&parser_locals(state)->ring, val);
 #endif
 }
 
@@ -5427,8 +5528,9 @@ static void value_local(parser_state_t *state, value_t *val)
      *      subsequently re-localled the variable
      */
     if (state != NULL && val != NULL && val->loc_last_ref == NULL)
-    {   OMIT(parser_report(root_state, "value %p marked as local\n", val););  
-        value_chain_push(parser_locals(state), val);
+    {   valpool_t *locals = parser_locals(state);
+        OMIT(parser_report(root_state, "value %p marked as local\n", val););  
+        value_chain_push(&locals->ring, val);
     } OMIT(else parser_report(root_state, "value %p %s marked as local\n",
                               val, val == NULL? "NULL so not":
                               val->loc_last_ref != NULL? "already":
@@ -5811,26 +5913,115 @@ value_heap_nextversion(void)
 
 
 
-/*static*/ void
+
+
+
+
+static void
+value_locals_init(valpool_t *locals)
+{   locals->outer = NULL;
+    value_chain_init(&locals->ring);
+}
+
+
+
+
+#if 0 /*unused*/
+static void
 value_locals_list(parser_state_t *state)
 {   int heap_version = value_heap.version;
-    value_chain_list(parser_locals(state), heap_version);
+    valpool_t *locals = parser_locals(state);
+    do {
+        value_chain_list(&locals->ring, heap_version);
+        locals = locals->outer;
+    } while (locals != NULL);
 }
+#endif
 
 
 
 
-/*static*/ void
+
+static void
 value_locals_discard(parser_state_t *state)
-{   value_chain_init(parser_locals(state));
+{   valpool_t *locals = parser_locals(state);
+    do {
+        value_chain_init(&locals->ring);
+        locals = locals->outer;
+    } while (locals != NULL);
 }
+
+
+
+
+
+/*! Create a new locals ring
+ *  by saving current ring to *outer_ring and making a new one linked to it.
+ */
+static void
+value_locals_new_ring(parser_state_t *state, valpool_t *outer_ring)
+{   valpool_t *locals = parser_locals(state);
+    *outer_ring = *locals;
+    value_chain_init(&locals->ring);
+    locals->outer = outer_ring;
+}
+
+
+
+
+
+
+
+/*! Restore outer locals ring
+ */
+static void
+value_locals_unlocal_ring(parser_state_t *state, const valpool_t *outer_ring)
+{   valpool_t *locals = parser_locals(state);
+    assert(outer_ring == locals->outer);
+    value_chain_empty(&locals->ring);
+    *locals = *outer_ring;
+}
+
+
+
+
+#if 0 /*unused*/
+/*! Move the locals in one valpool to another
+ *  (losing the previous contents of the destination)
+ */
+static void value_locals_move(valpool_t *to, valpool_t *from)
+{   to->outer = from->outer;
+    from->outer = NULL;
+    value_chain_move(&to->ring, &from->ring);
+}
+#endif
+
+
+
+
+
+
+/*! Merge the current locals ring with the outer one
+ */
+static void
+value_locals_merge_ring(parser_state_t *state, valpool_t *outer_ring)
+{   valpool_t *locals = parser_locals(state);
+    assert(outer_ring == locals->outer);
+    value_chain_merge(&locals->ring, &outer_ring->ring);
+    locals->outer = outer_ring->outer;
+}
+
 
 
 
 
 static void
 value_locals_mark_version(parser_state_t *state, int heap_version)
-{   value_chain_mark_version(parser_locals(state), heap_version);
+{   valpool_t *locals = parser_locals(state);
+    do {
+        value_chain_mark_version(&locals->ring, heap_version);
+        locals = locals->outer;
+    } while (locals != NULL);
 }
 
 
@@ -17334,7 +17525,7 @@ value_coroutine_init(parser_state_t *state, dir_stack_t *env, dir_t *root,
     state->catch_pos = NULL;  /* no outer exception */
     state->catch_arg = NULL;
     parser_env_push(state, root, /*outer_visible*/FALSE);
-    value_chain_init(&state->locals);
+    value_locals_init(&state->locals);
     return val;
 }
 
@@ -17454,6 +17645,7 @@ extern valpool_t *
 parser_locals(parser_state_t *parser_state)
 {   return (&(parser_state)->locals);
 }
+
 
 
 /* forward reference */
@@ -17831,33 +18023,58 @@ parser_report_help(parser_state_t *parser_state, const value_t *cmd)
 
 
 static void
-parser_exception_save(const parser_state_t *parser_state,
-                      parser_state_t *out_saved, dir_t **out_saved_stack)
-{   *out_saved = *parser_state; /* saves too much state, but simple */
-    *out_saved_stack = dir_stack_top(parser_env_stack(parser_state));
+parser_exception_save(parser_state_t *state,
+                      parser_state_t *out_saved, dir_t **out_saved_stack,
+                      valpool_t *out_saved_locals_ring)
+{   valpool_t *locals = parser_locals(state);
+    *out_saved = *state; /* saves too much state, but simple */
+    *out_saved_stack = dir_stack_top(parser_env_stack(state));
+    *out_saved_locals_ring = *locals;
+    value_locals_new_ring(state, /*outer_ring*/out_saved_locals_ring);
+    /*< start with a new empty ring */
 }
 
 
 
 
 static void
-parser_exception_restore(parser_state_t *parser_state,
-                         const parser_state_t *saved, dir_t *saved_stack)
-{   /*dir_stack_t *stack; */
-    /* *parser_state = *saved; - too much restoration */
-    /* don't restore: value, errors, locals */
-    parser_state->source = saved->source;
-    parser_state->env = saved->env;
-    parser_state->left_envs = saved->left_envs;
-    parser_state->root = saved->root;
-    parser_state->opdefs = saved->opdefs;
-    parser_state->sleep = saved->sleep;
-    parser_state->echo_log = saved->echo_log;
-    parser_state->catch_arg = saved->catch_arg;
+parser_exception_restore(parser_state_t *state,
+                         const parser_state_t *saved, dir_t *saved_stack,
+                         const valpool_t *saved_locals_ring)
+{   /* all the locals have been lost */
+    value_locals_unlocal_ring(state, saved_locals_ring);
     
-    /*stack = parser_env_stack(parser_state); */
+    /*dir_stack_t *stack; */
+    /* *state = *saved; - too much restoration */
+    /* don't restore: value, errors, locals */
+    state->source = saved->source;
+    state->env = saved->env;
+    state->left_envs = saved->left_envs;
+    state->root = saved->root;
+    state->opdefs = saved->opdefs;
+    state->sleep = saved->sleep;
+    state->echo_log = saved->echo_log;
+    state->catch_pos = saved->catch_pos;
+    state->catch_arg = saved->catch_arg;
+    
+    /*stack = parser_env_stack(state); */
     /*stack->stack = saved_stack; */
-    parser_env_return(parser_state, (dir_stack_pos_t)&saved_stack);
+    parser_env_return(state, (dir_stack_pos_t)&saved_stack);
+
+}
+
+
+
+
+/*! Ignore the effect of saving exception state
+ *  (as an alternative to restoring it)
+ */
+static void
+parser_exception_ignore(parser_state_t *parser_state,
+                        valpool_t *saved_locals_ring)
+{   /* we have older locals in locals->outer and newer ones in locals, they
+       need to be merged together */
+    value_locals_merge_ring(parser_state, saved_locals_ring);
 }
 
 
@@ -17885,13 +18102,14 @@ extern const value_t * /*local*/
 parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
                   void *call_arg, wbool *out_ok)
 {
-    parser_state_t saved_state;
-    dir_t *saved_stack = NULL;
     jmp_buf except_place;
     int event;
+    parser_state_t saved_state;
+    dir_t *saved_stack = NULL;
+    valpool_t saved_locals;
     const value_t *val = &value_null;
 
-    parser_exception_save(state, &saved_state, &saved_stack);
+    parser_exception_save(state, &saved_state, &saved_stack, &saved_locals);
 
     state->catch_pos = &except_place;
     state->catch_arg = NULL;
@@ -17905,6 +18123,7 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
         /* restore outer values */
         state->catch_pos = saved_state.catch_pos;
         state->catch_arg = saved_state.catch_arg;
+        parser_exception_ignore(state, &saved_locals);
         *out_ok = TRUE;
     } else {
         /* longjmp() was called somewhere in the body of execute_code
@@ -17912,7 +18131,10 @@ parser_catch_call(parser_state_t *state, parser_call_fn_t *call,
            above
          */
         val = state->catch_arg; /* probably still local */
-        parser_exception_restore(state, &saved_state, saved_stack);
+        /* TODO: instead make val local in outer ring here */
+        parser_exception_restore(state,
+                                 &saved_state, saved_stack, &saved_locals);
+        value_local(state, (value_t */*unconst*/)val);
         *out_ok = FALSE;
     }
     return val;
@@ -17932,8 +18154,11 @@ parser_call_invoke_lnew(parser_state_t *state, void *call_arg)
 extern const value_t * /*local*/
 parser_catch_invoke(parser_state_t *state, const value_t *code, wbool *out_ok)
 {
-    return /*lnew*/parser_catch_call(state, &parser_call_invoke_lnew,
-                                     (void *)code, out_ok);
+    const value_t *val = /*lnew*/
+        parser_catch_call(state, &parser_call_invoke_lnew, (void *)code,
+                          out_ok);
+    OMIT(LOCS(state, val);DPRINTF("catch %sexception\n", *out_ok?"no ":""););
+    return val;
 }
 
 
@@ -23960,11 +24185,13 @@ fn_catch(const value_t *this_fn, parser_state_t *state)
         if (!ok) /* an exception was caught - returned in val */
         {
             const value_t *exception;
+            const value_t *exception_return;
             exception = /*lnew*/substitute(exception_code, val, state,
                                            /*unstrict*/FALSE);
-            value_unlocal(val); /* we are replacing val */
-            val = /*lnew*/invoke(exception, state);
+            exception_return = /*lnew*/invoke(exception, state);
             value_unlocal(exception);
+            value_unlocal(val);
+            val = exception_return;
         }
     } else
         parser_report_help(state, this_fn);
