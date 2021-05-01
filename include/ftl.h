@@ -82,11 +82,15 @@ typedef int wbool; /* Wide BOOLEAN - for boolean pointers */
  * agree on the type used for 'bool' and for the compiler not to be able to see
  * this.  This is rarely a problem - except when one of the functions here
  * returns a pointer to a bool when an unexpectedly large area of memory might
- * be updated. */
+ * be updated.
+ * It is safest, therefore, always to use "wbool *" whenever a pointer to a
+ * boolean is part of an exported proforma.
+ */
     
     
 
 /*          O/S Independence                                     */
+
 
 #ifdef _WIN32
 #define STATIC_INLINE static __inline
@@ -99,27 +103,53 @@ typedef int wbool; /* Wide BOOLEAN - for boolean pointers */
 /* The following two should mimic the Windows.h types */
 typedef void *PVOID;
 typedef PVOID HANDLE;
+#endif
+    
+
+/*          Threads                                          */
+
+
+#ifdef _WIN32
+
 typedef HANDLE thread_os_t;
 #define THREAD_OS_BAD 0
 
+#else /* not windows native compiler, assume pthreads available */
 
+#include <pthread.h> /* for threads */
+typedef pthread_t thread_os_t;
+#define THREAD_OS_BAD 0
+
+#endif /* thread compiler choice for threads */
+
+    
 /*          Numbers                                          */
 
-#ifdef __GNUC__ /* e.g. mingw? */
-typedef long long number_t;
-typedef unsigned long long unumber_t;
-#define os_strtonumber  strtoll
-#define os_strtounumber strtoull
-#else /* assume windows compiler? */
-typedef __int64 number_t;
-typedef unsigned __int64 unumber_t;
-#define os_strtonumber  _strtoi64
-#define os_strtounumber _strtoui64
+
+#ifdef _WIN32 /* targeting the WINDOWS environment/libraries */
+#else
 #endif
 
+#ifdef _WIN32
+
+typedef __int64 number_t;
+typedef unsigned __int64 unumber_t;
+
+#define os_strtonumber  _strtoi64
+#define os_strtounumber _strtoui64
+    
 #define NUMBER(digits) digits##ll
 #define UNUMBER(digits) digits##ull
 /* printf formats */
+#ifdef __MINGW_USE_ANSI_STDIO
+#define _WINDOWS_NATIVE_STDIO (1 != (__MINGW_USE_ANSI_STDIO + 0))
+#endif
+#ifndef _WINDOWS_NATIVE_STDIO
+#define _WINDOWS_NATIVE_STDIO 1
+#endif
+#if _WINDOWS_NATIVE_STDIO
+/* use msvcrt.dll formats including %I64d etc. */
+//#warning Using windows native print formats 
 #define F_NUMBER_T "I64d"
 #define FX_UNUMBER_T "I64x"
 #define FXC_UNUMBER_T "I64X"
@@ -127,6 +157,16 @@ typedef unsigned __int64 unumber_t;
 #define F_UNUMBER_T "I64u"
 #define F_U32_T "u"
 #define F_S32_T ""
+#else
+//#warning Using C99 print formats 
+#define F_NUMBER_T "lld"
+#define FX_UNUMBER_T "llx"
+#define FXC_UNUMBER_T "llX"
+#define FO_UNUMBER_T "llo"
+#define F_UNUMBER_T "llu"
+#define F_U32_T "lu"
+#define F_S32_T "l"
+#endif
 
 typedef unsigned int   ftl_u32_t;
 typedef signed int     ftl_s32_t;
@@ -138,22 +178,26 @@ typedef signed short   ftl_s16_t;
 typedef unumber_t      ftl_u64_t;
 typedef number_t       ftl_s64_t;
 
-#else /* assume OSX/Linux */
+#else /* not a compiler for the windows environment */
 
-#include <pthread.h> /* for threads */
-typedef pthread_t thread_os_t;
-#define THREAD_OS_BAD 0
+#ifdef __GNUC__ /* windows or posix using GCC */
 
-#if defined(__ia64__) || defined(__x86_64__)
+#define os_strtonumber  strtoll
+#define os_strtounumber strtoull
+
+#if defined(__SIZEOF_LONG__)
+#define _SIZEOF_LONG __SIZEOF_LONG__
+#elif defined(__ia64__) || defined(__x86_64__)
 #define _SIZEOF_LONG 8
 #endif
 
+// char check_long[1+sizeof(long)-_SIZEOF_LONG];
+    
 #ifndef _SIZEOF_LONG
 #define _SIZEOF_LONG 4
 #endif
 
 #if _SIZEOF_LONG == 8
-
 typedef long number_t;
 typedef unsigned long unumber_t;
 typedef unsigned int  ftl_u32_t;
@@ -161,6 +205,7 @@ typedef signed int    ftl_s32_t;
 
 #define NUMBER(digits) digits##l
 #define UNUMBER(digits) digits##ul
+
 /* printf formats */
 #define F_NUMBER_T "ld"
 #define FX_UNUMBER_T "lx"
@@ -170,7 +215,7 @@ typedef signed int    ftl_s32_t;
 #define F_U32_T "u"
 #define F_S32_T ""
 
-#else
+#else /* LONG is not 8 bytes */
 
 typedef long long number_t;
 typedef unsigned long long unumber_t;
@@ -194,10 +239,34 @@ typedef unsigned char  ftl_u8_t;
 typedef signed char    ftl_s8_t;
 typedef unsigned short ftl_u16_t;
 typedef signed short   ftl_s16_t;
+    
+#else /* compiler is neither for Windows nor is GCC - OSX compiler? */
+
+#define os_strtonumber  strtoll
+#define os_strtounumber strtoull
+
+typedef unsigned char  ftl_u8_t;
+typedef signed char    ftl_s8_t;
+typedef unsigned short ftl_u16_t;
+typedef signed short   ftl_s16_t;
 typedef unumber_t      ftl_u64_t;
 typedef number_t       ftl_s64_t;
 
-#endif
+#define NUMBER(digits) digits##l
+#define UNUMBER(digits) digits##ul
+
+/* printf formats */
+#define F_NUMBER_T "ld"
+#define FX_UNUMBER_T "lx"
+#define FXC_UNUMBER_T "lX"
+#define FO_UNUMBER_T "lo"
+#define F_UNUMBER_T "lu"
+#define F_U32_T "u"
+#define F_S32_T ""
+
+#endif /* non GCC compiler */
+
+#endif /* compiler selection */
 
 
 /*          O/S Independence - Threads                               */
@@ -218,8 +287,6 @@ thread_rc(thread_os_t thread);
 
 extern bool
 thread_active(thread_os_t thread);
-
-
 
 extern thread_os_t
 thread_self(void);
