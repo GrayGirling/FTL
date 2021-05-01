@@ -1,7 +1,7 @@
 
 /*
  * Copyright (c) 2005-2009, Solarflare Communications Inc.
- * Copyright (c) 2013-2020, Gray Girling
+ * Copyright (c) 2013-2021, Gray Girling
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -953,6 +953,7 @@ main(int argc, char **argv)
     
     DEBUG_CLI(printf(CODEID ": entered\n"););
     ftl_init();
+    DEBUG_CLI(printf(CODEID ": initialized\n"););
     codeid_set(CODEID);
 
     err = parse_args(argc, argv,&app_argc, &app_argv[0], APP_ARGC_MAX,
@@ -968,8 +969,14 @@ main(int argc, char **argv)
     {   show_version(CODEID);
     }
     else
-    {   dir_t *root = dir_id_lnew(NULL);
-        parser_state_t *state = parser_state_lnew(NULL, root);
+    {
+        dir_t *root;
+        parser_state_t *state;
+        
+        DEBUG_CLI(printf(CODEID ": create root dir\n"););
+        root = dir_id_lnew(NULL);
+        DEBUG_CLI(printf(CODEID ": allocating state\n"););
+        state = parser_state_lnew(NULL, root);
 
         value_unlocal(dir_value(root));
         if (NULL == state)
@@ -978,6 +985,7 @@ main(int argc, char **argv)
         {   parser_echo_setlog(state, echo_prolog_lines? echo_log: NULL,
                                "prolog> %s\n");
 
+            DEBUG_CLI(printf(CODEID ": defining generic commands\n"););
             cmds_generic(state, app_argc, &app_argv[0]);
             DEBUG_CLI(printf("%s: opened internal commands\n", codeid()););
 
