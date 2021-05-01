@@ -3,7 +3,7 @@ chop 3 "abcdefghijk"
 chop -3 "abcdefghijk"
 # <"ijk", "fgh", "cde", "ab">
 set rev[x]:{x.<(len x!)-1..0>}
-join "," (rev (chop -3 (strf "%d" <10000000>!)!)!)
+join "," (rev (chop (-3) (strf "%d" <10000000>!)!)!)
 # "10,000,000"
 chop [word=-4] "thisand that"
 # <[word="that"], [word="and "], [word="this"]>

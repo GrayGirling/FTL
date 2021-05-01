@@ -23,4 +23,4 @@ include "hello"
 # hello world
 set sys.env.MYPATH ".."
 include "hello"
-# can't read file "hello"
+# can't read file "hello" - assuming no file "hello" current

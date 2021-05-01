@@ -4,7 +4,7 @@ set try[fn]:{
 
 try { echo "hi"!; "good"}
 
-try { echo "hi"!; throw "A BAD ONE"!; echo "here - never"!; "never"}
+try { echo "hi"!; throw "AN EXCEPTION"!; echo "here - never"!; "never"}
 
 set deep[]:{
     echo "Deep..."!;

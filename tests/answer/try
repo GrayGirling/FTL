@@ -6,9 +6,9 @@
 hi
 "good"
 > 
-> try { echo "hi"!; throw "A BAD ONE"!; echo "here - never"!; "never"}
+> try { echo "hi"!; throw "AN EXCEPTION"!; echo "here - never"!; "never"}
 hi
-Exception: ** "A BAD ONE" **
+Exception: ** "AN EXCEPTION" **
 "caught"
 > 
 > set deep[]:{

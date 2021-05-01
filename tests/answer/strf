@@ -1,36 +1,3 @@
-> set on_1line[val]:{io.write io.out (strf "%-.79v" <val>!)!;io.write io.out "\n""!;}
-> on_1line 3
-3
-> # 3
-> on_1line fmt
-[d=[_1, _2, _3]::<func:0x7f608082c866,3>, u=[_1, _2, _3]::<func:0x7f608082c892,
-> # [d=[_1, _2, _3]::<func:0x55e8c0516e8d,3>, u=[_1, _2, _3]::<func:0x55e8c0516ebb9,
-> 
-> fmt help
-d <f> <p> <val> - %d integer format
-u <f> <p> <val> - %u unsinged format
-x <f> <p> <val> - %x hex format
-X <f> <p> <val> - %X hex format
-s <f> <p> <val> - %s string format
-S <f> <p> <val> - %s zero terminated string format
-c <f> <p> <val> - %c character format
-b <f> <p> <val> - %b little endian binary format
-B <f> <p> <val> - %B big endian binary format
-v <f> <p> <val> - %v value format
-j <f> <p> <val> - %j (JSON) value format
-J <f> <p> <val> - %J (pretty JSON) value format
-> #d <f> <p> <val> - %d integer format
-> #u <f> <p> <val> - %u unsinged format
-> #x <f> <p> <val> - %x hex format
-> #X <f> <p> <val> - %X hex format
-> #s <f> <p> <val> - %s string format
-> #S <f> <p> <val> - %s zero terminated string format
-> #c <f> <p> <val> - %c character format
-> #b <f> <p> <val> - %b little endian binary format
-> #B <f> <p> <val> - %B big endian binary format
-> #v <f> <p> <val> - %v value format
-> #j <f> <p> <val> - %j (JSON) value format
-> #J <f> <p> <val> - %J (pretty JSON) value format
 > 
 > set hdump[str]:{
 >     forall (split NULL str!) [h]:{
@@ -40,10 +7,10 @@ J <f> <p> <val> - %J (pretty JSON) value format
 > 
 > set printf io.fprintf io.out
 > printf "tokens %[one]t (not %[one]v) and %[two]t\n" [one="string", two=9]
-ftl $*console*:+28 in
-ftl $*console*:29: invalid format item syntax - '%[one]t (not %[one]v) and %[two]t
+ftl $*console*:+9 in
+ftl $*console*:10: invalid format item syntax - '%[one]t (not %[one]v) and %[two]t
 '
-ftl $*console*:+28: invalid format item syntax - '%[two]t
+ftl $*console*:+9: invalid format item syntax - '%[two]t
 '
 tokens t (not "string") and t
 30
@@ -76,4 +43,33 @@ tokens t (not "string") and t
 > packet 2 0x12131415 "somedata"
 "\x02\x15\x14\x13\x12somedata"
 > # "\x02\x15\x14\x13\x12somedata"
+> 
+> fmt help
+d <f> <p> <val> - %d integer format
+u <f> <p> <val> - %u unsigned format
+o <f> <p> <val> - %u unsigned octal format
+x <f> <p> <val> - %x unsigned hex format
+X <f> <p> <val> - %X unsigned hex format
+s <f> <p> <val> - %s string format
+S <f> <p> <val> - %s zero terminated string format
+c <f> <p> <val> - %c character format
+b <f> <p> <val> - %b little endian binary format
+B <f> <p> <val> - %B big endian binary format
+v <f> <p> <val> - %v value format
+p <f> <p> <val> - %p internal pointer
+j <f> <p> <val> - %j (JSON) value format
+J <f> <p> <val> - %J (pretty JSON) value format
+> #d <f> <p> <val> - %d integer format
+> #u <f> <p> <val> - %u unsigned format
+> #o <f> <p> <val> - %u unsigned octal format
+> #x <f> <p> <val> - %x unsigned hex format
+> #X <f> <p> <val> - %X unsigned hex format
+> #s <f> <p> <val> - %s string format
+> #S <f> <p> <val> - %s zero terminated string format
+> #c <f> <p> <val> - %c character format
+> #b <f> <p> <val> - %b little endian binary format
+> #B <f> <p> <val> - %B big endian binary format
+> #v <f> <p> <val> - %v value format
+> #j <f> <p> <val> - %j (JSON) value format
+> #J <f> <p> <val> - %J (pretty JSON) value format
 > 

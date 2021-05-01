@@ -1,19 +1,373 @@
 > closure FALSE [inc=3] {<0, inc .. 10>}
 []::{<0, inc .. 10>}
 > # [inc=3]::{<0, inc .. 10>}
-> set key_chooser[vals]:{(closure FALSE vals {key}!)!}
-> key_chooser ["lock"=8,"key"=-9,"bolt"=2]
+> set key 1000 # shouldn't be used in key_chooser1
+> set key_chooser1[vals]:{(closure FALSE vals {key}!)!}
+> set key_chooser2[vals]:{(closure TRUE vals {key}!)!} # include external env
+> key_chooser1 ["lock"=8,"key"=-9,"bolt"=2]
 -9
 > # -9
-> key_chooser ["lock"=8,"bolt"=2]
-ftl $*console*:3+0+0 in
-ftl $*console*:3+0 in
-ftl $*console*:+6 in
-ftl $*console*:7: undefined symbol 'key'
-ftl $*console*:3+0+0: error in closure code body
-> # ftl $*console*:28: undefined symbol 'key'
-> # ftl $*console*:28: error in closure code body
+> key_chooser1 ["lock"=8,"bolt"=2]
+ftl $*console*:4+0+0 in
+ftl $*console*:4+0 in
+ftl $*console*:+8 in
+ftl $*console*:9: undefined symbol 'key'
+ftl $*console*:4+0+0: error in closure code body
+> # ftl ...: undefined symbol 'key'
+> # ftl ...: error in closure code body
+> key_chooser2 ["lock"=8,"bolt"=2]
+1000
+> # 1000
 > set init_42 closure TRUE [first=42] {[value=first]}!
 > init_42
 [value=42]
+> # [value=42]
+> 
+> # Test constructors : and ::
+> 
+> # example values
+> set command code echo!             # code = cmd
+> set prog {prog}                    # code = body
+> set function code rnd!             # code = function (with arg)
+> set function0 code (parse.codeid)! # code = function (with no arg)
+> set unbound [arg]                  # unbound dir
+> set clos1_lg [arg]:prog            # closure with global context
+> set clos1_sml [arg]::prog          # closure with local context
+> set clos0_lg []:prog               # closure with global context (no arg)
+> set clos0_sml []::prog             # closure with local context (no arg)
+> 
+> eval [attr1=1]:[attr2=2]
+[attr2=2,attr1=1]:$root
+> eval [attr1=1]::[attr2=2]
+[attr2=2,attr1=1]
+> 
+> context command::[attr=42]
+[attr=42]
+> context [attr=42]::command
+[attr=42]
+> eval (code ([attr=42]::command)!) == command
+TRUE
+> context command:[attr=42]
+[attr=42]:$root
+> context [attr=42]:command
+[attr=42]:$root
+> eval (code ([attr=42]:command)!) == command
+TRUE
+> 
+> context prog::[attr=42]
+[attr=42]
+> context [attr=42]::prog
+[attr=42]
+> eval (code ([attr=42]::prog)!) == prog
+TRUE
+> context prog:[attr=42]
+[attr=42]:$root
+> context [attr=42]:prog
+[attr=42]:$root
+> eval (code ([attr=42]:prog)!) == prog
+TRUE
+> 
+> context function::[attr=42]
+[attr=42]
+> context [attr=42]::function
+[attr=42]
+> eval (code ([attr=42]::function)!) == function
+TRUE
+> context function:[attr=42]
+[attr=42]:$root
+> context [attr=42]:function
+[attr=42]:$root
+> eval (code ([attr=42]:function)!) == function
+TRUE
+> 
+> context function0::[attr=42]
+[attr=42]
+> context [attr=42]::function0
+[attr=42]
+> eval (code ([attr=42]::function0)!) == function0
+TRUE
+> context function0:[attr=42]
+[attr=42]:$root
+> context [attr=42]:function0
+[attr=42]:$root
+> eval (code ([attr=42]:function0)!) == function0
+TRUE
+> 
+> eval (code clos1_lg!) == prog
+TRUE
+> context clos1_lg::[attr=42]
+[attr=42, arg]:$root
+> argnames clos1_lg::[attr=42]
+<"arg">
+> inenv clos1_lg::[attr=42] "attr"
+TRUE
+> context [attr=42]::clos1_lg
+[arg]:$root
+> argnames [attr=42]::clos1_lg
+<"arg">
+> inenv [attr=42]::clos1_lg "attr"
+TRUE
+> eval (code ([attr=42]::clos1_lg)!) == prog
+TRUE
+> context clos1_lg:[attr=42]
+[attr=42, arg]:$root
+> argnames clos1_lg:[attr=42]
+<"arg">
+> inenv clos1_lg:[attr=42] "attr"
+TRUE
+> context [attr=42]:clos1_lg
+[arg]:$root
+> argnames [attr=42]:clos1_lg
+<"arg">
+> inenv [attr=42]:clos1_lg "attr"
+TRUE
+> eval (code ([attr=42]:clos1_lg)!) == prog
+TRUE
+> 
+> eval (code clos1_lg!) == prog
+TRUE
+> context clos1_sml::[attr=42]
+[attr=42, arg]
+> domain clos1_sml::[attr=42]
+<"attr">
+> context [attr=42]::clos1_sml
+[attr=42, arg]
+> domain [attr=42]::clos1_sml
+<"attr">
+> eval (code ([attr=42]::clos1_sml)!) == prog
+TRUE
+> context clos1_sml:[attr=42]
+[attr=42, arg]:$root
+> inenv clos1_sml:[attr=42] "attr"
+TRUE
+> context [attr=42]:clos1_sml
+[attr=42, arg]:$root
+> inenv [attr=42]:clos1_sml "attr"
+TRUE
+> eval (code ([attr=42]:clos1_sml)!) == prog
+TRUE
+> 
+> eval (code clos1_sml!) == prog
+TRUE
+> context clos1_sml::[attr=42]
+[attr=42, arg]
+> context [attr=42]::clos1_sml
+[attr=42, arg]
+> eval (code ([attr=42]::clos1_sml)!) == prog
+TRUE
+> context clos1_sml:[attr=42]
+[attr=42, arg]:$root
+> context [attr=42]:clos1_sml
+[attr=42, arg]:$root
+> eval (code ([attr=42]:clos1_sml)!) == prog
+TRUE
+> 
+> context [a=1]::[b=2]::clos1_sml::[c=3]::[d=4]
+[d=4,c=3,b=2,a=1, arg]
+> domain [a=1]::[b=2]::clos1_sml::[c=3]::[d=4]
+<"d", "c", "b", "a">
+> context [a=1]::[b=2]::clos0_sml::[c=3]::[d=4]
+[d=4,c=3,b=2,a=1]
+> domain [a=1]::[b=2]::clos0_sml::[c=3]::[d=4]
+<"d", "c", "b", "a">
+> 
+> context unbound::[attr=42]
+[attr=42, arg]
+> context [attr=42]::unbound
+[attr=42, arg]
+> context unbound:[attr=42]
+[attr=42, arg]:$root
+> context [attr=42]:unbound
+[attr=42, arg]:$root
+> 
+> argnames unbound::[attr=42]
+<"arg">
+> argnames [attr=42]::unbound
+<"arg">
+> argnames unbound:[attr=42]
+<"arg">
+> argnames [attr=42]:unbound
+<"arg">
+> 
+> argnames clos0_sml
+<>
+> argnames unbound::clos0_sml
+<"arg">
+> argnames clos0_sml::unbound
+<"arg">
+> argnames unbound:clos0_sml
+<"arg">
+> argnames clos0_sml:unbound
+<"arg">
+> 
+> argnames clos1_sml
+<"arg">
+> argnames unbound::clos1_sml
+ftl $*console*:+119 in
+ftl $*console*:120: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames clos1_sml::unbound
+ftl $*console*:+120 in
+ftl $*console*:121: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames unbound:clos1_sml
+ftl $*console*:+121 in
+ftl $*console*:122: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames clos1_sml:unbound
+ftl $*console*:+122 in
+ftl $*console*:123: can't join two environments with unbound variables - not yet supported
+<"arg">
+> 
+> argnames clos0_lg
+<>
+> argnames unbound::clos0_lg
+<"arg">
+> argnames clos0_lg::unbound
+<"arg">
+> argnames unbound:clos0_lg
+<"arg">
+> argnames clos0_lg:unbound
+<"arg">
+> 
+> argnames clos1_lg
+<"arg">
+> argnames unbound::clos1_lg
+ftl $*console*:+131 in
+ftl $*console*:132: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames clos1_lg::unbound
+ftl $*console*:+132 in
+ftl $*console*:133: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames unbound:clos1_lg
+ftl $*console*:+133 in
+ftl $*console*:134: can't join two environments with unbound variables - not yet supported
+<"arg">
+> argnames clos1_lg:unbound
+ftl $*console*:+134 in
+ftl $*console*:135: can't join two environments with unbound variables - not yet supported
+<"arg">
+> 
+> # argument names in a function value are unknown and implicit
+> argnames unbound::function0
+<"arg">
+> argnames function0::unbound
+<"arg">
+> argnames unbound:function0
+<"arg">
+> argnames function0:unbound
+<"arg">
+> 
+> argnames unbound::function
+<"arg">
+> argnames function::unbound
+<"arg">
+> argnames unbound:function
+<"arg">
+> argnames function:unbound
+<"arg">
+> 
+> # argument names in a function value are meaningless
+> argnames unbound::command
+<"arg">
+> argnames command::unbound
+<"arg">
+> argnames unbound:command
+<"arg">
+> argnames command:unbound
+<"arg">
+> 
+> 
+> set myecho [author="Gray"]:echo
+> set author "Anon"
+> 
+> eval myecho {Author is $author}!
+Author is Gray
+> # should be: Author is Gray
+> set any echo:[author="corruption by irrelevance"]
+> # once caused an environment corruption error
+> eval myecho {Author is $author}!
+Author is Gray
+> # should be: Author is Gray
+> set any echo:[author="corruption by another irrelevance"]
+> eval myecho {Author is $author}!
+Author is Gray
+> # should be: Author is Gray
+> 
+> eval echo "Author is $author"!
+Author is Anon
+> eval []:echo {Author is $author}!
+Author is Anon
+> # should be: Author is Anon
+> eval []::echo {Author is $author}!
+Author is Anon
+> # should be: Author is Anon
+> eval echo {Author is $author}!
+Author is Anon
+> # should be: Author is Anon
+> 
+> set simple[]:{"some text"}
+> simple
+"some text"
+> 
+> set collect_test[]:{
+>    [self]:{self} "some text"!
+> }
+> collect_test
+"some text"
+> # (once displayed a garbage collection issue), should be "some text"
+> 
+> set myclass []:{
+>    [self=[]]:{
+>        self.state = 2;
+>        self
+>    }!
+> }
+> myclass
+[state=2]
+> 
+> set myclass []:{
+>    [state=2]:{
+>        []:{state}
+>    }!
+> }
+> myclass
+[]:{state}
+> # should be []:{state}
+> eval myclass!!
+2
+> # 2
+> 
+> set myclass []:{
+>    [self=[],state=2]:{
+>        self.method = []:{state};
+>        self
+>    }!
+> }
+> myclass
+[method=[]:{state}]
+> eval (myclass!).method!
+2
+> # 2
+> 
+> set myclass [arg]:{
+>    [self=[],state=arg]:{
+>        enter self!;
+>        .method = []:{state};
+>        leaving!
+>    }!
+> }
+> myclass 2
+[method=[]:{state}]
+> set A myclass 2!
+> set B myclass 90!
+> eval A.method!
+2
+> eval B.method!
+90
+> A method
+2
+> B method
+90
 > 

@@ -32,7 +32,7 @@ err()
 }
 
 help()
-{   echo "syntax: $cmd_name [-g][-v][-x|-r|-l][-s][-a] | [test_name]"
+{   echo "syntax: $cmd_name [-c <cmd>] [-g][-v][-x|-r|-l][-s][-a] | [test_name]"
     echo "    -v        verbose"
     echo "    -r        record result as correct answer"
     echo "    -x        just execute and echo the test"
@@ -40,6 +40,7 @@ help()
     echo "    -i        show ideal results"
     echo "    -a        all tests"
     echo "    -g        run test under GDB"
+    echo "    -c <cmd>  test FTL binary at <cmd>"
 }
 
 do_list=false
@@ -148,6 +149,8 @@ while $option; do
           do_run=true;;
        -g | --gdb)
           do_gdb=true;;
+       -c | --cmd)
+          [ $# -gt 0 ] && { shift; ftl_cmd="$1"; };;
        -v | --verbose)
           verbose=true;;
        -h | --help)

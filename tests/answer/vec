@@ -85,7 +85,6 @@ TRUE
 > 
 > set v <..10>
 > set v.(len v!) 11
-ftl: name 10 has a constant value
 ftl $*console*:+47 in
 ftl $*console*:48: can't set a value for 10 here
 > eval v
@@ -175,7 +174,7 @@ ftl $*console*:+69: failed to evaluate expression
 > eval myadd 4
 [2]:{ .1 + .2 }
 > 
-> set f [1,2]:{ echo "${.1} - ${.2}"! }
+> set f [1,2]:{ []:echo "${.1} - ${.2}"! }
 > f "first" "rest"
 first - rest
 > 

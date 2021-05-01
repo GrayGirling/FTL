@@ -65,9 +65,8 @@ ftl $*console*:54+0 in
 ftl $*console*:+57 in
 ftl $*console*:58: undefined symbol 'yfy'
 ftl $*console*:54+0: code has trailing text - ''
-> opeval {x}         # fails - 'x' undefined
-ftl $*console*:54+0: undefined symbol 'x'
-ftl $*console*:54+0: code has trailing text - ''
+> opeval {x}         # returns 42
+42
 > opeval {4}
 4
 > opeval {"str"}

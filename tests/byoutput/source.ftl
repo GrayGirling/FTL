@@ -4,12 +4,16 @@ source "::://:::"
 
 set write[file, msg]:{
     .f = io.file file "w"!;
-    f != NULL {io.write f ""+(msg)+("\n")!}!;
+    if f == NULL {
+        echo "Failed to open file '$file' for writing"!;
+    }{
+        io.write f ""+(msg)+("\n")!
+    }!;
     io.close f!;
 }
-write "test"  "echo Running line from test\necho Finished in test"
-source test
-source "test"
+write "ftltest.tmp"  "echo Running line from test\necho Finished in test"
+source ftltest.tmp
+source "ftltest.tmp"
 
 set src[f]:{if TRUE {source f!}{}!;echo "Done now"!}
 src "test"

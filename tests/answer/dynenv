@@ -69,11 +69,9 @@ TRUE
 (count)
 2
 > set dyn_noset.ads 10
-ftl: name "ads" has a constant value
 ftl $*console*:+35 in
 ftl $*console*:36: can't set a value for "ads" here
 > set dyn_noset.b 120
-ftl: name "b" has a constant value
 ftl $*console*:+36 in
 ftl $*console*:37: can't set a value for "b" here
 > inenv dyn_noset "ads"

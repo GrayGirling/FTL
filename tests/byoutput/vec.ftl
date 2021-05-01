@@ -85,6 +85,6 @@ set myadd[1,2]:{ .1 + .2 }
 myadd 30 12
 eval myadd 4
 
-set f [1,2]:{ echo "${.1} - ${.2}"! }
+set f [1,2]:{ []:echo "${.1} - ${.2}"! }
 f "first" "rest"
 

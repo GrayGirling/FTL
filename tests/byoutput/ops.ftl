@@ -55,7 +55,7 @@ set opeval[expr]: { parse.opeval opdef expr! }
 
 set x 42
 opeval {yfy}       # fails - 'yfy' undefined
-opeval {x}         # fails - 'x' undefined
+opeval {x}         # returns 42
 opeval {4}
 opeval {"str"}
 opeval {<3>}

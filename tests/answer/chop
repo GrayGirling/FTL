@@ -5,14 +5,8 @@
 <"ijk", "fgh", "cde", "ab">
 > # <"ijk", "fgh", "cde", "ab">
 > set rev[x]:{x.<(len x!)-1..0>}
-> join "," (rev (chop -3 (strf "%d" <10000000>!)!)!)
-ftl: value has wrong type - type is closure, expected int
-ftl $*console*:+6 in
-ftl $*console*:7: syntax - <n1> <n2> - return n1 with n2 subtracted
-ftl $*console*:+6: no unbound symbols in a nul - substitution impossible
-ftl $*console*:+6: expected ')'
-ftl $*console*:+6: warning - trailing text ...!)!)
-[_2]::<func:0x7f71a422e9b1,2>
+> join "," (rev (chop (-3) (strf "%d" <10000000>!)!)!)
+"10,000,000"
 > # "10,000,000"
 > chop [word=-4] "thisand that"
 <[word="that"], [word="and "], [word="this"]>

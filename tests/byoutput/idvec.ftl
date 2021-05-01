@@ -1,7 +1,7 @@
 eval []
 eval [z=NULL]
 eval ["z"=NULL]
-eval [1=NULL] # error
+eval [1=NULL]
 eval [a=0,b=1]
 eval ["z"=NULL,"z"=4] # should have one z=4
 eval [z=NULL,z=1,z=2]
@@ -10,7 +10,7 @@ eval ["z"=NULL,"z "=4]
 len []
 len [z=NULL]
 len ["z"=NULL]
-len [1=NULL] # error
+len [1=NULL]
 len [a=0,b=1]
 len ["z"=NULL,"z"=4]
 len [z=NULL,z=1,z=2]
@@ -55,6 +55,3 @@ eval [a=1]::[b,c,d]  2
 eval [a=1]::[b,c,d]  2 3
 eval [a=1]::[b,c,d]  2 3 4
 eval [a=1]::[b,c,d]  2 3 4 5 # error
-
-
-

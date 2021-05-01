@@ -7,14 +7,18 @@ ftl $*console*:2: file name expected
 > 
 > set write[file, msg]:{
 >     .f = io.file file "w"!;
->     f != NULL {io.write f ""+(msg)+("\n")!}!;
+>     if f == NULL {
+>         echo "Failed to open file '$file' for writing"!;
+>     }{
+>         io.write f ""+(msg)+("\n")!
+>     }!;
 >     io.close f!;
 > }
-> write "test"  "echo Running line from test\necho Finished in test"
-> source test
+> write "ftltest.tmp"  "echo Running line from test\necho Finished in test"
+> source ftltest.tmp
 Running line from test
 Finished in test
-> source "test"
+> source "ftltest.tmp"
 Running line from test
 Finished in test
 > 

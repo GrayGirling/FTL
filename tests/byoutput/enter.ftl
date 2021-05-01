@@ -22,3 +22,51 @@ eval outer_fn._help # "OUTER"
 # expected to be FALSE
 inenv outer "local_fn"
 inenv outer_fn "local_fn"
+
+
+set outvar 1
+enter []
+set outvar 100
+leave
+eval outvar
+# should be 100
+
+enter []
+set .outvar 1000
+leave
+eval outvar
+# should still be 100
+
+set fn NULL
+enter []
+set priv 100
+set fn []:{priv}
+leave
+fn
+# should be 100
+eval priv
+#ftl $...: undefined symbol 'priv'
+
+
+set myclass [arg]:{
+   [self=[],state=arg]:{
+       enter self!;
+       .method = []:{state};
+       leaving!
+   }!
+}
+
+myclass 2
+set A myclass 2!
+set B myclass 90!
+A method
+B method
+
+enter A
+enter method
+eval state
+# 2
+leave
+eval method!
+# 2
+leave
