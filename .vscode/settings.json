@@ -11,5 +11,36 @@
             "binaryPath": "/mnt/c/Users/GrayG/Qsync/project/github-ftl/FTL/hi",
             "binaryArgs": []
         }
-    ]
+    ],
+    "makefile.configurations": [
+        {
+            "name": "linux build (on Linux)",
+            "makeArgs": []
+        },
+        {
+            "name": "windows build (on Linux)",
+            "makeArgs": ["force_native=yes", "use_elf=no"]
+        }
+    ],
+    "terminal.integrated.profiles.windows":{
+        "PowerShell": {
+            "source": "PowerShell"
+        },
+        "CMD Command Prompt": {
+            "path": [
+                "${env:windir}\\Sysnative\\cmd.exe",
+                "${env:windir}\\System32\\cmd.exe"
+            ],
+            "args": []
+        },
+        "Git Bash": {
+            "source": "Git Bash"
+        },
+        "MSYS2 Bash": {
+            "path": [
+                "C:\\msys64\\usr\\bin\\bash.exe"
+            ],
+            "args": ["--login", "-i"]
+        }
+    }
 }
