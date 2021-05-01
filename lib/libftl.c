@@ -33,7 +33,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    July 2020
+** date    April 2021
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -1224,6 +1224,57 @@ codeid_set(const char *codeid)
 
 
 
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Memory Allocation                                                *
+ *          =================                                                *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+#define DEBUG_FTLMEM    OMIT
+#define DEBUG_FTLMEMALL OMIT
+
+#if DEBUG_FTLMEM(1+)0 != 0
+
+static void *ftl_malloc(size_t size, int lineno)
+{   void *mem;
+    mem = FTL_MALLOC(size);
+    if (mem == NULL)
+        DPRINTF("%s: %p line %d alloc %d FAILED\n",
+                codeid(), mem, lineno, (int)size);
+    DEBUG_FTLMEMALL(else
+        DPRINTF("%s: %p line %d alloc %d\n", codeid(),
+                mem, lineno, (int)size);
+    )
+    return mem;
+}
+
+
+static void ftl_free(void *mem, int lineno)
+{   if (mem == NULL)
+        DPRINTF("%s: %p line %d free NULL\n", codeid(), mem, lineno);
+    DEBUG_FTLMEMALL(else
+        DPRINTF("%s: %p line %d free\n", codeid(), mem, lineno);
+    )
+    FTL_FREE(mem);
+}
+
+
+#undef FTL_MALLOC
+#undef FTL_FREE
+
+#define FTL_MALLOC(_size) ftl_malloc(_size, __LINE__)
+#define FTL_FREE(_mem)    ftl_free(_mem, __LINE__)
+
+
+#endif /*DEBUG_FTLMEM*/
 
 
 
@@ -2423,7 +2474,7 @@ static void win_console_flush_events(HANDLE conhandle)
         {   /* conevents should be the total number of unread console events
              */
             INPUT_RECORD *inrecs = (INPUT_RECORD *)
-                                   malloc(conevents * sizeof(INPUT_RECORD));
+                                   FTL_MALLOC(conevents * sizeof(INPUT_RECORD));
             DWORD incount = 0; // number of console input events
 
             if (inrecs != NULL)
@@ -5469,12 +5520,23 @@ dir_stack_lnew_strace(parser_state_t *state, const dir_stack_t *stack,
  *  Values allocated using this function should not be free'd directly using
  *  either FTL_FREE() or free()
  */
+#if DEBUG_FTLMEM(1+)0 != 0
+static value_t *
+value_malloc_lnew_at(parser_state_t *state, size_t size, int lineno)
+{   value_t *val = FTL_MALLOC(size);
+#else    
 extern value_t *value_malloc_lnew(parser_state_t *state, size_t size)
 {   value_t *val = FTL_MALLOC(size);
+#endif
 #ifdef LOCAL_GARBAGE
-    if (state != NULL)
+    if (PTRVALID(state) && PTRVALID(val))
     {   valpool_t *locals = parser_locals(state);
         value_chain_push(&locals->ring, val);
+    }
+    else if (PTRVALID(val)) 
+    {   /* no global state established yet */
+        val->loc_next = NULL;
+        val->loc_last_ref = NULL;
     }
 #endif
     DO(if (val == NULL)
@@ -5484,6 +5546,17 @@ extern value_t *value_malloc_lnew(parser_state_t *state, size_t size)
     
     return val;
 }
+
+
+
+#if DEBUG_FTLMEM(1+)0 != 0
+extern value_t *value_malloc_lnew(parser_state_t *state, size_t size)
+{   return value_malloc_lnew_at(state, size, 0/*external reference*/);
+}
+
+#define value_malloc_lnew(_state, _size) \
+    value_malloc_lnew_at(_state, _size, __LINE__)
+#endif
 
 
 
@@ -5529,9 +5602,9 @@ static void value_local(parser_state_t *state, value_t *val)
      */
     if (state != NULL && val != NULL && val->loc_last_ref == NULL)
     {   valpool_t *locals = parser_locals(state);
-        OMIT(parser_report(root_state, "value %p marked as local\n", val););  
+        OMIT(parser_report(state, "value %p marked as local\n", val););  
         value_chain_push(&locals->ring, val);
-    } OMIT(else parser_report(root_state, "value %p %s marked as local\n",
+    } OMIT(else parser_report(state, "value %p %s marked as local\n",
                               val, val == NULL? "NULL so not":
                               val->loc_last_ref != NULL? "already":
                               "COULDN'T be"););
@@ -6349,9 +6422,9 @@ static int value_int_print(parser_state_t *state, outchar_t *out,
         absn = -absn;
     (void)root;
     if (0 != (absn & ~int_format_bits_indec))
-        return outchar_printf(out, "0x%"FX_UNUMBER_T"", n);
+        return outchar_printf(out, "0x%" FX_UNUMBER_T, n);
     else
-        return outchar_printf(out, "%"F_NUMBER_T"", n);
+        return outchar_printf(out, "%" F_NUMBER_T, n);
 }
 
 
@@ -6547,14 +6620,20 @@ parsew_uintbase(const char **ref_line, const char *lineend, int base, int sepch,
  */
 extern bool
 parse_int(const char **ref_line, number_t *out_int)
+{   const char *lineend = &(*ref_line)[24];
+    /* lineend is arbitrary - this is why you should use parsew_int */
+    return parsew_uintbase(ref_line, lineend, 10, /*sep*/-1,
+                          (unumber_t *)out_int);
+}
+#if 0
 {   int width;
-    if (1 == sscanf(*ref_line, "%"F_NUMBER_T"%n", out_int, &width))
+    if (1 == sscanf(*ref_line, "%" F_NUMBER_T "%n", out_int, &width))
     {   *ref_line += width;
         return TRUE;
     } else
         return FALSE;
 }
-
+#endif
 
 
 
@@ -6581,7 +6660,7 @@ parsew_hex(const char **ref_line, const char *lineend, unumber_t *out_int)
 }
 #if 0
 {   int width;
-    if (1 == sscanf(*ref_line, "%"FX_UNUMBER_T"%n", out_int, &width))
+    if (1 == sscanf(*ref_line, "%" FX_UNUMBER_T "%n", out_int, &width))
     {   *ref_line += width;
         return TRUE;
     } else
@@ -6838,8 +6917,8 @@ static bool parse_int_shift(const char **ref_line,
             else
                 accum = (number_t) (((unumber_t)starting) >> (unsigned)opnd);
 
-            OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
-                          " == %"F_NUMBER_T"\n",
+            OMIT(printf("%s: %" F_NUMBER_T " %s %" F_NUMBER_T
+                          " == %" F_NUMBER_T "\n",
                           codeid(), starting, left?"lsh":"rsh", opnd, accum);)
         }
     }
@@ -10515,7 +10594,7 @@ dir_int_lset(dir_t *dir, parser_state_t *state,
              int index, const value_t *value)
 {   value_int_t nameval;
     value_int_init(&nameval, index, /*on_heap*/FALSE);
-    return dir_lset(dir, root_state, &nameval.value, value);
+    return dir_lset(dir, state, &nameval.value, value);
 }
 
 
@@ -10722,7 +10801,7 @@ static void list_delete(list_t *list, list_thing_delete_fn_t *delete_fn)
 /* Push a new thing on to the start of the list
  */
 static bool list_add_start(list_t *list, void *thing)
-{   list_element_t *element = malloc(sizeof(list_element_t));
+{   list_element_t *element = FTL_MALLOC(sizeof(list_element_t));
     if (element != NULL)
     {   element->link = list->first;
         element->thing = thing;
@@ -10761,7 +10840,7 @@ static bool list_element_start(list_t *list, void **out_thing)
 
 #if 0 /* unused */
 static bool list_add_end(list_t *list, void *thing)
-{   list_element_t *element = malloc(sizeof(list_element_t));
+{   list_element_t *element = FTL_MALLOC(sizeof(list_element_t));
     if (element != NULL)
     {   element->link = NULL;
         element->thing = thing;
@@ -12544,9 +12623,10 @@ dir_struct_get(dir_t *dir, const value_t *nameval)
         {   /* get any value_t we've been saving to put return value into */
             dir_t *get_cache = dir_id_dir(&structdir->get_cache);
             const value_t **ref_value = dir_id_lookup(get_cache, nameval);
+            parser_state_t *state = root_state; /*TODO: get this elsewhere */
 
             if (NULL == ref_value)
-            {   if (dir_id_add(get_cache, root_state, nameval, &value_null))
+            {   if (dir_id_add(get_cache, state, nameval, &value_null))
                     ref_value = dir_id_lookup(get_cache, nameval);
                 if (NULL != ref_value)
                 {   dir_t *subdir;
@@ -12588,9 +12668,10 @@ dir_spec_enum_fn(const struct_field_t *field, void *arg)
     dir_t *get_cache = dir_id_dir(args->get_cache);
     const value_t **ref_value = dir_id_lookup(get_cache, nameval);
     void *result = NULL;
+    parser_state_t *state = root_state; /*TODO: get this elsewhere */
 
     if (NULL == ref_value)
-    {   dir_id_add(get_cache, root_state, nameval, &value_null);
+    {   dir_id_add(get_cache, state, nameval, &value_null);
         ref_value = dir_id_lookup(get_cache, nameval);
     }
     OMIT(printf("%s: get field \"%s\" in struct %p val at %p\n",
@@ -12864,7 +12945,7 @@ binparse_bits8(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                datatype_t *dtype)
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 1;
-    parser_state_t *state = root_state;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
     if (newpos <= binend) {
         if (PTRVALID(rdr)) {
             ftl_u8_t data;
@@ -12894,7 +12975,7 @@ static const value_t *
 binparse_bits16l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
 {   const value_t *val = NULL;
-    parser_state_t *state = root_state;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
     unumber_t newpos = *ref_binpos + 2;
     if (newpos <= binend) {
         if (PTRVALID(rdr)) {
@@ -12926,7 +13007,7 @@ binparse_bits16b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 2;
-    parser_state_t *state = root_state;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
     if (newpos <= binend) {
         if (PTRVALID(rdr)) {
             ftl_u8_t data[2];
@@ -12958,7 +13039,7 @@ binparse_bits32l(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 4;
-    parser_state_t *state = root_state;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
     if (newpos <= binend) {
         if (PTRVALID(rdr)) {
             ftl_u8_t data[4];
@@ -12991,7 +13072,7 @@ binparse_bits32b(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
                  datatype_t *dtype)
 {   const value_t *val = NULL;
     unumber_t newpos = *ref_binpos + 4;
-    parser_state_t *state = root_state;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
     if (newpos <= binend) {
         if (PTRVALID(rdr)) {
             ftl_u8_t data[4];
@@ -13097,6 +13178,7 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
     size_t entryno = 0;
     bool ok = TRUE;
     dir_t *vec = NULL;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     while (ok && entryno < n) {
         const value_t *entry =
@@ -13107,7 +13189,7 @@ binparse_seq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t binend,
             if (vec == NULL)
                 vec = dir_vec_lnew(root_state);
             if (PTRVALID(vec))
-                dir_int_lset(vec, root_state, (int)entryno, entry);
+                dir_int_lset(vec, state, (int)entryno, entry);
             entryno++;
         }
     }
@@ -13340,6 +13422,7 @@ binparse_dynseq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t last,
     size_t entryno = 0;
     bool ok = TRUE;
     dir_t *vec = dir_seq_new(entry_dt, rdr, *ref_binpos, last);
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     while (ok && entryno < n) {
         const value_t *entry =
@@ -13348,9 +13431,9 @@ binparse_dynseq(memreader_t *rdr, unumber_t *ref_binpos, unumber_t last,
             ok = FALSE;
         else {
             if (vec == NULL)
-                vec = dir_vec_lnew(root_state);
+                vec = dir_vec_lnew(state);
             if (PTRVALID(vec))
-                dir_int_lset(vec, root_state, entryno, entry);
+                dir_int_lset(vec, state, entryno, entry);
             entryno++;
         }
     }
@@ -13422,6 +13505,7 @@ dir_argvec_get(dir_t *dir, const value_t *name)
 {   dir_argvec_t *vecdir = (dir_argvec_t *)dir;
     const value_t *found = NULL;
     const char **argv = vecdir->argv;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     if (value_istype(name, type_int) && PTRVALID(argv))
     {   size_t index = (size_t)value_int_number(name);
@@ -13430,7 +13514,7 @@ dir_argvec_get(dir_t *dir, const value_t *name)
             if (NULL == arg)
                 found = &value_null;
             else
-                found = value_string_lnew_measured(root_state, arg);
+                found = value_string_lnew_measured(state, arg);
         }
     }
 
@@ -13687,6 +13771,7 @@ dir_array_get(dir_t *dir, const value_t *nameval)
         size_t stride = arraydir->stride;
         void *arraymem;
         size_t arraylen;
+        parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
         if ((*arraydir->dimfn)(arraydir, &arraymem, &arraylen))
         {   if (index >= 0 && index < (int)arraylen)
@@ -13696,7 +13781,7 @@ dir_array_get(dir_t *dir, const value_t *nameval)
                 const value_t **ref_value = dir_vec_lookup(get_cache, nameval);
 
                 if (NULL == ref_value)
-                {   if (dir_vec_add(get_cache, root_state, nameval,
+                {   if (dir_vec_add(get_cache, state, nameval,
                                     &value_null))
                         ref_value = dir_vec_lookup(get_cache, nameval);
                 }
@@ -14248,12 +14333,13 @@ dir_sysenv_get(dir_t *dir, const value_t *name)
 {   const char *namestr = NULL;
     size_t namestrl;
     const value_t *val = (const value_t *)NULL;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     if (value_type_equal(name, type_string) &&
         value_string_get(name, &namestr, &namestrl))
     {   char *strval = getenv(namestr);
         if (PTRVALID(strval))
-            val = value_string_lnew_measured(root_state, strval);
+            val = value_string_lnew_measured(state, strval);
         OMIT(else printf("%s: sysenv get '%s' not in env\n",
                            codeid(), namestr);)
     }
@@ -14392,12 +14478,13 @@ dir_fs_get(dir_t *dir, const value_t *name)
 {   const char *namestr = NULL;
     size_t namestrl;
     const value_t *val = (const value_t *)NULL;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     if (value_type_equal(name, type_string) &&
         value_string_get(name, &namestr, &namestrl))
     {   char *strval = getenv(namestr);
         if (PTRVALID(strval))
-            val = value_string_lnew_measured(root_state, strval);
+            val = value_string_lnew_measured(state, strval);
         OMIT(else printf("%s: fs get '%s' not in env\n",
                            codeid(), namestr);)
     }
@@ -14463,11 +14550,12 @@ dir_fs_markver(const value_t *value, int heap_version)
 
 
 static void
-dir_fs_init(dir_fs_t *fsdir, const value_t *dirnameval)
-{   dir_init(&fsdir->dir, &type_dir_fs_val, &dir_fs_add, /*lookup*/ NULL,
+dir_fs_init(dir_fs_t *fsdir, const value_t *dirnameval, parser_state_t *state)
+{
+    dir_init(&fsdir->dir, &type_dir_fs_val, &dir_fs_add, /*lookup*/ NULL,
              /*get*/&dir_fs_get, &dir_fs_forall, /*on_heap*/FALSE);
     fsdir->dirnameval = /*dirnameval or lnew*/
-        value_string_nulterm_lnew(root_state, dirnameval, &fsdir->dirname,
+        value_string_nulterm_lnew(state, dirnameval, &fsdir->dirname,
                                   &fsdir->dirnamelen);
 }
 
@@ -14482,7 +14570,7 @@ dir_fs_lnew(parser_state_t *state, const char *dirname)
         (dir_fs_t *)value_malloc_lnew(state, sizeof(dir_fs_t));
 
     if (PTRVALID(fsdir))
-    {   dir_fs_init(fsdir, dirname);
+    {   dir_fs_init(fsdir, dirname, state);
         if (fsdir->dirnameval != dirname)
             value_unlocal(fsdir->dirnameval);
     }
@@ -15095,12 +15183,14 @@ value_keyinfo(parser_state_t *state, key_type_t key_type,
 
 
 
+/* TODO: find some way to pass state into this function */
 static const value_t *
 dir_regkeyval_get(dir_t *dir, const value_t *name)
 {   dir_regkeyval_t *keydir = (dir_regkeyval_t *)dir;
     const char *namestr = NULL;
     size_t namestrl;
     const value_t *val = (const value_t *)NULL;
+    parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
     if (value_type_equal(name, type_string) &&
         value_string_get(name, &namestr, &namestrl))
@@ -15313,9 +15403,18 @@ dir_regkeyval_set(key_t key, REGVAL_NAMEVAR_T valname_k,
             break;
 
         default:
-            fprintf(stderr, "%s: \"type\" %"F_UNUMBER_T" is not a "
+#if 1
+            fprintf(stderr, "%s: \"type\" %" F_UNUMBER_T " is not a "
                     "valid registry type\n",
                     codeid(), key_type);
+#else
+            fprintf(stderr, "%s: \"type\" %I64u is not a "
+                    "valid registry type\n",
+                    codeid(), key_type);
+#endif
+#ifndef F_UNUMBER_T
+#error F_UNUMBER_T not defined
+#endif
     }
     return rc;
 }
@@ -15360,7 +15459,7 @@ dir_regkeyval_add(dir_t *dir, parser_state_t *state,
                         rc = dir_regkeyval_set(keydir->key, valname_k,
                                                typeval, dataval);
                     value_unlocal(typeval);
-                    value_unlocal(dirval);
+                    value_unlocal(dir_value(dirval));
                 } else
                 /* give a binary value if set as a string */
                 if (value_string_get(value, &valstr, &valstrl))
@@ -17044,10 +17143,11 @@ value_closure_pushdir(const value_t *value, dir_t *dir, bool env_end)
 {   bool ok = FALSE;
     if (PTRVALID(dir))
     {   value_closure_t *closure = (value_closure_t *)value;
+        parser_state_t *state = root_state;  /*TODO: get this elsewhere */
 
         ok = TRUE;
         if (NULL == closure->env)
-        {   value_env_t *newenv = value_env_lnew(root_state);
+        {   value_env_t *newenv = value_env_lnew(state);
             closure->env = newenv;
             value_unlocal(value_env_value(newenv));
         }
@@ -17634,6 +17734,8 @@ parser_state_lnew(parser_state_t *owner_state, dir_t *root)
             value_coroutine_lnew(owner_state, root, envstack, opdefs);
         value_unlocal(dir_stack_value(envstack));
         value_unlocal(dir_value(opdefs));
+        value_unlocal(parser_state_value(state));
+        /* implicitly kept alive once garbage collection begins */
         return state;
     }
 }
@@ -20524,8 +20626,9 @@ value_mem_bin_write(const value_mem_t *mem, size_t byte_index,
               byte_index >= base &&
               byte_index + buflen <= base + binlen;
 
-    OMIT(printf("%s: bin write %zd[%zd] in %"F_NUMBER_T"[%zd] %s\n", codeid(),
-                  byte_index, buflen, base, binlen, ok? "OK": "failed"););
+    OMIT(printf("%s: bin write %zd[%zd] in %" F_NUMBER_T "[%zd] %s\n",
+                codeid(), byte_index, buflen, base, binlen,
+                ok? "OK": "failed"););
     if (ok)
     {   char *writeable_bin = (char *)bin;
         /* we will use this function only on writeable strings */
@@ -20562,7 +20665,7 @@ value_mem_bin_len_able_ro(const value_mem_t *mem, size_t byte_index,
         if (0 != (ability & (1 << mem_can_write)))
             len = 0; /* we can't write */
 
-        OMIT(printf("%s: mem bin base %"F_NUMBER_T" index %zd len %zd "
+        OMIT(printf("%s: mem bin base %" F_NUMBER_T " index %zd len %zd "
                       "%sable 0x%X - gives len %zd\n",
                       codeid(), membase, byte_index, binlen, unable?"un":"",
                       ability, len););
@@ -20594,7 +20697,7 @@ value_mem_bin_len_able_rw(const value_mem_t *mem, size_t byte_index,
                 byte_index < membase + binlen)
                 len = (size_t)(membase + binlen - byte_index);
         }
-        OMIT(printf("%s: mem bin base %"F_NUMBER_T" index %zd "
+        OMIT(printf("%s: mem bin base %" F_NUMBER_T " index %zd "
                       "len %zd %sable 0x%X - gives len %zd\n",
                       codeid(), membase, byte_index, binlen, unable?"un":"",
                       ability, len););
@@ -20664,7 +20767,7 @@ value_mem_bin_alloc_lnew(parser_state_t *state, number_t base,
                          size_t len, int memset_val, char **out_block)
 {   value_t *val = NULL;
     value_mem_bin_t *binmem =
-        (value_mem_bin_t *)value_malloc_lnew(root_state,
+        (value_mem_bin_t *)value_malloc_lnew(state,
                                              sizeof(value_mem_bin_t));
 
     *out_block = NULL;
@@ -21087,9 +21190,12 @@ static bool argv_sentence_next(argv_token_t *args)
 
 
 
+/*! Add help environment and unbound arguments to a built-in function closure
+ *  to make it invocable
+ */
 STATIC_INLINE void
-value_mod_cmd(parser_state_t *state, const value_t *helpstrval,
-              value_t *closure, int args)
+value_smod_cmd(parser_state_t *state, const value_t *helpstrval,
+               value_t *closure, int args)
 {   dir_t *helpenv = dir_id_lnew(state);
     int i;
     value_t *argnext = NULL;
@@ -21148,7 +21254,8 @@ smod_add_cmd_lnew(parser_state_t *state, dir_t *dir,
                                         /*env_end*/FALSE);
             value_unlocal(dir_stack_value(stack_copy));
         }
-        value_mod_cmd(state, helpval, closure, args);
+        value_smod_cmd(state, helpval, closure, args);
+        /*< build closure into an invocable function with given no. of args */
 
         if (dir_string_lset(dir, state, name, closure))
             made = closure;
@@ -21183,8 +21290,8 @@ mod_add_op(dir_t *opdefs, op_prec_t prec, op_assoc_t assoc, const char *opname,
     {   const value_t *precfnsval = /*lnew*/dir_int_get(opdefs, prec);
 
         if (NULL == precfnsval)
-        {   precfnsval = dir_value(dir_id_lnew(root_state));
-            if (!dir_int_lset(opdefs, root_state, prec, precfnsval))
+        {   precfnsval = dir_value(dir_id_lnew(state));
+            if (!dir_int_lset(opdefs, state, prec, precfnsval))
                 fprintf(stderr, "%s: can't create operator definitions "
                         "at precidence %d (for op %s)\n",
                         codeid(), prec, opname);
@@ -21192,7 +21299,7 @@ mod_add_op(dir_t *opdefs, op_prec_t prec, op_assoc_t assoc, const char *opname,
 
         if (value_type_equal(precfnsval, type_dir))
         {   dir_t *precfns = (dir_t *)precfnsval;
-            dir_t *opdefn = dir_id_lnew(root_state);
+            dir_t *opdefn = dir_id_lnew(state);
             value_t *opnameval = value_string_lnew_measured(state, opname);
             dir_cstring_lset(opdefn, state, OP_FN, fn);
             dir_cstring_lsetul(opdefn, state, OP_ASSOC,
@@ -21491,7 +21598,6 @@ mod_get_implicit(const value_t *this_fn)
 
 
 
-
 /*****************************************************************************
  *                                                                           *
  *          Boolean Values                                                   *
@@ -21533,6 +21639,16 @@ values_bool_init()
 }
 
 
+/*! add values for TRUE and FALSE
+ */
+static void
+smod_addfns_bool(parser_state_t *state, dir_t *cmds)
+{   smod_add_val(state, cmds, "TRUE", value_true);
+    smod_add_val(state, cmds, "FALSE", value_false);
+}
+
+
+
 
 #else
 
@@ -21544,6 +21660,9 @@ static value_func_t    value_func_true;
 static value_env_t     value_argenv_true;
 static value_closure_t value_closure_true;
 static value_string_t  value_helpstr_true;
+
+const char *help_string_true  = "- TRUE value";
+const char *help_string_false = "- FALSE value";
 
 static value_func_t    value_func_false;
 static value_env_t     value_argenv_false;
@@ -21581,27 +21700,15 @@ value_bool_cmp(const value_t *v1, const value_t *v2)
 
 
 
-
-static value_t *
+static void
 value_bool_init(value_closure_t *closure, value_func_t *boolfunc,
-                value_env_t *boolargenv, value_string_t *boolhelpstr,
-                func_fn_t *boolfn, const char *help)
-{   value_t *bfnval;
-    value_t *bval;
-    value_t *bhelpstr;
-
-    bfnval = value_func_init(boolfunc, &type_func_val, boolfn, help, 1,
-                             /*implicit*/FALSE, /*on_heap*/FALSE);
+                value_env_t *boolargenv, func_fn_t *boolfn, const char *help)
+{   value_t *bfnval = value_func_init(boolfunc, &type_func_val, boolfn, help, 1,
+                                      /*implicit*/FALSE, /*on_heap*/FALSE);
     (void)value_env_init(boolargenv, /*on_heap*/FALSE);
-    bval = value_closure_init(closure, &type_bool_val,
-                              bfnval, boolargenv, FTL_LIB_AUTORUN_DEFAULT,
-                              /*on_heap*/FALSE);
-    bhelpstr = value_cstring_init(boolhelpstr, help, strlen(help),
-                                  /*on_heap*/FALSE);
-
-    value_mod_cmd(root_state, bhelpstr, bval, 1);
-
-    return bval;
+    (void)value_closure_init(closure, &type_bool_val,
+                             bfnval, boolargenv, FTL_LIB_AUTORUN_DEFAULT,
+                             /*on_heap*/FALSE);
 }
 
 
@@ -21651,16 +21758,40 @@ values_bool_init(void)
               &value_bool_cmp, &value_closure_delete,
               &value_closure_markver);
 
-    value_bool_init(&value_closure_true, &value_func_true,
-                    &value_argenv_true, &value_helpstr_true,
-                    &fn_true,  "TRUE value");
-    value_bool_init(&value_closure_false, &value_func_false,
-                    &value_argenv_false, &value_helpstr_false,
-                    &fn_false,  "FALSE value");
+    value_bool_init(&value_closure_true, &value_func_true, 
+                    &value_argenv_true, &fn_true, help_string_true);
+    value_bool_init(&value_closure_false, &value_func_false, 
+                    &value_argenv_false,  &fn_false, help_string_false);
 }
 
 
 
+
+
+static void
+smod_addfn_bool(parser_state_t *state, dir_t *cmds,
+                const char *name, const char *help, value_t *boolval,
+                value_string_t *boolhelpstr)
+{   value_t *bhelpstr = value_cstring_init(boolhelpstr, help, strlen(help),
+                                           /*on_heap*/FALSE);
+    /* update boolval to include help and argument unbound values */
+    value_smod_cmd(root_state, bhelpstr, boolval, 1);
+    smod_add_val(state, cmds, name, boolval);
+}
+
+
+
+
+
+/*! Update value_true/false and add commands for them
+ */
+static void
+smod_addfns_bool(parser_state_t *state, dir_t *cmds)
+{   smod_addfn_bool(state, cmds, "TRUE", help_string_true,
+                    (value_t */*unconst*/)value_true, &value_helpstr_true);
+    smod_addfn_bool(state, cmds, "FALSE", help_string_false,
+                    (value_t */*unconst*/)value_false, &value_helpstr_false);
+}
 
 #endif
 
@@ -22703,7 +22834,7 @@ parsew_base_env(const char **ref_line, const char *lineend,
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
         value_unlocal(strval);
     } else
-            if (parsew_int_expr(ref_line, lineend, state, &val))
+    if (parsew_int_expr(ref_line, lineend, state, &val))
     {   *out_lval = value_int_lnew(state, val);
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
     } else
@@ -25450,8 +25581,8 @@ filename_home_alloc(const char *homedir, const char *homefile)
                     homedir, ENV_FTL_HOMEDIR_HOME, homefile);
         else
             sprintf(rc_home, "%s%s", homedir, ENV_FTL_HOMEDIR_HOME);
-        DEBUG_RCFILE(DPRINTF("%s: full rc file name '%s'\n",
-                             codeid(), rc_home););
+        DEBUG_RCFILE(DPRINTF("%s: (home '%s') full rc file name '%s'\n",
+                             codeid(), homefile,rc_home););
     }
     return rc_home;
 }
@@ -26121,12 +26252,12 @@ parsew_format(const char **ref_line, const char *lineend, parser_state_t *state,
         continue;
 
     OMIT(printf("%s: %sleft %ssign %szero\n", codeid(),
-                  left?"":"not ", sign?"":"not ", zero?"":"not ");)
+                left?"":"not ", sign?"":"not ", zero?"":"not "););
 
-    (void)parse_int(ref_line, &width);
+    (void)parsew_int(ref_line, lineend, &width);
 
     if (parsew_key(ref_line, lineend, "."))
-        ok = parse_int(ref_line, &precision);
+        ok = parsew_int(ref_line, lineend, &precision);
 
     if (ok)
     {   if (parsew_key(ref_line, lineend, "{"))
@@ -27603,7 +27734,8 @@ parsew_opbase_using_closure(const char **ref_line, const char *lineend,
 
                 DEBUG_SCAN_LNEW(LOCS(state, dir_value(ftl_arg->return_dir)));
                 *out_val = /*lnew*/dir_get(ftl_arg->return_dir, return_name);
-                value_static_lnew(state, (value_t *)*out_val); // GRAY otherwise collected when return_dir is
+                value_static_lnew(state, (value_t *)*out_val);
+                /* otherwise *out_val is collected when return_dir is */
                 DEBUG_SCAN_LNEW(LOCS(state, *out_val));
                 value_unlocal(linenewval);
             }
@@ -29061,6 +29193,12 @@ fn_lib_extend(const value_t *this_fn, parser_state_t *state)
 
 
 
+
+
+#define DEBUG_CGS OMIT
+
+
+
 static void
 cmds_generic_sys(parser_state_t *state, dir_t *cmds)
 {   dir_t *scmds = dir_id_lnew(state);
@@ -29072,9 +29210,11 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     const char *osfamily = "unknown";
     static char sep[2];
     static char exec_buf[PATHNAME_MAX];
+    DEBUG_CGS(DPRINTF("file_executable\n"););
     const char *executable = file_executable(&exec_buf[0], sizeof(exec_buf));
     bool is_default_rcfile = FALSE;
     char rcfile_name_buf[256];
+    DEBUG_CGS(DPRINTF("generic - rcfile\n"););
     const char *rcfile_name =
         filename_env_rcfile(codeid(), &is_default_rcfile,
                             &rcfile_name_buf[0], sizeof(rcfile_name_buf));
@@ -29096,6 +29236,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     sep[0] = OS_FS_SEP;
     sep[1] = '\0';
 
+    DEBUG_CGS(DPRINTF("generic - adding cmds\n"););
     smod_add_lval(state, fscmds, "sep", value_string_lnew_measured(state, sep));
     smod_add_lval(state, fscmds, "nowhere",
                  value_cstring_lnew_measured(state, OS_FS_NOWHERE));
@@ -29105,15 +29246,20 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
                   value_string_lnew_measured(state, homedir));
     smod_add_lval(state, fscmds, "rcfile",
                   value_string_lnew_measured(state, rcfile_name));
+    DEBUG_CGS(DPRINTF("generic - deleting homedir\n"););
     FTL_FREE((void *)homedir);
+    DEBUG_CGS(DPRINTF("generic - add casematch\n"););
     smod_add_val(state, fscmds, "casematch",
                  OS_FS_CASE_EQ? value_true: value_false);
+    DEBUG_CGS(DPRINTF("generic - add absname\n"););
     smod_addfn(state, fscmds, "absname",
               "<file> - TRUE iff file has an absolute path name",
               &fn_fs_absname, 1);
+    DEBUG_CGS(DPRINTF("generic - add ls\n"););
     smod_addfn(state, fscmds, "ls",
               "<dir> - directory content as name=[dir=<bool>] pairs",
               &fn_fs_ls, 1);
+    DEBUG_CGS(DPRINTF("generic - lock fscmds\n"););
     (void)dir_lock(fscmds, NULL/*no updates*/);
     /* prevents additions to this directory */
 
@@ -29136,6 +29282,7 @@ cmds_generic_sys(parser_state_t *state, dir_t *cmds)
     (void)dir_lock(shcmds, NULL/*no updates*/);
     /* prevents additions to this directory */
 
+    DEBUG_CGS(DPRINTF("dirs\n"););
     smod_add_dir(state, cmds, "sys", scmds);
     smod_add_dir(state, scmds, "fs", fscmds);
     smod_add_dir(state, scmds, "shell", shcmds);
@@ -29920,6 +30067,7 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
 
         sprintf(&pathname[0], ENV_FTL_PATH(codeid_uc()));
         path = getenv(&pathname[0]);
+        OMIT(DPRINTF("%s: finding file on path '%s'\n", codeid(), path););
         inchars = charsource_file_path_new(path, filename, strlen(filename));
 
         if (NULL == inchars)
@@ -30392,8 +30540,7 @@ cmds_generic_bool(parser_state_t *state, dir_t *cmds)
     mod_add_op(parser_opdefs(state), OP_PREC_OR,  assoc_xfy, "or",  op_or);
     mod_add_op(parser_opdefs(state), OP_PREC_OR,  assoc_xfy, "_or_",  op_or);
 
-    smod_add_val(state, cmds, "TRUE", value_true);
-    smod_add_val(state, cmds, "FALSE", value_false);
+    smod_addfns_bool(state, cmds);
 
     value_unlocal(op_eq);
     value_unlocal(op_ne);
@@ -30559,8 +30706,8 @@ fn_int_shl(const value_t *this_fn, parser_state_t *state)
         else if (n2 < 8*sizeof(number_t))
             accum = (number_t) (((unumber_t)n1) << (unsigned)n2);
 
-        OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
-                    " == %"F_NUMBER_T"\n",
+        OMIT(printf("%s: %" F_NUMBER_T " %s %"F_NUMBER_T
+                    " == %" F_NUMBER_T "\n",
                     codeid(), n1, "lsh", opnd, accum););
         val = value_int_lnew(state, accum);
     } else
@@ -30589,8 +30736,8 @@ fn_int_shr(const value_t *this_fn, parser_state_t *state)
         else if (n2 < 8*sizeof(number_t))
             accum = (number_t) (((unumber_t)n1) >> (unsigned)n2);
 
-        OMIT(printf("%s: %"F_NUMBER_T" %s %"F_NUMBER_T
-                    " == %"F_NUMBER_T"\n",
+        OMIT(printf("%s: %" F_NUMBER_T " %s %"F_NUMBER_T
+                    " == %" F_NUMBER_T "\n",
                     codeid(), n1, "rsh", opnd, accum););
         val = value_int_lnew(state, accum);
     } else
@@ -32074,7 +32221,7 @@ genfn_chop(const value_t *this_fn, parser_state_t *state, int n, int argstart)
         else
         {
             number_t stride = value_int_number(strideval);
-            DEBUG_CHOP(printf("%s: stride %"F_NUMBER_T" %s%s\n", codeid(),
+            DEBUG_CHOP(printf("%s: stride %" F_NUMBER_T " %s%s\n", codeid(),
                               stride,
                               stride>(number_t)buflen? "too big ":"",
                               -stride>(number_t)buflen? "too little ":""););
@@ -35140,6 +35287,11 @@ fn_len(const value_t *this_fn, parser_state_t *state)
 
 
 
+
+#define DEBUG_GENC OMIT
+
+
+
 extern void
 cmds_generic(parser_state_t *state, int argc, const char **argv)
 {   dir_t *cmds = parser_root(state);
@@ -35148,24 +35300,35 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     OMIT(if (cmds == NULL)
              fprintf(stderr, "%s: parser root is %p - from state %p\n",
                      codeid(), cmds, state););
+
+    DEBUG_GENC(DPRINTF("cmds - lang\n"););
     cmds_generic_lang(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - exception\n"););
     cmds_generic_exception(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - sys\n"););
     cmds_generic_sys(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - registry\n"););
     cmds_generic_registry(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - parser command line args\n"););
     if (NULL != argv)
         cmds_generic_parser(state, cmds, argc, argv);
 
+    DEBUG_GENC(DPRINTF("cmds - coroutine\n"););
     cmds_generic_coroutine(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - type\n"););
     cmds_generic_type(state, cmds);
     cmds_generic_stream(state, cmds);
     cmds_generic_nul(state, cmds);
     cmds_generic_int(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - bool\n"););
     cmds_generic_bool(state, cmds);
     cmds_generic_string(state, cmds);
     cmds_generic_ipaddr(state, cmds);
     cmds_generic_macaddr(state, cmds);
     cmds_generic_closure(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - dir\n"););
     cmds_generic_dir(state, cmds);
+    DEBUG_GENC(DPRINTF("cmds - mem\n"););
     cmds_generic_mem(state, cmds);
 
 #ifdef USE_FTL_XML
@@ -35255,26 +35418,44 @@ ftl_version(int *out_major, int *out_minor, int *out_debug)
 
 
 
+#define DEBUG_FINIT OMIT
+
+
+
 extern void
 ftl_init(void)
 {   value_heap_init();
+    DEBUG_FINIT(DPRINTF("init - heap\n"););
     values_type_init();
+    DEBUG_FINIT(DPRINTF("init - type\n"););
     values_null_init();
+    DEBUG_FINIT(DPRINTF("init - null\n"););
     values_int_init();
     values_ipaddr_init();
     values_macaddr_init();
+    DEBUG_FINIT(DPRINTF("init - int/ip/mac\n"););
     values_string_init();
     values_code_init();
+    DEBUG_FINIT(DPRINTF("init - code/string\n"););
     values_stream_init();
+    DEBUG_FINIT(DPRINTF("init - stream\n"););
     values_string_argname_init();
+    DEBUG_FINIT(DPRINTF("init - string args\n"););
     values_dir_init();
+    DEBUG_FINIT(DPRINTF("init - dir\n"););
     values_closure_init();
+    DEBUG_FINIT(DPRINTF("init - closure\n"););
     values_coroutine_init();
+    DEBUG_FINIT(DPRINTF("init - coroutine\n"););
     values_cmd_init();
     values_func_init();
+    DEBUG_FINIT(DPRINTF("init - cmd/func\n"););
     values_bool_init();/* must follow values_func_init */
+    DEBUG_FINIT(DPRINTF("init - bool\n"););
     values_mem_init();
+    DEBUG_FINIT(DPRINTF("init - mem\n"););
     fprint_init();
+    DEBUG_FINIT(DPRINTF("init - fprintf\n"););
     OMIT(printf("FTL_MB_LEN_MAX = %d MB_LEN_MAX = %d (%s)\n",
                   FTL_MB_LEN_MAX, MB_LEN_MAX, str(MB_LEN_MAX));)
 }
