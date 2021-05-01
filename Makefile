@@ -30,10 +30,18 @@ ndebug=no
 #          make use_elf=no force_native=yes
 # (On Ubuntu this may require package gcc-mingw-w64)
 
+# Under MSYS2 you may need the folowing pacman packages
+#    mingw-w64-x86_64-dlfcn msys2-w32api-runtime
+
 
 # OS CUSTOMIZATION
 
+# $(info OS='$(OS)' OSARCH='$(OSARCH)' OSNAME='$(OSNAME)')
+
 ARCH=$(OSARCH)
+ifeq ($(OSARCH),)
+    OSARCH=$(OS)
+endif
 ifeq ($(OSARCH),Darwin)
     ARCH=osx
 endif
@@ -49,6 +57,9 @@ ifeq ($(OSARCH),linux64)
         #$(info Windows WSL Kernel detected)
         ARCH=winlinux
     endif
+endif
+ifeq ($(OSARCH),Windows_NT)
+    ARCH=windows
 endif
 ifeq ($(ARCH),cygwin64)
     ARCH=cygwin
@@ -113,7 +124,7 @@ ifeq ($(BUILDARCH),osx)
     CFLAGS_CC=-Wno-tautological-compare
 else
 ifeq ($(BUILDARCH),windows)
-    ifeq ($(NATIVE),no)
+    ifeq ($(NATIVEARCH),windows)
         EXE:=.exe
         OBJ:=.obj
         # CC:=mingw32-gcc
@@ -123,8 +134,12 @@ ifeq ($(BUILDARCH),windows)
         #OBJS_READLINE=linenoise$(OBJ)
 	LIB_DYNLIB=
 	LIB_SOCKET=-lws2_32
-        #CC:=i686-w64-mingw32-gcc# for 32-bit executable
-	CC:=x86_64-w64-mingw32-gcc# for 64-bit executable
+        #CC:=i686-w64-mingw32-gcc  # for 32-bit executable
+	CC:=x86_64-w64-mingw32-gcc # for 64-bit executable
+        CFLAGS_CC=-D__MINGW_USE_ANSI_STDIO=1
+        # ANSI_STIO: The mingw compiler (well, version 10.2.0 at least) seems
+        # to assume this define whether we set it or not.  We set it here to
+        # let our headers know it is implicitly in force.
     endif
 else
     # assume posix-like native environmnent
