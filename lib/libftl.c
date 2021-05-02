@@ -16962,6 +16962,12 @@ value_closure_compare(const value_t *v1, const value_t *v2)
 
 
 /*! Initialize a new closure value.
+ *    @param closure - the closure data structure to be initialized
+ *    @param closure_type - type defn of the closure (normally type_closure)
+ *    @param code    - the code body to be executed when invoked
+ *    @param env     - the values to which the code has access
+ *    @param autorun - whether the code is automatically executed once it has
+ *                     no unbound variables
  *  If the \c env or \c code values were local they can safely be unlocalled
  *  after this call since they have been incorporated into the returned value
  */
@@ -16983,7 +16989,7 @@ value_closure_init(value_closure_t *closure, type_t closure_type,
 
 
 /*! create a new closure with the given components
- *    @param code    - the text to be executed
+ *    @param code    - the code body to be executed when invoked
  *    @param env     - the values to which the code has access
  *    @param autorun - whether the code is automatically executed once it has
  *                     no unbound variables
@@ -21223,13 +21229,19 @@ value_smod_cmd(parser_state_t *state, const value_t *helpstrval,
  *    @param name      - the name to give the function
  *    @param help      - optional help text
  *    @param cmd       - the callable value
- *    @param scope     - optional environment to push into the calling
+ *    @param scope     - optional (sole) environment to push into the calling
  *                       environment
  *    @returns         - the closure value created & set into the directory
  *
  *  The \c scope environment will provide names and values accessible to the
- *  executable defined taken as a snapshot of those available when this
- *  function is called.
+ *  executable defined taken as the current level of the environment stack
+ *  available when this function is called.  The command will have no
+ *  an empty environment if this value is NULL.
+ *
+ *  Note - care is needed when specifying the environment provided by scope.
+ *  It is pushed after the other bound variables for the command are
+ *  present on the stack, so it has the capability of occluding the argument
+ *  from the command.
  */
 static value_t *
 smod_add_cmd_lnew(parser_state_t *state, dir_t *dir,
@@ -21243,9 +21255,10 @@ smod_add_cmd_lnew(parser_state_t *state, dir_t *dir,
     else
     {   int args = value_type_equal(cmd, type_func)?
                    value_func_args((value_func_t *)cmd): /*type_cmd*/1;
-        value_env_t *env = value_env_lnew(state);
+        value_env_t *env = NULL;
         value_t *closure = value_closure_fn_lnew(state, cmd, env,
                                                  FTL_LIB_AUTORUN_DEFAULT);
+        /*< new closure with empty env & autorun FTL_LIB_AUTORUN_DEFAULT */
         value_t *helpval = value_string_lnew_measured(state, help);
 
         if (scope != NULL)
@@ -23669,21 +23682,30 @@ invoke(const value_t *code, parser_state_t *state)
                             charsink_string_init(&expandline);
                         dir_stack_pos_t pos;
 
-                        /* TODO: envdir is from a closure, it may be using
-                           its link directory - which this push will overwrite
-                        */
-                        pos = parser_env_push(state, envdir,
-                                              /*outer_visible*/TRUE);
-                        /* expand string (buf, len) into expandsink */
+                        /* expand string (buf, len) into expandsink
+                         * Note: the environment will now be stacked
+                         *  most recent ------------------
+                         *              <cmd bound text argument> ...
+                         *              <pre-argument binding environment>
+                         */
                         (void)parser_expand(state, expandsink, buf, len);
 
+                        if (envdir != NULL)
+                        {   /* TODO: envdir is from a closure, it may be using
+                               its link directory - which this push will
+                               overwrite
+                            */
+                            pos = parser_env_push(state, envdir,
+                                                  /*outer_visible*/TRUE);
+                        }
                         /* execute command taking expandsink as parse input */
                         charsink_string_buf(expandsink, &buf, &len);
                         lval = value_cmd_exec(cmd)(&buf, code, state)/*lnew*/;
 
                         value_local(state, (value_t *)/*un-const*/lval);
-                        /* ensure local */
-                        parser_env_return(state, pos);
+                        /*< ensure local */
+                        if (envdir != NULL)
+                            parser_env_return(state, pos);
                         charsink_string_close(expandsink);
                     }
                     else
