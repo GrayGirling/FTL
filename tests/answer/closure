@@ -283,17 +283,17 @@ ftl $*console*:135: can't join two environments with unbound variables - not yet
 > set author "Anon"
 > 
 > eval myecho {Author is $author}!
-Author is Gray
-> # should be: Author is Gray
+Author is Anon
+> # should be: Author is Anon
 > set any echo:[author="corruption by irrelevance"]
 > # once caused an environment corruption error
 > eval myecho {Author is $author}!
-Author is Gray
-> # should be: Author is Gray
+Author is Anon
+> # should be: Author is Anon
 > set any echo:[author="corruption by another irrelevance"]
 > eval myecho {Author is $author}!
-Author is Gray
-> # should be: Author is Gray
+Author is Anon
+> # should be: Author is Anon
 > 
 > eval echo "Author is $author"!
 Author is Anon

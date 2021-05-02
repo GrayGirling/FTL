@@ -155,14 +155,14 @@ set myecho [author="Gray"]:echo
 set author "Anon"
 
 eval myecho {Author is $author}!
-# should be: Author is Gray
+# should be: Author is Anon
 set any echo:[author="corruption by irrelevance"]
 # once caused an environment corruption error
 eval myecho {Author is $author}!
-# should be: Author is Gray
+# should be: Author is Anon
 set any echo:[author="corruption by another irrelevance"]
 eval myecho {Author is $author}!
-# should be: Author is Gray
+# should be: Author is Anon
 
 eval echo "Author is $author"!
 eval []:echo {Author is $author}!
