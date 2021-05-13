@@ -180,7 +180,9 @@
    <base> is the radix, and optional repeating separators (, _ or .) occur
    every <n> digits.  e.g. printf "%r2_4r" <0x99> would give 1001_1001.
 
-   Implement real number type.
+   Implement real number type and parsing and output formats.
+
+   Implement fmt_t for %t (two) to output binary numbers.
 
    Provide a new feature of a closure "private": private closures have no
    visible environment part (e.g. fn.arg is invalid syntax if fn is a private
@@ -220,8 +222,8 @@
 #error you can define only one of USE_READLINE and USE_LINENOISE
 #endif
 
-#define LOCAL_GARBAGE 1
-/**< collect garbage only only if it's value is marked non-local */
+#define LOCAL_GARBAGE 0
+/**< collect garbage - only if it's value is marked non-local */
 
 /**<
  *   If the above is defined we will pay attention to a type's 'local' marker.
@@ -4627,7 +4629,7 @@ linesource_init(linesource_t *source)
     source->string = '\"';
     source->commandsep = ';';
     source->comment = '#';
-    source->eof = FALSE;
+    source->eof = TRUE;
     code_place_unset(&source->place);
     code_place_unset(&source->report_place);
 }
@@ -21674,8 +21676,8 @@ static value_env_t     value_argenv_true;
 static value_closure_t value_closure_true;
 static value_string_t  value_helpstr_true;
 
-const char *help_string_true  = "- TRUE value";
-const char *help_string_false = "- FALSE value";
+const char *help_string_true  = "- TRUE value (an un-FALSE value)";
+const char *help_string_false = "- the FALSE value";
 
 static value_func_t    value_func_false;
 static value_env_t     value_argenv_false;
@@ -28856,6 +28858,7 @@ fn_fs_ls_enum(void *enum_arg, const char *entry, const char *subdir,
         (void)dir_cstring_lset(valdir, state, "dir",
                                is_dir? value_true: value_false);
         (void)dir_string_lset(args->content, state, entry, dir_value(valdir));
+        value_unlocal(dir_value(valdir));
     } else
         (void)dir_string_lset(args->content, state, entry, &value_null);
 
@@ -28882,11 +28885,14 @@ fn_fs_ls(const value_t *this_fn, parser_state_t *state)
         arg.dirnameval = d;
         arg.content = dir_id_lnew(state);
 
-        if (arg.content != NULL &&
-            fs_enum_dir(dirname, &fn_fs_ls_enum, &arg))
-            result = dir_value(arg.content);
-        else
-            result = &value_null;
+        result = &value_null;
+        if (arg.content != NULL)
+        {   if (fs_enum_dir(dirname, &fn_fs_ls_enum, &arg))
+                result = dir_value(arg.content);
+            else
+                value_unlocal(dir_value(arg.content));
+        }
+        value_unlocal(d);
     } else
         parser_report_help(state, this_fn);
 
@@ -30050,17 +30056,29 @@ fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
 {   const value_t *str = parser_builtin_arg(state, 1);
     const value_t *res = &value_null;
 
-    if (value_istype(str, type_string))
+    if (value_type_equal(str, type_code) ||
+        value_istype(str, type_string))
     {   const char *buf;
         size_t len;
+        bool ok;
 
-        if (value_string_get(str, &buf, &len))
+        if (value_type_equal(str, type_code))
+        {   ok = value_code_buf(str, &buf, &len);
+        } else
+            ok = value_string_get(str, &buf, &len);
+            /* checks boundarg is a string */
+
+        if (ok)
         {   charsource_t *inchars =
                 charsource_string_new("sourcetext", buf, len);
             if (NULL == inchars)
                 res = parser_errorval(state, "couldn't open string to read\n");
             else
-                linesource_push(parser_linesource(state), inchars);
+            {   res = parser_expand_exec_int(state, inchars,
+                                             /*cmdstr*/NULL, /*rcfile*/NULL,
+                                             /*expect_no_locals*/FALSE,
+                                             /*interactive*/FALSE);
+            }
         }
     }
     return res;
@@ -30102,7 +30120,8 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
                               &pathname[0], strerror(errno), errno););
         } else
         {   const value_t *result =
-                parser_expand_exec_int(state, inchars, NULL, NULL,
+                parser_expand_exec_int(state, inchars,
+                                       /*cmdstr*/NULL, /*rcfile*/NULL,
                                        /*expect_no_locals*/FALSE,
                                         /*interactive*/FALSE);
             /* we ignore the result */value_unlocal(result);
@@ -30215,7 +30234,7 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
     smod_add(state, cmds, "source", "<filename> - read from file <filename>",
              &cmd_source);
     smod_addfnscope(state, cmds, "sourcetext",
-                   "<stringexpr> - read characters from string",
+                   "<strin>|<code> - read characters from string or code",
                    &fn_sourcetext, 1, scope);
     smod_addfn(state, cmds, "return",
               "<rc> - abandon current command input returning <rc>",
@@ -30971,8 +30990,8 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
               "<n> | <string> - set random seed based on argument",
               &fn_rndseed, 1);
     smod_addfn(state, cmds, "int_fmt_hexbits",
-              "<n> - set bits that won't result in integer hex "
-              "printing in hex when set",
+              "<n> - print decimal if all bits in this mask, "
+                    "else hex",
               &fn_int_set_hexbits, 1);
     smod_add(state, cmds, "int",
              "<integer expr> - numeric value",  &value_int_parse);
@@ -31241,6 +31260,32 @@ genfn_fmt_d(char *buf, size_t buflen, fprint_flags_t flags, int precision,
     return val;
 }
 
+
+
+
+
+#if 0 /* implement me */
+static const value_t *
+genfn_fmt_t(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   const value_t *val = &value_null;
+
+    if (value_istype(argval, type_int))
+    {   const char *format;
+        number_t arg = value_int_number(argval);
+        int len;
+
+        /* print binary number 
+        len = os_snprintf(buf, buflen, format, precision, arg);
+        */
+
+        if (len >= 0)
+            val = value_string_lnew(state, buf, len);
+    }
+
+    return val;
+}
+#endif
 
 
 
@@ -34451,8 +34496,8 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
               "<env> <binding> - forall <binding> while it is not FALSE",
               &fn_forallwhile, 2, scope);
     smod_addfnscope(state, cmds, "if",
-              "<n> <then-code> <else-code> - execute <then-code> if "
-                   "<n>!=FALSE",
+              "<b> <then-code> <else-code> - execute <then-code> if "
+                   "<b>!=FALSE",
                    &fn_if, 3, scope);
     smod_addfnscope(state, cmds, "while",
               "<test> <do> - while <test> evaluates non-FALSE execute <do>",
