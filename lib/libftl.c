@@ -376,7 +376,7 @@
 #endif
 
 #ifndef SUPPORT_FMT_P
-#define SUPPORT_FMT_P 1 /*GRAY*/
+#define SUPPORT_FMT_P 0
 #endif
 
 #define CATDELIM(a, delim, b) #a  delim  #b
@@ -427,7 +427,7 @@
 #include <errno.h>
 
 
-#include "ftl.h" /* also defines bool */
+#include "ftl_api.h" /* also defines bool */
 #include "libdyn.h"
 #include "filenames.h"
 #include "ftl_internal.h"
@@ -19534,8 +19534,9 @@ static bool
 parse_op(const char **ref_line, op_state_t *ops, dir_t *opdefs,
          operator_t *ref_op)
 {   const char *line = *ref_line;
+    const char *lineend = &line[strlen(line)];
     const value_t *opval = NULL;
-    bool ok = parse_oneof(ref_line, ops->state, opdefs, &opval) &&
+    bool ok = parsew_oneof(ref_line, lineend, ops->state, opdefs, &opval) &&
               !(isalpha((unsigned char)(*ref_line)[-1]) &&
                 (isalpha((unsigned char)(*ref_line)[0]) ||
                  (*ref_line)[0] == '_'));
@@ -30049,8 +30050,6 @@ fn_load(const char **ref_line, const char *lineend, const value_t *this_cmd,
 
 
 
-#if 0
-/*! Deprecated - use command "command" instead */
 static const value_t *
 fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
 {   const value_t *str = parser_builtin_arg(state, 1);
@@ -30083,7 +30082,6 @@ fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
     }
     return res;
 }
-#endif
 
 
 
@@ -30261,12 +30259,9 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
              &cmd_source);
     smod_add(state, cmds, "command", "<whole line> - execute as line of source",
              &cmd_command);
-#if 0 /* never worked properly - deprecated in favour of "command" above */
-    dir_stack_t *scope = parser_env_stack(state);
     smod_addfnscope(state, cmds, "sourcetext",
                    "<strin>|<code> - read characters from string or code",
-                   &fn_sourcetext, 1, scope);
-#endif
+                    &fn_sourcetext, 1, /*scope*/parser_env_stack(state));
     smod_addfn(state, cmds, "return",
               "<rc> - abandon current command input returning <rc>",
               &fn_return, 1);

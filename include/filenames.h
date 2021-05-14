@@ -9,7 +9,7 @@
 #ifndef _FTL_LIBS_FILENAMES_H
 #define _FTL_LIBS_FILENAMES_H
 
-#include "ftl.h" /* for bool */
+#include "ftl_api.h" /* for bool */
 
 #ifdef WIN32  /**< Set the macros according to the OS */
 

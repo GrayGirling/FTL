@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "ftl.h"        /* for codeid() and bool */
+#include "ftl_api.h"        /* for codeid() and bool */
 #include "filenames.h"
 
 

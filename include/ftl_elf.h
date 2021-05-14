@@ -5,7 +5,7 @@
 #ifndef _DRIVER_FTL_ELFLIB_H
 #define _DRIVER_FTL_ELFLIB_H
 
-#include "ftl.h"
+#include "ftl_api.h"
 
 #ifdef __cplusplus
 extern "C" {

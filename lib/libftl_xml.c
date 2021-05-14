@@ -47,7 +47,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "ftl.h"              // FTL access header
+#include "ftl_api.h"          // FTL access header
 #include "ftl_internal.h"     // FTL extensions header
 #include "ftl_xml.h"          // our header
 
@@ -566,11 +566,11 @@ parsew_xml_attributes(parser_state_t *state, const char **ref_line,
                                sizeof(attribute_value), &attr_len);
             if (ok && dir != NULL) {
                 const value_t *attrname =
-                    value_string_new_measured(&attribute_name[0]);
+                    value_string_lnew_measured(state, &attribute_name[0]);
                 const value_t *attrval =
-                    value_string_new(&attribute_value[0], attr_len);
+                    value_string_lnew(state, &attribute_value[0], attr_len);
 
-                dir_set(dir, attrname, attrval);
+                dir_lset(dir, state, attrname, attrval);
                 value_unlocal(attrname);
                 value_unlocal(attrval);
             }
@@ -1043,10 +1043,10 @@ fn_scan_xml_name(const value_t *this_fn, parser_state_t *state)
 extern bool
 cmds_xml(parser_state_t *state, dir_t *cmds)
 {
-    mod_addfn(cmds, "scanxmlid",
+    smod_addfn(state, cmds, "scanxmlid",
               "<@string> <parseobj> - parse XML-style name in <parseobj>",
               &fn_scan_xml_name, 2);
-    mod_addfn(cmds, "scanxml",
+    smod_addfn(state, cmds, "scanxml",
               "<d> <@fn> <parseobj> - bind d.pi|cmt|decl|mttag|stag|etag|text "
               "to XML item",
               &fn_scan_xml_itemfn, 3);

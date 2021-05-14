@@ -42,7 +42,7 @@
 #ifndef _FTL_INTERNAL_H
 #define _FTL_INTERNAL_H
 
-#include "ftl.h"
+#include "ftl_api.h"
 
 /*          Configuration                      		                     */
 

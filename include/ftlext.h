@@ -39,7 +39,7 @@
 #define _FTLEXT_H
 
 #include "sharedlib.h"
-#include "ftl.h"
+#include "ftl_api.h"
 
 #define FTL_EXTENSION_MAIN _ftl_main
 

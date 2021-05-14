@@ -36,7 +36,7 @@
 #ifndef _FTL_JSON_H
 #define _FTL_JSON_H
 
-#include "ftl.h"
+#include "ftl_api.h"
 
 #ifdef __cplusplus
 extern "C" {

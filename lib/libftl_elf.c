@@ -96,6 +96,7 @@
 #include <assert.h>
 
 #include "ftl.h"
+/* TODO: use non-legacy API with ftl_api.h instead */
 #include "ftl_internal.h"
 #include "ftl_elf.h"       /* our library */
 

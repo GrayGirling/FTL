@@ -49,9 +49,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "ftl.h"              // FTL access header
-#include "ftl_internal.h"     // FTL extensions header
-#include "ftl_json.h"         // our header
+#include "ftl_api.h"          /* FTL access header */
+#include "ftl_internal.h"     /* FTL extensions header */
+#include "ftl_json.h"         /* our header */
 
 
 /*****************************************************************************
@@ -107,7 +107,7 @@ parsew_json_object_body(const char **ref_line, const char *lineend,
     /* syntax: [<string> : <value> [, <string> : <value>]*] */
     bool ok = true;
     const char *line = *ref_line;
-    dir_t *dirval = dir_id_new();
+    dir_t *dirval = dir_id_lnew(state);
     bool expect_name = FALSE;
 
     do
@@ -130,8 +130,9 @@ parsew_json_object_body(const char **ref_line, const char *lineend,
                 *ref_line = line;
                 if (ok)
                 {
-                    value_t *nameval = value_string_new(&strbuf[0], namelen);
-                    if (!dir_set(dirval, nameval, val))
+                    value_t *nameval =
+                        value_string_lnew(state, &strbuf[0], namelen);
+                    if (!dir_lset(dirval, state, nameval, val))
                     {   parser_error(state, "failed to set value of JSON object "
                                      "field \"%s\"\n",
                                      &strbuf[0]);
@@ -166,7 +167,7 @@ parsew_json_array_body(const char **ref_line, const char *lineend,
     /* syntax: [<value> [, <value>]*] */
     bool ok = true;
     const char *line = *ref_line;
-    dir_t *dirval = dir_vec_new();
+    dir_t *dirval = dir_vec_lnew(state);
     bool expect_value = false;
     int index = 0;
 
@@ -178,7 +179,7 @@ parsew_json_array_body(const char **ref_line, const char *lineend,
         parsew_space(&line, lineend);
         if (ok)
         {
-            if (!dir_int_set(dirval, index, val))
+            if (!dir_int_lset(dirval, state, index, val))
             {   parser_error(state, "failed to set index [%d] of JSON array\n",
                              index);
                 /* syntax OK though so don't update 'ok' */
@@ -237,11 +238,11 @@ parsew_json_value(const char **ref_line, const char *lineend,
         *ref_line = line;
     } else
     if (parsew_int_val(&line, lineend, &numb))
-    {   *out_val = value_int_new(numb);
+    {   *out_val = value_int_lnew(state, numb);
     } else
     if (parsew_string(&line, lineend,
                       &stringbuf[0], sizeof(stringbuf), &stringbufused))
-    {   *out_val = value_string_new(&stringbuf[0], stringbufused);
+    {   *out_val = value_string_lnew(state, &stringbuf[0], stringbufused);
     } else
     if (parsew_key(&line, lineend, "null"))
     {   *out_val = &value_null;
@@ -579,7 +580,7 @@ gengenfn_fmt_json(char *buf, size_t buflen, fprint_flags_t flags, int precision,
     charsink_string_buf(sink, &strbuf, &strsize);
     if (precision > 0 && precision < (int)strsize)
         strsize = precision;
-    val = value_string_new(strbuf, strsize);
+    val = value_string_lnew(state, strbuf, strsize);
     charsink_string_close(sink);
 
     return val;
