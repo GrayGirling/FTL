@@ -25862,7 +25862,7 @@ parser_report_trailing(parser_state_t *state, const char *msg,
  *     - (\c source) a provided charsource_t (if not NULL)
  *
  *    @param state     - current parser state
- *    @param source    - source to read commands from 
+ *    @param source    - source to read commands from - deleted by this fn
  *    @param cmd_str   - a string containing commands to be executed
  *    @param rcfile_id - name of an initialization file on RC path
  *    @param expect_no_locals - garbage collect on every line if TRUE
@@ -30049,8 +30049,8 @@ fn_load(const char **ref_line, const char *lineend, const value_t *this_cmd,
 
 
 
-
-
+#if 0
+/*! Deprecated - use command "command" instead */
 static const value_t *
 fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
 {   const value_t *str = parser_builtin_arg(state, 1);
@@ -30083,7 +30083,7 @@ fn_sourcetext(const value_t *this_cmd, parser_state_t *state)
     }
     return res;
 }
-
+#endif
 
 
 
@@ -30138,6 +30138,33 @@ cmd_source(const char **ref_line, const value_t *this_cmd,
 
 
 static const value_t *
+cmd_command(const char **ref_line, const value_t *this_cmd,
+            parser_state_t *state)
+{   const value_t *res = &value_null;
+    const char *line = *ref_line;
+    size_t linelen = strlen(line);
+    charsource_t *inchars =
+        charsource_string_new("command", line, linelen);
+
+    if (NULL == inchars)
+    {   res = parser_errorval(state, "couldn't open commmand text to read\n");
+    } else
+    {   res = parser_expand_exec_int(state, inchars,
+                                     /*cmdstr*/NULL, /*rcfile*/NULL,
+                                     /*expect_no_locals*/FALSE,
+                                     /*interactive*/FALSE);
+    }
+    *ref_line = &line[linelen];
+
+    return res;
+}
+
+
+
+
+
+
+static const value_t *
 fn_return(const value_t *this_cmd, parser_state_t *state)
 {   const value_t *rc = parser_builtin_arg(state, 1);
     linesource_t *lines = parser_linesource(state);
@@ -30153,8 +30180,7 @@ fn_return(const value_t *this_cmd, parser_state_t *state)
 
 static void
 cmds_generic_stream(parser_state_t *state, dir_t *cmds)
-{   dir_stack_t *scope = parser_env_stack(state);
-    dir_t *icmds = dir_id_lnew(state);
+{   dir_t *icmds = dir_id_lnew(state);
     value_t *val_stdout =
         value_stream_openfile_lnew(state, stdout, /*autoclose*/FALSE, "stdout",
                                    /*read*/FALSE, /*write*/TRUE);
@@ -30233,9 +30259,14 @@ cmds_generic_stream(parser_state_t *state, dir_t *cmds)
               &cmd_filetostring);
     smod_add(state, cmds, "source", "<filename> - read from file <filename>",
              &cmd_source);
+    smod_add(state, cmds, "command", "<whole line> - execute as line of source",
+             &cmd_command);
+#if 0 /* never worked properly - deprecated in favour of "command" above */
+    dir_stack_t *scope = parser_env_stack(state);
     smod_addfnscope(state, cmds, "sourcetext",
                    "<strin>|<code> - read characters from string or code",
                    &fn_sourcetext, 1, scope);
+#endif
     smod_addfn(state, cmds, "return",
               "<rc> - abandon current command input returning <rc>",
               &fn_return, 1);
