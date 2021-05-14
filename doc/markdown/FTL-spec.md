@@ -145,7 +145,7 @@ can be replaced by
 '[' <sym_1> '=' <val_1> ',' ... ',' <sym_n> = <val_n> ',' ... <sym_m> ']' '::' <code-expression>
 ```
 
-Note that each \<val\_i\> is still evaluated in the environment outside
+Note that each `<val_i>` is still evaluated in the environment outside
 the closure (in which none of the \<sym\_i\> symbols have been set).  
 The symbols with an associated '=' will be bound symbols, and those
 without will be unbound.  
@@ -161,7 +161,19 @@ value anywhere.  Note that, to simplify implementation, no bound symbols
 can be specified following the first unbound symbol in the
 specification.
 
-### <span id="mozTocId807267"></span>Obtaining Bound Values in Closures
+### <span id="mozTocId807267"></span>Types that can be used as Symbols
+
+Symbols can be either strings or integers. Thus, for example, the
+environment \["a"=1\] binds the symbol "a" to the value 1; and the
+environment \[1="a"\] binds the symbol 1 to the value "a".
+
+In the specific case of strings used as symbols, those formatted as
+identifiers (i.e. those composed of an initial alphabetic character
+followed by one or more alphanumerics or the underbar (\_) character)
+can be specified without quotation marks. Thus \[a=1\] and \["a"=1\] are
+equivalent.
+
+### Obtaining Bound Values in Closures
 
 This syntax
 
@@ -173,12 +185,29 @@ This syntax
 environment) can be replaced by
 
 ``` western
-<closure> '.' <value>
+<closure> '.' <symbol>
 ```
 
-Currently \<value\>s are constrained to be either integers or strings.
-For the sake of convenience strings can be provided as symbols (with no
-associated quotes) if they have the syntax of an identifier.
+As above, \<symbols\>s may be either integers or strings; and, in the
+case of strings, can be provided with no associated quotes if they have
+the syntax of an identifier.
+
+In addition the same syntax is available for environments
+
+``` western
+<closure> '::' '{' <environment> '}' '!' 
+```
+
+can be replaced by
+
+``` western
+<closure> '.' <environment>
+```
+
+(The result will be an environment in which each of the values bound in
+\<environment\> are replaced by they value they take in the \<closure\>
+environment.) For example \[a="one", b="two",
+c="three"\].\[q1="a",q2="c"\] will evaluate to \[q1="one", q2="three"\].
 
 In addition the following syntax can be used to create a symbol value
 from an expression
@@ -267,7 +296,7 @@ so that the following would have value 10
 <..42>.11
 ```
 
-### Code Concatenation
+### Code Concatenation and NULL
 
 The infix operator ";" is available in a code object to ignore its
 left-hand value and replace it with its right (if there is one).  Thus
@@ -283,8 +312,8 @@ is \<expression n\>.  And the value of
 <expression 1> ; <expression 2> ; ... ;
 ```
 
-is the special empty value "NULL" (which is therefore a name for the
-value of "{}\!")
+is the special empty value "NULL" meaning 'nothing' (which is therefore
+a name for the value of "{}\!")
 
 ### Boolean Expressions
 
@@ -329,11 +358,20 @@ The characters '\#', '\\' and '$' are not used as part of FTL syntax.
                 '!' | '&' | '~' | '@' | 
                 ';' | ',' | ':' | '.'
 <symbol> ::= <integer> | <identifier>
-<integer> ::= <digit>+
+<integer> ::= [<base>] <digit> (<digit> | '_')*
+<base> ::= '0x' | '0X' | '0o' | '0O' | '0b' | '0B' 
 <identifier> ::= <common_identifier> | <builtin_identifier>
 <common_identifier> ::= <alphabetic> (<alphabetic> | '_' | <digit>)*
 <builtin_identifier> ::= '_' <digit>+ 
 ```
+
+The numeric base 16 is specified by '0x' and '0X'; the base 8 is
+specified by '0o' and '0O'; and the base 2 is specified by '0b' and
+'0B'. Integers beginning with a numeric base specification use digits
+from '0' up to a character representing one less than the base. The
+characters 'A', 'B', 'C', 'D', 'E' and 'F', or 'a', 'b, 'c', 'd', 'e',
+and 'f' are used for digits of value 10, 11, 12, 13, 14, and 15 as
+required by base 16.
 
 The precedence of the various operators outlined above is specified as
 part of the syntax for an expression:
@@ -635,7 +673,7 @@ forn 4 [n]: {
 which will print out the squares from 0 to 4.
 
 Such a definition is not required, however, since the standard
-environment in FTL includes an "for" function which takes an environment
+environment in FTL includes a "for" function which takes an environment
 and a closure value as an argument and applies each binding in the
 environment to the closure value.
 
@@ -680,7 +718,8 @@ access to the new variable set its environment:
 empty = [string]: {
     [answer = FALSE]:{
         (len string!) == 0 {answer = TRUE}!;
-        answer}!
+        answer
+    }!
 }
 ```
 
@@ -712,7 +751,7 @@ example:
 vect = [x,y]:{
     echo "New point"!;
     [   print = []:{
-            echo "<\$x,\$y>"!
+            echo "<$x,$y>"!
         },
         xcoord = []:{x},
         ycoord = []:{y},
@@ -743,10 +782,83 @@ point", "\<2,4\>".  There are some things to note
     record (this is why the methods xcoord and ycoord were defined).
 
   - (However, because x and y are bound into the methods it is possible
-    to use p.add.x and p.add.y for example\!)
+    to refer to them as p.add.x and p.add.y for example\!)
 
   - If there is any initialization for the object to be performed it can
     be done in a code part to the definition of "point".
+
+### Self-referring Classes
+
+In many languages supporting classes complex methods can be built up
+from more primitive ones by using the notion of "self" – representing
+the value of the class instance currently being operated on by a method.
+This example represents a slot machine as a class:
+
+``` western
+set slotmachine [bank]:{
+   [self=[cash=bank]]:{
+       self.accumulate = [n]:{
+           self.cash=self.cash+n
+       };
+       self.play = [bet]:{
+           if self.cash _ge_ bet {
+               [win = (rnd 10!) _ge_ 5]:{
+                   if win {self.accumulate bet!}
+                          {self.accumulate (-bet)!}!;
+                   printf "You %s - you have %d coins left\n"
+                          <if win{"WIN"}{"LOSE"}!, self.cash>!
+               }!;
+           }{  printf "Out of money - try a smaller bet?\n"<>!; }!
+       };
+       self
+   }!
+}
+```
+
+A typical command line session build using this library and making use
+of this class might proceed as follows:
+
+``` western
+> set slot1 slotmachine 100!
+
+> set slot2 slotmachine 20!
+
+>
+
+> slot1 play 50
+
+You LOSE - you have 50 coins left
+
+> slot1 play 50
+
+You WIN - you have 100 coins left
+
+> slot1 play 50
+
+You LOSE - you have 50 coins left
+
+> slot1 play 50
+
+You LOSE - you have 0 coins left
+
+>
+
+> slot2 play 20
+
+You WIN - you have 40 coins left
+
+> slot2 play 20
+
+You LOSE - you have 20 coins left
+
+> slot2 play 20
+
+You LOSE - you have 0 coins left
+
+> slot2 play 20
+
+Out of money - try a smaller bet?
+```
 
 ### Argument Passing
 
@@ -830,3 +942,16 @@ print item1!;
 ```
 
 would print out "\[name="Cheese",total=600,items=3,unit\_cost=200\]".
+
+Note, however, that there are functions in the standard library enter
+and leave, which can be used to achieve the same effect. enter pushes an
+environment on the current stack, leave takes it off again. Thus an
+alternative definition of item\_bill might be:
+
+``` western
+item_bill = [purchase]: {
+    enter purchase!;
+    total = items * unit_cost;
+    leave!;
+};
+```

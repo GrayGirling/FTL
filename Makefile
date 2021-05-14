@@ -136,7 +136,9 @@ ifeq ($(BUILDARCH),windows)
 	LIB_SOCKET=-lws2_32
         #CC:=i686-w64-mingw32-gcc  # for 32-bit executable
 	CC:=x86_64-w64-mingw32-gcc # for 64-bit executable
-        CFLAGS_CC=-D__MINGW_USE_ANSI_STDIO=1
+        ifeq ($(ARCH),windows)
+            CFLAGS_CC=-D__MINGW_USE_ANSI_STDIO=1
+        endif
         # ANSI_STIO: The mingw compiler (well, version 10.2.0 at least) seems
         # to assume this define whether we set it or not.  We set it here to
         # let our headers know it is implicitly in force.
@@ -279,14 +281,15 @@ ftl$(OBJ): ftl.c tools/ftl_fns.str
 hi$(OBJ): hi.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
+ftl.h: ftl_api.h ftl_legacy.h
 penv$(OBJ): ftl.h ftl_internal.h ftlext.h 
 ftl$(OBJ): ftl.h ftl_internal.h ftlext.h 
 ftlext-test$(OBJ): ftl.h ftl_internal.h ftlext.h 
 libftl_elf$(OBJ): ftl.h ftl_internal.h ftl_elf.h
-libftl_xml$(OBJ): ftl.h ftl_internal.h ftl_xml.h
-libftl_json$(OBJ): ftl.h ftl_internal.h ftl_json.h
-libftl$(OBJ): ftl.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
-filenames$(OBJ): ftl.h filenames.h Makefile
+libftl_xml$(OBJ): ftl_api.h ftl_internal.h ftl_xml.h
+libftl_json$(OBJ): ftl_api.h ftl_internal.h ftl_json.h
+libftl$(OBJ): ftl_api.h ftl_internal.h ftlext.h filenames.h libdyn.h Makefile
+filenames$(OBJ): ftl_api.h filenames.h Makefile
 libdyn$(OBJ): libdyn.h filenames.h Makefile
 
 libs: $(FTLEXTS)
@@ -315,4 +318,4 @@ docs:
 	make -C doc
 
 clean:
-	rm -f ftl$(FTLVER) penv$(FTLVER) hi$(FTLVER) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)
+	rm -f ftl$(FTLVER)$(EXE) penv$(FTLVER) hi$(FTLVER)$(EXE) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)

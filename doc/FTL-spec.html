@@ -3,13 +3,18 @@
 <head>
 	<meta http-equiv="content-type" content="text/html; charset=windows-1252"/>
 	<title>FTL</title>
-	<meta name="generator" content="LibreOffice 6.3.5.2 (Windows)"/>
+	<meta name="generator" content="LibreOffice 7.1.2.2 (Windows)"/>
 	<meta name="author" content="Gray Girling"/>
 	<meta name="created" content="00:00:00"/>
-	<meta name="changed" content="2020-04-17T23:32:32.155000000"/>
+	<meta name="changedby" content="Gray Girling"/>
+	<meta name="changed" content="2021-05-01T17:35:35.373000000"/>
+	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
 	<meta name="created" content="00:00:00">
 	<style type="text/css">
+		h1.cjk { font-family: "NSimSun" }
+		h1.ctl { font-family: "Lucida Sans" }
+		p { text-align: left }
 		h2 { border: none; padding: 0cm }
 		h2.cjk { font-family: "NSimSun" }
 		h2.ctl { font-family: "Lucida Sans" }
@@ -19,8 +24,7 @@
 		h3.ctl { font-family: "Lucida Sans" }
 		h4.cjk { font-family: "NSimSun" }
 		h4.ctl { font-family: "Lucida Sans" }
-		h1.cjk { font-family: "NSimSun" }
-		h1.ctl { font-family: "Lucida Sans" }
+		code.cjk { font-family: "NSimSun", monospace }
 	</style>
 </head>
 <body lang="en-GB" dir="ltr"><h1 class="western" align="center">FTL</h1>
@@ -67,7 +71,7 @@ conceptually a closure value is composed of three parts</p>
 <p align="left">As a generalization of the simple &lt;closure&gt;
 syntax above the part of the syntax before '<font face="monospace">::</font>'
 </p>
-<pre class="western" style="margin-left: 4.71cm; text-align: left">'[' &lt;symbol&gt; ']'</pre><p align="left">
+<pre class="western" style="margin-left: 5.71cm; text-align: left">'[' &lt;symbol&gt; ']'</pre><p align="left">
 is treated as a literal environment that may be generalized to an
 &lt;environment-expression&gt; - the '<font face="monospace">::</font>'
 being an operator that binds an environment to some code, or - more
@@ -89,7 +93,7 @@ the environment in &lt;environment-expression&gt;.<br/>
 <br/>
 Thus
 the full syntax for a closure expression is:</p>
-<pre class="western" style="margin-left: 4.71cm; text-align: left">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre><p align="left">
+<pre class="western" style="margin-left: 5.71cm; text-align: left">&lt;closure&gt; ::= (&lt;environment-expression&gt; [ '::' | ':' ])* &lt;code-expression&gt;</pre><p align="left">
 where either expression may involve literals, brackets, substitution,
 invocation etc. &nbsp;One option for an &lt;environment-expression&gt;
 is a &lt;closure&gt;, which, when used in this way refers only to the
@@ -126,10 +130,10 @@ and in general</p>
 <br/>
 can be replaced by</p>
 <pre class="western" style="text-align: left">'[' &lt;sym_1&gt; '=' &lt;val_1&gt; ',' ... ',' &lt;sym_n&gt; = &lt;val_n&gt; ',' ... &lt;sym_m&gt; ']' '::' &lt;code-expression&gt;</pre><p align="left">
-Note that each <font face="monospace">&lt;val_i&gt;</font> is still
-evaluated in the environment outside the closure (in which none of
-the <font face="monospace">&lt;sym_i&gt;</font> symbols have been
-set). &nbsp; The symbols with an associated '=' will be bound
+Note that each <code class="western"><font face="monospace">&lt;val_i&gt;</font></code>
+is still evaluated in the environment outside the closure (in which
+none of the <font face="monospace">&lt;sym_i&gt;</font> symbols have
+been set). &nbsp; The symbols with an associated '=' will be bound
 symbols, and those without will be unbound. <br/>
 <br/>
 In addition
@@ -140,18 +144,40 @@ specifies a first-class element in the language that can be used as a
 value anywhere. &nbsp;Note that, to simplify implementation, no bound
 symbols can be specified following the first unbound symbol in the
 specification.</p>
-<h3 class="western" align="left"><a name="mozTocId807267"></a>Obtaining
-Bound Values in Closures</h3>
+<h3 class="western" align="left"><a name="mozTocId807267"></a>Types
+that can be used as Symbols</h3>
+<p>Symbols can be either strings or integers.  Thus, for example, the
+environment <font face="monospace">[</font><font face="monospace">&quot;</font><font face="monospace">a</font><font face="monospace">&quot;=1]</font>
+binds the symbol <font face="monospace">&quot;a&quot;</font> to the
+value <font face="monospace">1</font>; and the environment <font face="monospace">[1=&quot;a&quot;]</font>
+binds the symbol <font face="monospace">1</font> to the value <font face="monospace">&quot;a&quot;</font>.
+</p>
+<p>In the specific case of strings used as symbols, those formatted
+as identifiers (i.e. those composed of an initial alphabetic
+character followed by one or more alphanumerics or the underbar (_)
+character) can be specified without quotation marks.  Thus <font face="monospace">[a=1]</font>
+and <font face="monospace">[&quot;a&quot;=1]</font> are equivalent.</p>
+<h3 class="western" align="left">Obtaining Bound Values in Closures</h3>
 <p align="left">This syntax 
 </p>
 <pre class="western" style="text-align: left">&lt;closure&gt; '::' '{' &lt;symbol&gt; '}' '!' </pre><p align="left">
 (which simply expands to the value of &lt;symbol&gt; in &lt;closure&gt;&rsquo;s
 environment) can be replaced by</p>
-<pre class="western" style="text-align: left">&lt;closure&gt; '.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">value</font></font>&gt;</pre><p align="left">
-Currently &lt;value&gt;s are constrained to be either integers or
-strings. For the sake of convenience strings can be provided as
-symbols (with no associated quotes) if they have the syntax of an
-identifier.</p>
+<pre class="western" style="text-align: left">&lt;closure&gt; '.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">symbol</font></font>&gt;</pre><p align="left">
+As above, &lt;symbols&gt;s may be either integers or strings; and, in
+the case of strings, can be provided with no associated quotes if
+they have the syntax of an identifier.</p>
+<p align="left">In addition the same syntax is available for
+environments</p>
+<pre class="western" style="text-align: left">&lt;closure&gt; '::' '{' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">environment</font></font>&gt; '}' '!' </pre><p align="left">
+can be replaced by</p>
+<pre class="western" style="text-align: left">&lt;closure&gt; '.' &lt;<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">environment</font></font>&gt;</pre><p align="left">
+(The result will be an environment in which each of the values bound
+in &lt;environment&gt; are replaced by they value they take in the
+&lt;closure&gt; environment.)  For example <font face="monospace">[a=&quot;one&quot;,
+b=&quot;two&quot;, c=&quot;three&quot;].[q1=&quot;a&quot;,q2=&quot;c&quot;]</font>
+will evaluate to <font face="monospace">[q1=&quot;one&quot;,
+q2=&quot;three&quot;]</font>.</p>
 <p align="left">In addition the following syntax can be used to
 create a symbol value from an expression</p>
 <pre class="western" style="text-align: left">'&lt;closure&gt; '.' '(' &lt;expression&gt; ')'</pre><p align="left">
@@ -200,7 +226,7 @@ the integers 0 to 41 in</p>
 <pre class="western" style="text-align: left">&lt;..42&gt;</pre><p align="left">
 so that the following would have value 10</p>
 <pre class="western" style="text-align: left">&lt;..42&gt;.11</pre><h3 class="western" align="left">
-Code Concatenation</h3>
+Code Concatenation and NULL</h3>
 <p align="left">The infix operator &quot;;&quot; is available in a
 code object to ignore its left-hand value and replace it with its
 right (if there is one). &nbsp;Thus the value of 
@@ -210,7 +236,7 @@ is &lt;expression n&gt;. &nbsp;And the value of
 </p>
 <pre class="western" style="text-align: left">&lt;expression 1&gt; ; &lt;expression 2&gt; ; ... ;</pre><p align="left">
 is the special empty value &quot;<font face="monospace">NULL</font>&quot;
-(which is therefore a name for the value of &quot;<font face="monospace">{}!</font>&quot;)</p>
+meaning 'nothing' (which is therefore a name for the value of &quot;<font face="monospace">{}!</font>&quot;)</p>
 <h3 class="western" align="left">Boolean Expressions</h3>
 <p align="left">The standard environment in FTL includes two
 &quot;built-in&quot; values &quot;<font face="monospace">TRUE</font>&quot;
@@ -254,12 +280,20 @@ of FTL syntax.
                 '!' | '&amp;' | '~' | '@' | 
                 ';' | ',' | ':' | '.'
 &lt;symbol&gt; ::= &lt;integer&gt; | &lt;identifier&gt;
-&lt;integer&gt; ::= &lt;digit&gt;+
+&lt;integer&gt; ::= [&lt;base&gt;] &lt;digit&gt; (&lt;digit&gt; | '_')*
+&lt;base&gt; ::= '0x' | '0X' | '0o' | '0O' | '0b' | '0B' 
 &lt;identifier&gt; ::= &lt;common_identifier&gt; | &lt;builtin_identifier&gt;
 &lt;common_identifier&gt; ::= &lt;alphabetic&gt; (&lt;alphabetic&gt; | '_' | &lt;digit&gt;)*
 &lt;builtin_identifier&gt; ::= '_' &lt;digit&gt;+ </pre><p align="left">
-The precedence of the various operators outlined above is specified
-as part of the syntax for an expression: 
+The numeric base 16 is specified by '0x' and '0X'; the base 8 is
+specified by '0o' and '0O'; and the base 2 is specified by '0b' and
+'0B'. Integers beginning with a numeric base specification use digits
+from '0' up to a character representing one less than the base.   The
+characters 'A', 'B', 'C', 'D', 'E' and 'F', or 'a', 'b, 'c', 'd',
+'e', and 'f' are used for digits of value 10, 11, 12, 13, 14, and 15
+as required by base 16.</p>
+<p align="left">The precedence of the various operators outlined
+above is specified as part of the syntax for an expression: 
 </p>
 <pre class="western" style="text-align: left">&lt;expression&gt; ::= (&lt;index&gt; '=')* &lt;invocation&gt;
 &lt;invocation&gt; ::= (&lt;substitution&gt; ['!']*)+ 
@@ -396,10 +430,10 @@ simply returns the code in the binding that would evaluate 5 times 5
 if it were executed. &nbsp;If its value were printed it would be</p>
 <pre class="western" style="text-align: left">[n=5]: {<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">mul</font></font> n n !}</pre><p align="left">
 (Note: in the implementation, there is no primitive that will print
-the value in this format. Printing the value as &ldquo;[]:{mul n n
-!}&rdquo;, where only unbound variables are shown, is more convenient
-because of the large size of the environment associated with a
-typical binding.)</p>
+the value in this format. Printing the value as &ldquo;<font face="monospace">[]:{mul
+n n !}</font>&rdquo;, where only unbound variables are shown, is more
+convenient because of the large size of the environment associated
+with a typical binding.)</p>
 <p align="left">whereas printing the expression</p>
 <pre class="western" style="text-align: left">square 5 !</pre><p align="left">
 would produce the answer</p>
@@ -422,8 +456,8 @@ The fields can be accessed as follows:</p>
 <pre class="western" style="text-align: left">radius = length point.x point.y !</pre><h3 class="western" align="left">
 <a name="mozTocId434879"></a>If .. then .. else</h3>
 <p align="left">Conditional execution of a single element of code
-code is provided using boolean expressions returning TRUE or FALSE
-(as described above). &nbsp;</p>
+code is provided using boolean expressions returning <font face="monospace">TRUE</font>
+or <font face="monospace">FALSE</font> (as described above). &nbsp;</p>
 <pre class="western" style="text-align: left">too_big { 
   print &quot;not small enough&quot; !;
 }!</pre><p align="left">
@@ -494,7 +528,7 @@ which enables code to be written such as</p>
 which will print out the squares from 0 to 4. 
 </p>
 <p align="left">Such a definition is not required, however, since the
-standard environment in FTL includes an &quot;<font face="Courier New, monospace">for</font>&quot;
+standard environment in FTL includes a &quot;<font face="Courier New, monospace">for</font>&quot;
 function which takes an environment and a closure value as an
 argument and applies each binding in the environment to the closure
 value.</p>
@@ -530,7 +564,8 @@ which has access to the new variable set its environment:</p>
 <pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">empty</font></font> = [<font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">string</font></font>]: {
     [answer = FALSE]:{
         (len string!) == 0 {answer = TRUE}!;
-        answer}!
+        answer
+    }!
 }</pre><p>
 It has the benefit/disbenefit of hiding the value of &quot;<font face="Courier New, monospace">answer</font>&quot;
 from the user of &quot;<font face="Courier New, monospace">empty</font>&quot;.</p>
@@ -552,7 +587,7 @@ using a closure. &nbsp;For example:</p>
 <pre class="western" style="text-align: left"><font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">vect</font></font> = [x,y]:{
     echo &quot;New point&quot;!;
     [   print = []:{
-            echo &quot;&lt;\$x,\$y&gt;&quot;!
+            echo &quot;&lt;$x,$y&gt;&quot;!
         },
         xcoord = []:{x},
         ycoord = []:{y},
@@ -587,14 +622,61 @@ point&quot; and then &quot;New point&quot;, &quot;&lt;2,4&gt;&quot;.
 	</p>
 	<li><p align="left" style="margin-bottom: 0cm">(However, because <font face="Monospace">x</font>
 	and <font face="Monospace">y</font> are bound into the methods it is
-	possible to use <font face="Monospace">p.add.x</font> and <font face="Monospace">p.add.y</font>
-	for example!)</p>
+	possible to refer to them as <font face="Monospace">p.add.x</font>
+	and <font face="Monospace">p.add.y</font> for example!)</p>
 	<li><p align="left">If there is any initialization for the object to
 	be performed it can be done in a code part to the definition of
 	&quot;<font face="monospace">point</font>&quot;. 
 	</p>
 </ul>
-<h3 class="western" align="left">Argument Passing</h3>
+<h3 class="western" align="left">Self-referring Classes 
+</h3>
+<p align="left">In many languages supporting classes complex methods
+can be built up from more primitive ones by using the notion of
+&quot;self&quot; &ndash; representing the value of the class instance
+currently being operated on by a method.  This example represents a
+slot machine as a class:</p>
+<pre class="western" style="text-align: left">set slotmachine [bank]:{
+   [self=[cash=bank]]:{
+       self.accumulate = [n]:{
+           self.cash=self.cash+n
+       };
+       self.play = [bet]:{
+           if self.cash _ge_ bet {
+               [win = (rnd 10!) _ge_ 5]:{
+                   if win {self.accumulate bet!}
+                          {self.accumulate (-bet)!}!;
+                   printf &quot;You %s - you have %d coins left\n&quot;
+                          &lt;if win{&quot;WIN&quot;}{&quot;LOSE&quot;}!, self.cash&gt;!
+               }!;
+           }{  printf &quot;Out of money - try a smaller bet?\n&quot;&lt;&gt;!; }!
+       };
+       <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">self</font></font>
+   }!
+}</pre><p>
+A typical command line session build using this library and making
+use of this class might proceed as follows:</p>
+<pre class="western" style="text-align: left">&gt; set slot1 slotmachine 100!<br/>
+&gt; set slot2 slotmachine 20!<br/>
+&gt;<br/>
+&gt; slot1 play 50<br/>
+You LOSE - you have 50 coins left<br/>
+&gt; slot1 play 50<br/>
+You WIN - you have 100 coins left<br/>
+&gt; slot1 play 50<br/>
+You LOSE - you have 50 coins left<br/>
+&gt; slot1 play 50<br/>
+You LOSE - you have 0 coins left<br/>
+&gt;<br/>
+&gt; slot2 play 20<br/>
+You WIN - you have 40 coins left<br/>
+&gt; slot2 play 20<br/>
+You LOSE - you have 20 coins left<br/>
+&gt; slot2 play 20<br/>
+You LOSE - you have 0 coins left<br/>
+&gt; slot2 play 20<br/>
+Out of money - try a smaller bet?</pre><h3 class="western" align="left">
+Argument Passing</h3>
 <p align="left">Although not built in to the language, methods of
 parameter passing can be emulated as follows.</p>
 <h4 class="western" align="left">Call by value</h4>
@@ -686,10 +768,17 @@ which has access to the new variable set its environment:</p>
 item1 = [name=&quot;Cheese&quot;, total=NULL, items=3, unit_cost=200];
 item_bill item1!;
 print item1!;</pre><p align="left">
-would print out &quot;[name=&quot;Cheese&quot;,total=600,items=3,unit_cost=200]&quot;.</p>
-<p align="left"><br/>
-<br/>
-
-</p>
+would print out &quot;<font face="monospace">[name=&quot;Cheese&quot;,total=600,items=3,unit_cost=200]</font>&quot;.</p>
+<p align="left">Note, however, that there are functions in the
+standard library <font face="monospace">enter</font> and <font face="monospace">leave</font>,
+which can be used to achieve the same effect.  <font face="monospace">enter</font>
+pushes an environment on the current stack, <font face="monospace">leave</font>
+takes it off again.  Thus an alternative definition of item_bill
+might be:</p>
+<pre class="western">item_bill = [purchase]: {
+    enter purchase!;
+    total = items * unit_cost;
+    leave!;
+};</pre>
 </body>
 </html>

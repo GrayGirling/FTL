@@ -44,7 +44,9 @@
 #define _FTL_LEGACY_H
 
 /* This header uses the current API as the basis for functions that were
-   available in older versions of FTL
+   available in older versions of FTL.
+
+   In new code it is best to avoid the use of these, now deprecated, functions.
 */
 #include "ftl_api.h"
 

@@ -4,21 +4,105 @@ FTL User's Guide
 
 ### Version
 
-This guide applies to the FTL run-time library with version 1.23. 
+This guide applies to the FTL run-time library with version 1.27. 
 
-### Command File Syntax
+### Overview
 
-Command lines are extracted from a command file after 
+The primary use of FTL is to facilitate the simple creation of tools
+driven by command line scripts that can either be read from a script
+file or typed line-by-line on a console. This is achieved by writing
+programs in C or C++ which create FTL *commands* and FTL *functions*
+which are used directly to provide the basic operations a tool wishes to
+make available. This C or C++ can make use of the FTL library which 
+
+  - can handle common aspects of a script interpretation
+  - provides a run-time library of additional FTL commands, functions
+    and values which can be made available alongside the features
+    provided by the tool.
+
+The advantage to the tool writer of using FTL is that the simple script
+language supported can be extended using the FTL language in such a way
+that the scripts made available to the tool user can be far more
+sophisticated than would otherwise been the case.
+
+The typical structure of a tool written using FTL involves
+
+  - the FTL run-time library
+  - zero or more FTL run-time library extensions
+  - C/C++ code written by the tool writer
+  - a "prolog" written in FTL which provides a user scripting
+    environment based on that provided by the tool writer
+
+The FTL language itself is syntactically more diverse (and therefore
+more complex for the tool user to learn) than the basic script syntax
+we'd expect tool users to require. Although FTL is available to the tool
+user, typically only the separate, and simpler, basic script syntax
+should be needed.
+
+### **Basic Script** Syntax
+
+Command lines are extracted from a command file (or command line
+console) after 
 
   - discard of commented-out lines (those beginning '\#') 
   - concatenation of lines ending with an escape ('\\') 
+  - separation of command lines joined on the line using semicolon (';')
+    
   - expansion of textual substitutions introduced with an expansion
     escape ('$') 
+  - incorporation in to a single command line of every line that is
+    enclosed by brackets( and *)*,  *{* and *}*,  *\<* and *\>* , and
+    double quoted (*"*) strings.
 
 The characters '\#', '\\' and '$' are not used as part of FTL expression
 syntax. 
 
-### Run-time library values
+Some examples (including the new line prompt '\> ') might include:
+
+\> echo Hello World
+
+\> echo A Long \\
+
+\> Hello \\
+
+\> World
+
+\> echo Hello World; echo Hello Again
+
+\> set lines "more than
+
+\> one line
+
+\> with newlines in it"
+
+\> set program {
+
+\>   echo Hello World
+
+\> }
+
+\> echo $lines; echo ${lines}
+
+The macro expansion is similar to that traditionally found in POSIX
+shell programs, and is describe in a section below "Macro Expansion".
+
+Command lines usually have a structure (also familiar to those who have
+used POSIX shells) in which an initial word is taken as the name of a
+command and further text provides further detail about what is required
+often with no syntax more complex than further words, numbers and quoted
+strings. The way that these lines are interpreted in the light of the
+current values of variables in the FTL language is explained just below
+"Standard Command Line Parsing".
+
+In a fashion, the interpretation of these command lines amounts to a
+very simple programming language. That language, however, is not FTL
+itself. 
+
+One consequence of this is that the way a variable is used will be
+different depending on whether it is used as part of the command line
+syntax or as part of FTL expression syntax.
+
+#### Standard Command Line Parsing
 
 The run-time library consists of a number of objects provided by default
 in the root environment. They fall in to the following categories:  
@@ -33,8 +117,8 @@ in the root environment. They fall in to the following categories:
   
 These are used in two separate environments:
 
-1.  As a command - one of the initial elements on an interpreted command
-    line 
+1.  As the command on a command line - one of the initial elements on an
+    interpreted command line 
 
 <!-- end list -->
 
@@ -57,16 +141,61 @@ These are used in two separate environments:
 
 <!-- end list -->
 
-1.  As an FTL expression 
+1.  As an FTL value 
 
 <!-- end list -->
 
-  -   - The expression is evaluated and returned. 
+  -   - The value is returned as part of an FTL expression. 
+
+These are some examples of command lines:
+
+\> command anything
+
+\> directory subdirectory-in-directory command-in-subdirectory any
+syntax at all
+
+\> function FTL-expression-1 FTL-expression-2
+
+\> directory FTL-expression-in-directory-1 FTL-expression-in-directory-2
 
 Because the primary aim of the language is to provide a command
-interpreter most input files are interpreted in command context, with
-FTL expressions used only when required for command definition and
-extension.
+interpreter most input files are interpreted as scripts in the script
+syntax, with FTL expressions used only when required for command
+definition and extension.
+
+### FTL Literals Syntax
+
+> \<code\_literal\> ::= '{' \[ '\\' \<char\> | \<char\> \]\* \] '}'  
+> \<string\> ::= '"' \['\\' \<escape\> | \<char\> \]\* '"'  
+> \<integer\> ::= \[\<base\>\] \<digit\> (\<digit\> | '\_')\*  
+> \<base\> ::= '0x' | '0X' | '0o' | '0O' | '0b' | '0B'  
+> \<identifier\> ::= \<common\_identifier\> | \<builtin\_identifier\>  
+> \<common\_identifier\> ::= \<alphabetic\> (\<alphabetic\> | '\_' |
+> \<digit\>)\*  
+> \<builtin\_identifier\> ::= '\_' \<digit\>+ 
+
+In \<code\_literal\>s all the characters between an initial '{' and a
+matching '}' are used except '\\' which is used to ensure the following
+character is included (e.g. '\\\\' will include the '\\' character). A
+'}' matches the initial '{' only when it does not occur within bracketed
+text (i.e. text between '{' and '}', or between an initial double quote
+(") and its matching closing double quote). 
+
+In a \<string\> all characters between an initial double quote (") and
+its matching closing double quote are included except '\\' which is used
+to introduce one or more characters in an escape sequence.
+
+For \<integers\> the numeric base 16 is specified by '0x' and '0X'; the
+base 8 is specified by '0o' and '0O'; and the base 2 is specified by
+'0b' and '0B'. Integers beginning with a numeric base specification use
+digits from '0' up to a character representing one less than the base.
+The characters 'A', 'B', 'C', 'D', 'E' and 'F', or 'a', 'b, 'c', 'd',
+'e', and 'f' are used for digits of value 10, 11, 12, 13, 14, and 15 as
+required by base 16. Following the initial digit the character '\_' can
+be used – it is ignored in the value and is accepted only to aid the
+comprehension of long numbers (e.g. it might be used every three
+characters as a thousands separator, or every eight binary digits as a
+byte separator).   
 
 ### FTL Expression Syntax
 
@@ -104,7 +233,7 @@ extension.
 
 \<type\_literal\>
 
-\<code\> ::= '{' \<expression\_list\> '}'
+\<code\> ::= \<code\_literal\>
 
 \<expression\_list\> ::= \<expression\> (';' \<expression\>)\* \[';'\]
 
@@ -132,6 +261,9 @@ extension.
 
 \<series\_binding\> ::= \[\<invocation\> '='\] \<invocation\>
 
+In a \<code\> value the \<code\_literal\> is interpreted as an
+\<expression\_list\>.
+
 ### FTL Expression evaluation
 
 #### User-Operator Parsing
@@ -143,13 +275,13 @@ User-operator parsing is determined by the set of operations defined
 using parse.opset (described as part of the run-time library below).
  Each operator definition links the name of an operator (which may be
 one or more characters and can involve unused punctuation characters or
-identifiers) with a precidence, an associativity and a monadic or diadic
+identifiers) with a precedence, an associativity and a monadic or diadic
 binding.  The associativity determines whether the operator is a prefix,
 infix, or postfix one and which of its arguments may be parsed at the
-same precidence . The precidence defines how tightly the arguments of
+same precedence . The precedence defines how tightly the arguments of
 the operator are bound to the operator in comparison with other
 operators.  The binding should take either one (for a monadic operator)
-or two (for a diadic operator) arguments and will be executed once the
+or two (for a dyadic operator) arguments and will be executed once the
 operator's arguments have been parsed successfully.  
 
 #### Standard Operator Definitions
@@ -275,9 +407,12 @@ X::{Y}\!
 That is, "Y" is interpreted in the context of the environment "X".  Thus
 if X is an environment containing strings X."*string*" will return the
 value associated with the string "*string*" and if it contains integers
-X.*integer* returns the value associated with the integer *integer*.
+X.*integer* refers to the value associated with the integer *integer*.
  For convenience FTL also allows the syntax X.*identifier* as an
-equivalent to X."*identifier*".    
+equivalent to X."*identifier*".  Not all strings are identifiers:
+identifiers are those which begin with an alphabetic character and then
+continue with characters that are either alphanumeric or the character
+'\_'.  
   
 Similarly if Y is itself a literal environment each of the values in it
 will be interpreted as names in X and will be replaced by their values
@@ -292,9 +427,7 @@ X.(Y)
 can be used when a literal value is not available.  The value of
 expression Y is used as an object to be interpreted in the context of X.
  If this value is an integer, string or environment it is treated in the
-way indicated above.  If it is itself an environment then the result is
-the same environment in which the named values are replaced by their own
-value in the indexed environment.  
+way indicated above.  
   
 Examples:<span id="anchor"></span>
 
@@ -387,6 +520,27 @@ or using "enter":
 
 > }
 
+The "leave" or "leaving" functions return to the previous environment as
+it was before a matching enter. The difference between them is that
+leaving returns the environment that was built up since the matching
+enter.
+
+> set make\_imaginary \[re,im\]: {
+
+>     enter \[numbertype = "complex"\]\!;
+
+>     .real = re;
+
+>     .imaginary = im;
+
+>     leaving\!
+
+> }
+
+> \> make\_imaginary 3 4
+
+> \[numbertype="complex",real=3,imaginary=4\]
+
 ### FTL References
 
 Left hand values (references) can be established with the '@' operator
@@ -453,7 +607,7 @@ Closures can be marked for automatic execution. If they are not marked for autom
 </tr>
 <tr class="even">
 <td>cmd</td>
-<td>This type supports different kind of executable value to a closure.  Each value incorporates an executable program which will parse a single string argument.  A number of commands are built-in in the run time library.</td>
+<td>This type supports different kind of executable value from a closure.  Each value incorporates an executable program which will parse a single string argument.  A number of commands are built-in in the run time library.</td>
 </tr>
 <tr class="odd">
 <td>function</td>
@@ -565,6 +719,143 @@ not marked for automatic execution. For example:
 
 3
 
+### Macro Expansion
+
+The command line handler incorporates a traditional-style macro handler
+which uses the '$' character to introduce a macro invocation.
+
+#### What a Macro Invocation Looks Like
+
+Macro invocation uses one of these syntaxes:
+
+  - $\<decimal\_number\> - expand the value of FTL expression
+    ".\<decimal\_number\>"
+  - $\<identifier\> - expand the value of FTL expression
+    "\<identifier\>"
+  - ${\<expression\>} - expand the value of FTL expression
+    "\<expression\>"
+
+The expression .1, as a \<decimal\_number\>, for example will return the
+value of symbol 1 in top level of the current environment. This means
+that, when a series of environments have been stacked (as might occur
+when integers are used as unbound variables in a series of closures
+which have invoked each other) .1 will refer only to the current
+invocation.
+
+The expression var, as an \<identifier\>, will refer to the current
+value of that symbol (at any level in the environment).
+
+Note that the first two syntaxes can be re-expressed using the third,
+since $\<decimal\_number\> is the same as ${.\<decimal\_number\>} and
+$\<identifier\> is the same as ${\<identifier\>}. This can be convenient
+when the macro is to be expanded in text which might be consumed as part
+of a \<decimal\_number\> or an \<identifier\>. For example:
+
+  - '12 ${item}s' can be used in place of the otherwise ambiguous '12
+    $items'
+  - '${.1}000 bytes' could be used in place of the otherwise ambiguous
+    '$1000 bytes'
+
+When an expression is expanded its value is calculated and then the
+macro invocation characters are replaced by text. If the value is a
+string that string forms the text of the replacement. Otherwise the
+replacement text will be the text with which that value would normally
+be printed.
+
+#### When Macro Expansion Takes Place
+
+Macro expansion occurs on two separate occasions:
+
+1.  When using the standard command line parsing method: after each line
+    of input is complete (e.g. once a number of input lines using '\\'
+    at the end of each one are concatenated, or the lines between
+    matching brackets are concatenated).
+2.  Before a command is invoked as part of an FTL expression the
+    expansion is applied to its argument. (When commands, which usually
+    consume the text of the rest of the line when used on a command
+    line, are used in this way they take a single string argument.) 
+
+In either case macros invocations are sought throughout the text except:
+
+  - if the leading '$' is preceded by a backslash (\\) character; or,
+
+  - if the invocation occurs in a section of the text bracketed by '{'
+    and '}'
+    
+      - where the final '}' matches the first '{' in terms of included
+        '{ .. }' sections
+      - where the initial '{' is not preceded by a backslash (\\)
+        character.
+
+Naturally, the result of a macro expansion depends on the values of
+symbols in the environment when the expansion takes place. 
+
+In the first case, of a completed line of input, the environment is the
+one left by any previous line. This is true even if the line includes a
+prefix which denotes a change or restriction of the current environment.
+
+In the second case the environment used is the latest one, which
+includes the binding of a single unbound variable representing the
+command's string argument.
+
+These examples use the standard command line parsing method:
+
+\> set name "Eric"
+
+\> echo Your name is $name
+
+Your name is Eric
+
+\> echo {Your name is $name}
+
+{Your name is $name}
+
+\> set hi\[name\]:{echo "Hello $name"\!}
+
+\> hi "sunshine"
+
+Hello sunshine
+
+\> echo hi is $hi
+
+hi is \[name\]:{echo "Hello $name"\!}
+
+\> set age 50
+
+\> eval echo "Hi $name, happy ${age}th"\!
+
+Hi Eric, happy 50th
+
+\> eval echo {Hi $name, happy ${age}th}\!
+
+Hi Eric, happy 50th
+
+\> set person \[name="Sunny Joe", age=30\]
+
+\> person eval echo "Hi $name, happy ${age}th"\!
+
+Hi Eric, happy 50th
+
+\> person eval echo {Hi $name, happy ${age}th}\!
+
+Hi Sunny Joe, happy 30th
+
+\> set args \<"copy", "fileA", "fileB"\>
+
+\> echo Program ${args.0}
+
+Program copy
+
+\> args eval echo {${.0}ing $1 to $2}\!
+
+copying fileA to fileB
+
+\> set log\[0,1,2\]:{ echo ${.0}ing $1 to $2"\! }
+
+\> log "copy" "fileA" "fileB"
+
+copying fileA to fileB
+
 ### Run-time library overview
 
 The values available in the run time library include those in the
@@ -585,12 +876,13 @@ following categories.
       - forwhile \<env\> \<binding\> - for \<binding\> while it is not
         FALSE                 
       - forallwhile \<env\> \<binding\> - forall \<binding\> while it is
-        not FALSE 
-      - if \<n\> \<then-code\> \<else-code\> - execute \<then-code\> if
-        \<n\>\!=0
+        not FALSE
+      - if \<b\> \<then-code\> \<else-code\> - execute \<then-code\> if
+        \<n\>\!=FALSE
       - return \<rc\> - abandon current command input returning \<rc\>
       - source \<filename\> - read from file \<filename\>
-      - sourcetext \<stringexpr\> - read characters from string
+      - sourcetext \<strin\>|\<code\> - read characters from string or
+        code
       - throw \<value\> - signal an exception with \<value\>, exit outer
         'catch'
       - while \<test\> \<do\> - while \<test\> evaluates non-zero
@@ -600,8 +892,11 @@ following categories.
     
       - cmd \<function\> \<help\> - create a command from a function 
       - cmp \<expr\> \<expr\> - returns integer comparing its arguments 
+      - command \<whole line\> - execute as a line of source
       - echo \<whole line\> - prints the line out 
       - eval \<expr\> - evaluate expression 
+      - func \<name\> \<closure\> - set auto exec closure value in
+        environment
       - help - prints command information
       - set \<name\> \<expr\> - set value in environment
       - sleep \<n\> - sleep for \<n\> milliseconds
@@ -616,48 +911,54 @@ following categories.
 
   - Booleans 
     
-      - TRUE - the TRUE value 
-      - FALSE - an un-TRUE value 
-      - moreeq \<val\> \<val\> - TRUE if first \<val\> more than or
-        equal to second 
-      - more \<val\> \<val\> - TRUE if first \<val\> more than second 
-      - lesseq \<val\> \<val\> - TRUE if first \<val\> less than or
-        equal to second 
-      - less \<val\> \<val\> - TRUE if first \<val\> less than second 
-      - notequal \<val\> \<val\> - TRUE if first \<val\> not equal to
-        second 
+      - TRUE - TRUE value (an un-FALSE value)
+      - FALSE - the FALSE value 
       - equal \<val\> \<val\> - TRUE if first \<val\> equal to second 
       - invert \<val\> - TRUE if \<val\> is FALSE, FALSE otherwise
+      - less \<val\> \<val\> - TRUE if first \<val\> less than second 
+      - lesseq \<val\> \<val\> - TRUE if first \<val\> less than or
+        equal to second 
       - logand \<val1\> \<val2\> - FALSE if \<val1\> is FALSE, \<val2\>
         otherwise 
       - logor \<val1\> \<val2\> - TRUE if \<val1\> is TRUE, \<val2\>
-        otherwise 
+        otherwise
+      - more \<val\> \<val\> - TRUE if first \<val\> more than second 
+      - moreeq \<val\> \<val\> - TRUE if first \<val\> more than or
+        equal to second 
+      - notequal \<val\> \<val\> - TRUE if first \<val\> not equal to
+        second 
 
   - Integers 
     
+      - add \<n1\> \<n2\> - return n1 with n2 added
       - bitor \<n1\> \<n2\> - return n1 "or"ed with n2 
       - bitxor \<n1\> \<n2\> - return n1 exclusive "or"ed with n2 
       - bitand \<n1\> \<n2\> - return n1 "and"ed with n2 
       - bitnot \<n\> - return the bitwise "not" of n 
-      - shiftl \<n1\> \<n2\> - return n1 left shifted by n2 bits
-      - shiftr \<n1\> \<n2\> - return n1 right shifted by n2 bits
-      - add \<n1\> \<n2\> - return n1 with n2 added
-      - sub \<n1\> \<n2\> - return n1 with n2 subtracted
-      - mul \<n1\> \<n2\> - return n1 multiplied by n2
       - div \<n1\> \<n2\> - return n1 divided by n2
-      - neg \<n\> - return negated \<n\>
-      - rndseed \<n\> | \<string\> - set random seed based on argument
-      - rnd \<n\> - return random number less than \<n\>
       - int \<integer expr\> - numeric value 
       - intseq \<first\> \<inc\> \<last\> - vector of integers
         incrementing by \<inc\> 
+      - int\_fmt\_hexbits \<n\> - print decimal if all bits in this
+        mask, else hex
+      - mul \<n1\> \<n2\> - return n1 multiplied by n2
+      - neg \<n\> - return negated \<n\>
+      - rndseed \<n\> | \<string\> - set random seed based on argument
       - rndseq \<n\> - vector of integers containing 0..\<n\>-1 in a
         random order
+      - rnd \<n\> - return random number less than \<n\>
+      - shiftl \<n1\> \<n2\> - return n1 left shifted by n2 bits
+      - shiftr \<n1\> \<n2\> - return n1 right shifted by n2 bits
+      - sub \<n1\> \<n2\> - return n1 with n2 subtracted
 
   - Environments and directories 
     
       - domain \<env\> - generate vector of names in \<env\> 
+      - dynenv \<getall\> \<count\> \<set\> \<get\> - dynamic env built
+        from given functions
       - enter \<env\> - add commands from \<env\> to current environment
+      - envjoin \<env1\> \<env2\> - composed directory indexing \<env2\>
+        with \<env1\> values
       - inenv \<env\> \<name\> - returns 0 unless string \<name\> is in
         \<env\>
       - leave - exit the environment last entered or restricted 
@@ -670,6 +971,8 @@ following categories.
       - range \<env\> - generate vector of values in \<env\> 
       - restrict \<env\> - restrict further commands to those in \<env\>
         
+      - rndseq \<n\> - vector of integers containing 0..\<n\>-1 in a
+        random order
       - select \<binding\> \<env\> - subset of \<env\> for which
         \<binding\> returns TRUE
       - sort \<env\> - sorted vector of values in \<env\> 
@@ -683,47 +986,50 @@ following categories.
 
   - Closures
     
-      - func \<name\> \<closure\> - set auto exec closure value in
-        environment
-      - closure \<bool\> \<dir\> \<code\> - create closure from code and
-        dir (inherrit call context if \<bool\>) 
-      - bind \<closure\> \<arg\> - bind argument to unbound closure
-        argument 
-      - code \<closure\> - return code component of a closure 
-      - context \<closure\> - return environment component of a closure 
       - argname \<closure\> - return name of 1st argument to be bound or
         NULL 
       - argnames \<closure\> - return vector of arguments to be bound
+      - bind \<closure\> \<arg\> - bind argument to unbound closure
+        argument 
+      - closure \<push\> \<dir\> \<code\> - create closure from code and
+        dir (+ stack if push)
+      - code \<closure\> - return code component of a closure 
+      - context \<closure\> - return environment component of a closure
+      - deprime \<closure\> - unmark closure for automatic execution
+      - func \<name\> \<closure\> - set auto exec closure value in
+        environment
+      - prime \<closure\> - mark closure for automatic execution when
+        all args bound
 
   - Character handling 
     
-      - collate \<str1\> \<str2\> - compare collating sequence of chars
-        in strings 
-      - len \[\<env\>|\<closure\>|\<string\>\] - number of elements in
-        object
-      - joinchr \<delim\> \<str\> - join vector of chars and strings
-        separated by \<delim\>s
-      - join \<delim\> \<str\> - join vector of octets and strings
-        separated by \<delim\>s
-      - chr \<int\> - returns string of (multibyte) char with given
-        ordinal 
-      - octet \<int\> - returns single byte string containing given
-        octet
-      - chrcode \<string\> - returns ordinal of the first character of
-        string 
-      - octetcode \<string\> - returns ordinal of the first byte of
-        string
-      - split \<delim\> \<str\> - make vector of strings separated by
-        \<delim\>s 
       - binsplit \<le?\> \<signed?\> \<n\> \<str\> - make vector of
         \<signed\>\> \<n\>-byte ints with \<le?\> endianness
+      - chr \<int\> - returns string of (multibyte) char with given
+        ordinal 
+      - chrcode \<string\> - returns ordinal of the first character of
+        string 
+      - collate \<str1\> \<str2\> - compare collating sequence of chars
+        in strings 
       - chop \<stride\> \<str\> - make vector of strings each \<stride\>
         bytes or less
       - chopn \<n\> \<stride\> \<str\> - make vector of \<n\> strings
         each \<stride\> bytes or less
+      - len \[\<env\>|\<closure\>|\<string\>\] - number of elements in
+        object
+      - join \<delim\> \<str\> - join vector of octets and strings
+        separated by \<delim\>s
+      - joinchr \<delim\> \<str\> - join vector of chars and strings
+        separated by \<delim\>s
+      - octet \<int\> - returns single byte string containing given
+        octet
+      - octetcode \<string\> - returns ordinal of the first byte of
+        string
+      - split \<delim\> \<str\> - make vector of strings separated by
+        \<delim\>s 
       - str \<expr\> - evaluate expression and return string
         representation 
-      - strf \<fmt\> \<env\> - formatted string from values in \<env\> 
+      - strf \<fmt\> \<env\> - formatted string from values in \<env\> 
       - strcoll \<str1\> \<str2\> - compare collating sequence of chars
         in strings 
       - strlen \[\<string\>\] - number of (possibly multibyte) chars in
@@ -735,16 +1041,6 @@ following categories.
     
       - binsplit \<le?\> \<signed?\> \<n\> \<str\> - make vector of
         \<signed\>\> \<n\>-byte ints with \<le?\> endianness
-      - mem write \<mem\> \<ix\> \<str\> - write binary string at index
-        to memory
-      - mem read \<mem\> \<ix\> \<len\> - read \<len\> string at \<ix\>
-        in memory
-      - mem get \<mem\> \<ix\> \<len\> - force read \<len\> string at
-        \<ix\> in memory
-      - mem len\_can \<mem\> \[rwgc\] \<ix\> - return length of area at
-        \<ix\> that can do ops
-      - mem len\_cant \<mem\> \[rwgc\] \<ix\> - return length of area at
-        \<ix\> that can not do ops
       - mem base\_can \<mem\> \[rwgc\] \<ix\> - return start of area
         ending at \<ix\> that can do ops
       - mem base\_cant \<mem\> \[rwgc\] \<ix\> - return start of area
@@ -753,28 +1049,43 @@ following categories.
         read-only string
       - mem block \<base\> \<len\> - create block of mem with len bytes
         and base index
-      - mem rebase \<mem\> \<base\> - place \<mem\> at byte index
-        \<base\>
       - mem dump \<+char?\> \<ln2entryb\> \<mem\> \<ix\> \<len\> - dump
         content of memory
+      - mem get \<mem\> \<ix\> \<len\> - force read \<len\> string at
+        \<ix\> in memory
+      - mem len\_can \<mem\> \[rwgc\] \<ix\> - return length of area at
+        \<ix\> that can do ops
+      - mem len\_cant \<mem\> \[rwgc\] \<ix\> - return length of area at
+        \<ix\> that can not do ops
+      - mem read \<mem\> \<ix\> \<len\> - read \<len\> string at \<ix\>
+        in memory
+      - mem rebase \<mem\> \<base\> - place \<mem\> at byte index
+        \<base\>
+      - mem write \<mem\> \<ix\> \<str\> - write binary string at index
+        to memory
 
   - Input and Output 
     
-      - io fmt - updateable directory of formatting functions for
-        io.fprintf 
-      - io close \<stream\> - close stream
-      - io err - default error stream
-      - io file \<filename\> \<rw\> - return stream for opened file 
       - io binfile \<filename\> \<rw\> - return stream for opened binary
         file
+      - io close \<stream\> - close stream
+      - io connect \<protocol\> \<netaddress\> \<rw\> - return stream
+        for remote connection
+      - io err - default error stream
+      - io file \<filename\> \<rw\> - return stream for opened file 
       - io filetostring \<filename\> \[\<outfile\>\] - write file out as
-        a C string 
+        a C string
+      - io flush \<stream\> - ensure unbuffered output is written
+      - io fmt - updateable directory of formatting functions for
+        io.fprintf 
       - io fprintf \<stream\> \<format\> \<env\> - write formatted
         string to stream 
       - io getc \<stream\> - read the next character from the stream 
       - io in - default input stream 
+      - io inblocked \<stream\> - TRUE if reading would block
       - io instring \<string\> \<rw\> - return stream for reading string
-        
+      - io listen \<protocol\> \<netport\> \<rw\> - return stream for
+        local port
       - io out - default output stream 
       - io outstring \<closure\> - apply output stream to closure and
         return string 
@@ -783,14 +1094,16 @@ following categories.
       - io pathbinfile \<path\> \<filename\> \<rw\> - return stream for
         opened binary file on path
       - io read \<stream\> \<size\> - read up to \<size\> bytes from
-        stream 
+        stream
+      - io ready \<stream\> - return whether next write may not cause
+        wait
       - io stringify \<stream\> \<expr\> - write FTL representation to
         stream 
       - io write \<stream\> \<string\> - write string to stream 
 
   - Parser interface 
     
-      - parse argv - directory of command line arguments 
+      - parse argv - directory of command line arguments for command
       - parse assoc - environment containing operator associativity
         definitions 
       - parse codeid - name of interpreter
@@ -800,7 +1113,12 @@ following categories.
         \<n\> 
       - parse exec \<cmds\> \<stream\> - return value of executing
         initial \<cmds\> then stream
+      - parse execargv - directory of command line arguments given to
+        interpreter
+      - parse expand \<inc{}\> \<env\> \<val\> - expand macros in string
+        or code \<val\>
       - parse line - number of the line in the character source
+      - parse local - return local current invocation directory
       - parse newerror - register the occurrance of a new error 
       - parse op - environment containing operation definitions 
       - parse opeval \<opdefs\> \<code\> - execute code according to
@@ -814,40 +1132,43 @@ following categories.
         on path
       - parse root - return current root environment 
       - parse scan \<string\> - return parse object from string 
-      - parse scanned \<parseobj\> - return text remaining in parse
-        object 
-      - parse scanempty \<parseobj\> - parse empty line from string from
-        parse object, update string 
       - parse scancode \<@string\> \<parseobj\> - parse {code} block
         from parse object
-      - parse scanwhite \<parseobj\> - parse white spce from string from
-        parse object, update string
+      - parse scanempty \<parseobj\> - parse empty line from string from
+        parse object, update string 
       - parse scanspace \<parseobj\> - parse over white space from
         string from parse object, update string
+      - parse scanhex \<@int\> \<parseobj\> - parse hex string from
+        parse object, update string
+      - parse scanhexw \<width\> \<@int\> \<parseobj\> - parse hex in
+        \<width\> chars from parse object, update string 
+      - parse scanid \<@string\> \<parseobj\> - parse identifier, update
+        string
       - parse scanint \<@int\> \<parseobj\> - parse integer from string
         from parse object, update string 
       - parse scanintval \<@int\> \<parseobj\> - parse signed based
         integer from parse object
-      - parse scanhex \<@int\> \<parseobj\> - parse hex string from
-        parse object, update string
-      - parse scanhexw \<width\> \<@int\> \<parseobj\> - parse hex in
-        \<width\> chars from parse object, update string 
+      - parse scanitem \<delims\> \<@string\> \<parseobj\> - parse item
+        until delimiter, update string 
+      - parse scanitemstr \<@string\> \<parseobj\> - parse item or
+        string, update string
       - parse scanmatch \<dir\> \<@val\> \<parseobj\> - parse prefix in
         dir from parse object giving matching value
-      - scantomatch \<dir\> \<@val\> \<parseobj\> - parse up to
-        delimiter named in dir in \<parseobj\> giving matching value
+      - parse scanned \<parseobj\> - return text remaining in parse
+        object 
       - scanopterm \<opdefs\> \<scanfn\> \<@val\> \<parseobj\> - parse
         term using \<opdefs\> & base \<scanfn\>
       - parse scanstr \<@string\> \<parseobj\> - parse item until
         delimiter, update string
-      - parse scanid \<@string\> \<parseobj\> - parse identifier, update
-        string
-      - parse scanitemstr \<@string\> \<parseobj\> - parse item or
-        string, update string
-      - parse scanitem \<delims\> \<@string\> \<parseobj\> - parse item
-        until delimiter, update string 
+      - scantomatch \<dir\> \<@val\> \<parseobj\> - parse up to
+        delimiter named in dir in \<parseobj\> giving matching value
+      - parse scanvalue \<@string\> \<parseobj\> - parse a basic value
+        in \<parseobj\>
+      - parse scanwhite \<parseobj\> - parse white spce from string from
+        parse object, update string
       - parse source - name of the source of chars at start of the last
         line 
+      - parse stack - return local current invocation directory stack
 
   - Operating System interface 
     
@@ -856,10 +1177,15 @@ following categories.
         names value 
       - sys fs absname \<file\> - TRUE iff file has an absolute path
         name 
+      - sys fs home - the user's home directory name
       - sys fs nowhere - name of file available as empty source or sink
+      - sys fs rcfile - name of the file, in the home directory, holding
+        initial commands 
       - sys fs sep - string separating path elements in a file name 
-      - sys fs thisdir - name of directory repersenting the current
+      - sys fs thisdir - name of directory representing the current
         directory
+      - sys localtime \<time\> - broken down local time 
+      - sys localtimef \<format\> \<time\> - formatted local time 
       - sys osfamily - name of operating system type
       - sys run \<line\> - execute system \<line\> 
       - sys runrc \<command\> - execute system command & return result
@@ -867,12 +1193,14 @@ following categories.
       - sys shell path \<path\> \<file\> - return name of file on path 
       - sys shell pathsep - character value separating directory
         elements in a path environment
+      - sys shell self - file system name of interpreter binary
+      - sys ticks - current elapsed time measure in ticks
+      - sys ticks\_hz - number of ticks per second
+      - sys ticks\_start - ticks value when interpreter was started
+      - sys time - system calendar time in seconds 
       - sys uid \<user\> - return the UID of the named user 
       - sys utctime \<time\> - broken down UTC time 
-      - sys localtime \<time\> - broken down local time 
       - sys utctimef \<format\> \<time\> - formatted UTC time 
-      - sys localtimef \<format\> \<time\> - formatted local time 
-      - sys time - system calendar time in seconds 
 
   - Windows-only interface 
     
@@ -897,22 +1225,71 @@ including a specification of the argument syntax.  This uses
 indicated in the following table that is then referred to in a
 description using the name "label".
 
-|            |                                                                                                         |
-| ---------- | ------------------------------------------------------------------------------------------------------- |
-| any        | FTL expression returning any type of value                                                              |
-| int        | FTL expression returning an integer value                                                               |
-| bool       | FTL expression returning either TRUE or FALSE                                                           |
-| code       | FTL expression returning a code value                                                                   |
-| dir        | FTL expression rerturning a directory value                                                             |
-| closure    | FTL expression rerturning a closure value                                                               |
-| clodir     | \<closure\> | \<dir\>                                                                                   |
-| clocode    | \<closure\> | \<code\>                                                                                  |
-| intordir   | \<int\> | \<dir\>                                                                                       |
-| string     | FTL expression rerturning a string value                                                                |
-| stringnl   | FTL expression rerturning a string, NULL or integer                                                     |
-| token      | Any sequence of characters with no white space                                                          |
-| tokstring  | Either a \<token\> or a literal string                                                                  |
-| restofline | The sequence of characters starting at the first non-white character  and ending at the end of the line |
+<table>
+<tbody>
+<tr class="odd">
+<td>any</td>
+<td>FTL expression returning any type of value</td>
+</tr>
+<tr class="even">
+<td>int</td>
+<td>FTL expression returning an integer value</td>
+</tr>
+<tr class="odd">
+<td>bool</td>
+<td>FTL expression returning either TRUE or FALSE</td>
+</tr>
+<tr class="even">
+<td>code</td>
+<td>FTL expression returning a code value</td>
+</tr>
+<tr class="odd">
+<td>dir</td>
+<td>FTL expression rerturning a directory value</td>
+</tr>
+<tr class="even">
+<td>closure</td>
+<td>FTL expression rerturning a closure value</td>
+</tr>
+<tr class="odd">
+<td>clodir</td>
+<td>&lt;closure&gt; | &lt;dir&gt;</td>
+</tr>
+<tr class="even">
+<td>clocode</td>
+<td>&lt;closure&gt; | &lt;code&gt;</td>
+</tr>
+<tr class="odd">
+<td>intordir</td>
+<td>&lt;int&gt; | &lt;dir&gt;</td>
+</tr>
+<tr class="even">
+<td>string</td>
+<td>FTL expression rerturning a string value</td>
+</tr>
+<tr class="odd">
+<td>stringnl</td>
+<td>FTL expression rerturning a string, NULL or integer</td>
+</tr>
+<tr class="even">
+<td>stringorcode</td>
+<td>FTL expression rerturning either a string or a code value</td>
+</tr>
+<tr class="odd">
+<td>token</td>
+<td>Any sequence of characters with no white space</td>
+</tr>
+<tr class="even">
+<td>tokstring</td>
+<td>Either a &lt;token&gt; or a literal string</td>
+</tr>
+<tr class="odd">
+<td>restofline</td>
+<td><p>The sequence of characters starting at the first non-white character and ending at the end of the line.</p>
+<p>Note: when supplied to a command inside an FTL expression this is supplied as a string value or a code value. When a string is used it is subject to macro expansion before being provided to the command.</p></td>
+</tr>
+</tbody>
+</table>
 
   
 The names in the default run-time library are presented in alphabetic
@@ -1625,7 +2002,8 @@ See also: equal, notequal, more, less, moreeq, lesseq, collate </p></td>
 <p>&gt; set dir &lt;1&gt;</p>
 <p>&gt; cmp dir dir</p>
 <p>0</p>
-<p>cmp NULL ({}!)!</p></td>
+<p>&gt; cmp NULL ({}!)</p>
+<p>0</p></td>
 </tr>
 </tbody>
 </table>
@@ -1703,6 +2081,63 @@ See also: cmp</td>
 <p>-1</p>
 <p>&gt; sortby collate &lt;"fred", "£", "FORMER", "104"&gt;</p>
 <p>&lt;3, 2, 0, 1&gt;</p></td>
+</tr>
+</tbody>
+</table>
+
+### **command** \<**whole line**\>
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>command</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Command</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;restofline&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td><p>Execute the text on the rest of the line as if it was a source command.</p>
+<p>Normally execution continues until the line is completely read or until a return or exit command are executed. </p>
+<p>As with other commands, when used as a function multiple lines of source can be provided either as a string or as a code value and the text provided is subject to macro expansion in the current environment. This means that, unlike sourcetext, macros in the text are expanded before the commands are executed.</p>
+<p>See also: parse.exec, source, sourcetext, return, exit </p></td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>Any value provided by a return command.</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set doit "echo"</p>
+<p>&gt; command $doit some arguments for $doit</p>
+<p>some arguments for echo</p>
+<p>&gt; # some arguments for echo</p>
+<p>&gt; command return 2+2</p>
+<p>4</p>
+<p>&gt; #4</p>
+<p>&gt;</p>
+<p>&gt; set PROFORMA[cond,then]:{cond {command then!}!}</p>
+<p>&gt; set WHEN[cond,then]:{cond {sourcetext then!}!}</p>
+<p>&gt; set scope 1</p>
+<p>&gt; WHEN TRUE {</p>
+<p>&gt;    set scope 2</p>
+<p>&gt;    echo scope is $scope</p>
+<p>&gt; }</p>
+<p>scope is 2</p>
+<p>&gt; eval scope</p>
+<p>2</p>
+<p>&gt; set scope 1</p>
+<p>&gt; PROFORMA TRUE {</p>
+<p>&gt;    set scope 2</p>
+<p>&gt;    echo scope is $scope</p>
+<p>&gt; }</p>
+<p>scope is 1</p></td>
 </tr>
 </tbody>
 </table>
@@ -1894,7 +2329,7 @@ See also: range</td>
 <td><p>Compares its first argument with the second and returns TRUE iff they are equal and FALSE otherwise. The comparison is made as described in the cmp function.<br />
 This function is identical to:</p>
 <p>[val1, val2]: { 0 == (cmp val1 val2!) }</p>
-<p>See also:cmp, notequal, more, less, moreeq, lesseq<br />
+<p>See also: cmp, notequal, more, less, moreeq, lesseq<br />
 Normally this function is associated with the == operator.</p></td>
 </tr>
 <tr class="odd">
@@ -1947,9 +2382,12 @@ As with other commands the line is subject to $-expansion first.</td>
 <p>&gt; set option "on"</p>
 <p>&gt; echo Option is currently $option</p>
 <p>Option is currently on</p>
-<p>&gt; set roll[]: { die = rnd 6!; echo "Roll \$die"! }</p>
-<p>&gt; roll</p>
-<p>Roll 5</p></td>
+<p>&gt; set follow[a]: { [next = add a 1!]:{ echo "Next $next"! }! }</p>
+<p>&gt; follow 4</p>
+<p>Next 5</p>
+<p>&gt; set copy[1,2]:{ sys.run "echo cp '$1' '$2'"! }</p>
+<p>&gt; copy "fileA" "fileB"</p>
+<p>cp fileA fileB</p></td>
 </tr>
 </tbody>
 </table>
@@ -2269,12 +2707,12 @@ The order of evaluation is defined only for vectors.</td>
 <p>    }! </p>
 <p>}</p>
 <p>&gt; forall [a="ay", b="bee", c="see"] [pron, let]:{</p>
-<p>&gt;    echo "\$let is pronounced '\$pron'"!</p>
+<p>&gt;    echo "$let is pronounced '$pron'"!</p>
 <p>&gt; }</p>
 <p>a is pronounced 'ay'</p>
 <p>b is pronounced 'bee'</p>
 <p>c is pronounced 'see'</p>
-<p>&gt; forall ([a,b]::{b=20+(a)} 1 2) [val, name]:{echo "\$name = \$val"!}</p>
+<p>&gt; forall ([a,b]::{b=20+(a)} 1 2) [val, name]:{echo "$name = $val"!}</p>
 <p>b = 2</p>
 <p>a = 1</p></td>
 </tr>
@@ -2577,13 +3015,13 @@ Other types of value the command prints only the type of the value held.  These
 <tr class="even">
 <td>Example</td>
 <td><p>&gt; inenv parse.env "inenv"</p>
-<p>1</p>
+<p>TRUE</p>
 <p>&gt; inenv [a=NULL, b] "a"</p>
-<p>1</p>
+<p>TRUE</p>
 <p>&gt; inenv [a=NULL, b] "b"</p>
-<p>0</p>
+<p>FALSE</p>
 <p>&gt; inenv [a=NULL, b] "c"</p>
-<p>0</p></td>
+<p>FALSE</p></td>
 </tr>
 </tbody>
 </table>
@@ -3267,7 +3705,7 @@ See also: joinchr and split. </td>
 </tbody>
 </table>
 
-### **leave**
+### leave
 
 <table>
 <tbody>
@@ -5821,10 +6259,10 @@ See also: sortmodby, sort, cmp, domain </p></td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Open the filename for reading and push it onto the stack of character sources so that the next characters to read (e.g. to construct the next command) will be taken from this source.<br />
-This differs from parse.exec because the characters from the file are not read immediately.  Because it is possible to execute further commands on the current line additional character sources may be added to the stack before the characters from this source are read.<br />
-When the last octet is read as input or from the file or the interpreter is closed it is closed automatically.<br />
-See also: parse.exec, sourcetext</td>
+<td>Open the filename for reading and interpret lines from that file as commands to be executed.<br />
+Normally file execution continues until it is completely read or until a return or exit command are executed.<br />
+When the last octet is read from the file, or the interpreter is closed, the file will be closed automatically.<br />
+See also: parse.exec, sourcetext, command, return, exit</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
@@ -5833,13 +6271,14 @@ See also: parse.exec, sourcetext</td>
 <tr class="even">
 <td>Example</td>
 <td><p>When c:\\extra-commands contains:</p>
-<p>echo executing...</p>
+<p>echo executing…</p>
 <p>&gt; source c:\\extra-commands</p>
 <p>executing...</p>
-<p>This feature is not working correctly:</p>
-<p>set test[]:{ source "/tmp/extra-commands"!; echo "Started"! }</p>
-<p>test</p>
-<p>&lt;Segmentation fault&gt;</p></td>
+<p>&gt; set test[]:{ source "C:\\extra-commands"!; echo "finished"! }</p>
+<p>&gt; test</p>
+<p>executing…</p>
+<p>finished</p>
+<p>&gt;</p></td>
 </tr>
 </tbody>
 </table>
@@ -5858,31 +6297,48 @@ See also: parse.exec, sourcetext</td>
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;text:string&gt;</td>
+<td>&lt;text:stringorcode&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Push the supplied text onto the stack of character sources so that the next characters to read (e.g. to construct the next command) will be taken from this source.<br />
-This differs from parse.exec because the characters from the file are not read immediately.  Because it is possible to execute further commands on the current line additional character sources may be added to the stack before the characters from this source are read.<br />
-Beware that it is easy to generate input that does not complete a line (and therefore cause execution) which will nonetheless be used as part of an executed line.<br />
-See also: parse.exec, source </td>
+<td><p>Execute the provided text (provided either as a string or a code value) as if it were source commands.</p>
+<p>Normally execution continues until it is completely read or until a return or exit command are executed.<br />
+See also: parse.exec, source, command, return, exit </p></td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
-<td>NULL</td>
+<td>Any value provided by a return command.</td>
 </tr>
 <tr class="even">
 <td>Example</td>
-<td><p>&gt; sourcetext "echo executing...\n"</p>
+<td><p>&gt; sourcetext "echo executing..."</p>
 <p>executing...</p>
-<p>&gt; sourcetext "echo "</p>
-<p>&gt; mycommand wont work</p>
-<p>mycommand wont work</p>
-<p>This feature is not working correctly:</p>
-<p>&gt; set test[]:{ sourcetext "echo executing...\n"; echo "Started"! }</p>
+<p>&gt; sourcetext {</p>
+<p>&gt;   echo executing…</p>
+<p>&gt;}</p>
+<p>executing…</p>
+<p>&gt; set state "executing"</p>
+<p>&gt; sourcetext " enter [state=\"running\"]; echo ${state}...; "</p>
+<p>executing...</p>
+<p>&gt; sourcetext { enter [state="running"]; echo ${state}...; }</p>
+<p>running...</p>
+<p>&gt; sourcetext " enter [state=\"running\"]; echo \${state}...; "</p>
+<p>running…</p>
+<p>&gt; set test[]:{ sourcetext "echo executing...\n"!; echo "Started"! }</p>
 <p>&gt; test</p>
 <p>Started</p>
-<p>&gt;</p></td>
+<p>&gt; set IF[cond,then,else]:{ </p>
+<p>&gt;   if cond {sourcetext then!}{sourcetext else!}! </p>
+<p>&gt; }</p>
+<p>&gt; IF TRUE { </p>
+<p>&gt;    echo true</p>
+<p>&gt;    return 1 </p>
+<p>&gt; } { </p>
+<p>&gt;    echo false</p>
+<p>&gt;    return 0 </p>
+<p>&gt; }</p>
+<p>true</p>
+<p>1</p></td>
 </tr>
 </tbody>
 </table>
@@ -6817,17 +7273,14 @@ See also: chop</td>
 A number of types of directory are supported the most important of which
 are indexed and vector directories.  A vector directory is implemented
 as a contiguous array with memory elements allocated for every index
-between zero and its maximum entry.  Although some entries can be unset
-this type of directory will not store sparsely indexed data very well.
- Currently it can not store values associated with negative indeces.
- Vectors are generated when the '\<' ... '\>' syntax is used.  
+between a minimum and a maximum entry.  Although some entries can be
+unset this type of directory will not store sparsely indexed data very
+well.   Vectors are generated when the '\<' ... '\>' syntax is used.  
   
 Name-indexed directories are generated when the '\[' .. '\]' syntax is
 used.  Currently they can only be indexed by a string.  This means that
-a vector (which is indexed by number) can not be converted into an
-indexed directory - even though vectors incorporated into parts of other
-directories are represented (e.g. by str) using the '\[' .. '\]' syntax.
- This will be changed in the future. 
+a vector (which is indexed by number) can not be used to hold
+name-indexed entries. 
 
 ### Garbage Collection
 
@@ -6843,7 +7296,4 @@ generate garbage without limit.
 
 When parsing a block of text between ‘{‘ and ‘}’ there is no escape
 mechanism to allow ‘}’ to be inserted into the text without a matching
-‘{‘. For example ‘{ echo “end}”\! }’ will parse as the block ‘{ echo
-“end}’ followed by stray characters ‘\! }’. When the brace occurs in a
-string this limitation can be overcome by using the in-string escape
-sequence ‘\\x7d’.
+‘{‘.

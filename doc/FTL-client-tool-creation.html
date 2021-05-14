@@ -1,254 +1,509 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html><head><meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL Client Tool Creation</title>
-  <meta content="Gray Girling" name="author">
-</head><body>
-<h1><span dir="ltr">Writing New FTL Client Tools<br>
-</span></h1>
-<h3 align="left">
-</h3>
-
-
-<p>A llibrary, called "libftl", is available that can be used to extend
-existing, or create new, interactive command line interfaces. </p>
-
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=windows-1252"/>
+	<title>FTL Client Tool Creation</title>
+	<meta name="generator" content="LibreOffice 7.1.1.2 (Windows)"/>
+	<meta name="author" content="Gray Girling"/>
+	<meta name="created" content="00:00:00"/>
+	<meta name="changedby" content="Gray Girling"/>
+	<meta name="changed" content="2021-04-01T18:30:25.474000000"/>
+	<style type="text/css">
+		h3.cjk { font-family: "NSimSun" }
+		h3.ctl { font-family: "Lucida Sans" }
+		h2.cjk { font-family: "NSimSun" }
+		h2.ctl { font-family: "Lucida Sans" }
+		pre.cjk { font-family: "NSimSun", monospace }
+		tt.cjk { font-family: "NSimSun", monospace }
+	</style>
+</head>
+<body lang="en-GB" dir="ltr"><h1>Writing New FTL Client Tools</h1>
+<p>A llibrary, called &quot;libftl&quot;, is available that can be
+used to extend existing, or create new, interactive command line
+interfaces. 
+</p>
 <p>It can be embedded into any number of command line utilities. The
-'ftl' tool is available for testing (just) the library itself. </p>
-<h2>Overview</h2>
-
-<p>This library provides a framework for the execution of textual commands.  It's main features are </p>
-
-<ul>
-<li> command lines can be read from many sources including the terminal and files 
-</li><li> command lines from the terminal have history and "readline" support on Linux 
-</li><li> macro substitution and long-line processing are dealt with 
-</li><li> will read initial lines from a ".rc" file 
-</li><li> C functions that implement new commands are easily written and include help text 
-</li><li> provides a number of built-in commands, including "help", "set", "source" 
-</li><li> a small language, <a href="https://sites.google.com/site/graygirling/ftl">FTL</a>, is available for extending the set of
-commands, manipulating values returned by commands, obtaining values
-from the system etc. </li>
-</ul>
-
-<p>Below there are sections describing </p>
-
-<ul>
-<li> Simple Use - all you need to read in order to make use of the library 
-</li><li> Built-in Commands - some "free" commands you can give your user 
-</li>
-</ul>
-<a href="https://sites.google.com/site/graygirling/ftl/command-line-tutorial">Elsewhere</a> you can find more information about:<br>
-<ul>
-<li> FTL expressions - how values are generated in the built-in language 
-</li><li> Scripting - ways that you and your user can extend the functionality of your interpreter 
-</li><li> Control information available to scripts - command line, environment, file and windows registry access 
-</li><li> The FTL script-testing utility: ftl </li>
-</ul>
-
-
-<h2>Simple Use</h2>
-
-<p>This example code defines a small number of commands including a "sleep" command. 
+'ftl' tool is available for testing (just) the library itself. 
 </p>
-
-<pre style="margin-left: 40px;"> <br>#include &lt;unistd.h&gt; /* for sleep() */ <br> <br>#include "ci/efabcfg/ftl.h" <br> <br>: <br>: <br> <br>static const value_t * <br>cmd_sleep(const char **ref_line, const value_t *this_cmd, parser_state_t *state) <br>{   number_t duration_s; <br>     <br>    if (parse_int_expr(ref_line, state, &amp;duration_s) &amp;&amp;  <br>        parse_empty(ref_line)) <br>    {   sleep(duration_s); <br>    } else <br>        parser_report_help(state, this_cmd); <br> <br>    return &amp;value_null; <br>} <br> <br> <br> <br>static void <br>cmds_mine(dir_t *cmds) <br>{   mod_add(cmds, "dothis", "&lt;syntax&gt; - do this", &amp;cmd_dothis); <br>    mod_add(cmds, "dothat", "&lt;thatstuff&gt; - do that", &amp;cmd_dothat); <br>    : <br>    mod_add(cmds, "sleep", "&lt;number&gt; - sleeps for &lt;number&gt; seconds", &amp;cmd_sleep); <br>    --       cmd name ^    help ^           function implementing command ^ <br>} <br> <br>: <br>: <br> <br>extern int <br>main(int argc, char **argv) <br>{   const char *init = NULL;               -- pre-execution string <br>    char *app_argv[APP_ARGC_MAX]; <br>    int app_argc = 0; <br>     <br>    ftl_init();                            -- initialize library <br> <br>    if (parse_args(argc, argv, .. &amp;init, &amp;app_argc, &amp;app_argv, APP_ARGC_MAX)) <br>    {   parser_state_t *state = parser_state_new(dir_id_new()); <br>                                           -- create a place to put commands etc. <br>        if (NULL != state) <br>        {   cmds_generic(state, app_argc, app_argv); <br>                                           -- add pre-defined generic commands <br>  <br>            cli(state, init, "mytester");  -- run the command line interpreter <br>            -- commands ^     ^ name of utility <br>            parser_state_free(state);      -- discard state <br>        } <br>    } else <br>        usage(); <br>     <br>   ftl_end();                              -- finalize library <br>   return 0; <br>} <br> <br></pre>
-
-<p>In the above <tt>init</tt> can be set to a string (such
-as "sleep; echo done; exit") which will be executed before commands are
-taken from the terminal. The <tt>app_argc</tt> and <tt>app_argv</tt> values optionally give scripts access to command line arguments.  (The function <tt>parse_args</tt> is not provided as part of the library.) 
-The string <tt>"mytester"</tt> provides a name for the utility that will be used when providing error messages etc. 
+<p>(This documentation was revised for FTL library version 1.27)</p>
+<h2 class="western">Overview</h2>
+<p>This library provides a framework for the execution of textual
+commands. It's main features are 
 </p>
-
-
-<h3>Parsing Support</h3>
-
+<ul>
+	<li><p style="margin-bottom: 0cm">command lines can be read from
+	many sources including the terminal and files 
+	</p>
+	<li><p style="margin-bottom: 0cm">command lines from the terminal
+	have history and &quot;readline&quot; support on Linux 
+	</p>
+	<li><p style="margin-bottom: 0cm">macro substitution and long-line
+	processing are dealt with 
+	</p>
+	<li><p style="margin-bottom: 0cm">will read initial lines from a
+	&quot;.rc&quot; file 
+	</p>
+	<li><p style="margin-bottom: 0cm">C functions that implement new
+	commands are easily written and include help text 
+	</p>
+	<li><p style="margin-bottom: 0cm">provides a number of built-in
+	commands, including &quot;help&quot;, &quot;set&quot;, &quot;source&quot;
+		</p>
+	<li><p>a small language, <a href="https://sites.google.com/site/graygirling/ftl">FTL</a>,
+	is available for extending the set of commands, manipulating values
+	returned by commands, obtaining values from the system etc. 
+	</p>
+</ul>
+<p>Below there are sections describing 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">Simple Use - all you need to read
+	in order to make use of the library 
+	</p>
+	<li><p>Built-in Commands - some &quot;free&quot; commands you can
+	give your user 
+	</p>
+</ul>
+<p><a href="https://sites.google.com/site/graygirling/ftl/command-line-tutorial">Elsewhere</a>
+you can find more information about:</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">FTL expressions - how values are
+	generated in the built-in language 
+	</p>
+	<li><p style="margin-bottom: 0cm">Scripting - ways that you and your
+	user can extend the functionality of your interpreter 
+	</p>
+	<li><p style="margin-bottom: 0cm">Control information available to
+	scripts - command line, environment, file and windows registry
+	access 
+	</p>
+	<li><p>The FTL script-testing utility: ftl 
+	</p>
+</ul>
+<h2 class="western">Simple Use</h2>
+<p>This example code defines a small number of commands including a
+&quot;sleep&quot; command. 
+</p>
+<pre class="western" style="margin-left: 0.71cm"> 
+#include &lt;unistd.h&gt; /* for sleep() */ 
+ 
+#include &quot;ci/efabcfg/ftl.h&quot; 
+ 
+: 
+: 
+ 
+static const value_t * 
+cmd_sleep(const char **ref_line, const value_t *this_cmd, parser_state_t *state) 
+{   number_t duration_s; 
+    const char *lineend = &amp;(*ref_line)[strlen(*ref_line)];
+     
+    if (parsew_int_expr(ref_line, lineend, state, &amp;duration_s) &amp;&amp;  
+        parsew_empty(ref_line, lineend)) 
+    {   sleep(duration_s); 
+    } else 
+        parser_report_help(state, this_cmd); 
+ 
+    return &amp;value_null; 
+} 
+ 
+ 
+ 
+static void 
+cmds_mine(parser_state_t *state, dir_t *cmds) 
+{   smod_add(state, cmds, &quot;dothis&quot;, &quot;&lt;syntax&gt; - do this&quot;, &amp;cmd_dothis); 
+    smod_add(state, cmds, &quot;dothat&quot;, &quot;&lt;thatstuff&gt; - do that&quot;, &amp;cmd_dothat); 
+    : 
+    smod_add(state, cmds, &quot;sleep&quot;, &quot;&lt;number&gt; - sleeps for &lt;number&gt; seconds&quot;, &amp;cmd_sleep); 
+    --       cmd name ^    help ^           function implementing command ^ 
+} 
+ 
+: 
+: 
+ 
+extern int 
+main(int argc, char **argv) 
+{   const char *init = NULL;               -- pre-execution string 
+    char *app_argv[APP_ARGC_MAX]; 
+    int app_argc = 0; 
+     
+    ftl_init();                            -- initialize library 
+ 
+    if (parse_args(argc, argv, .. &amp;init, &amp;app_argc, &amp;app_argv, APP_ARGC_MAX)) 
+    {   parser_state_t *state = parser_state_new(dir_id_new()); 
+                                           -- create a place to put commands etc. 
+        if (NULL != state) 
+        {   cmds_generic(state, app_argc, app_argv); 
+                                           -- add pre-defined generic commands 
+  
+            cli(state, init, &quot;mytester&quot;);  -- run the command line interpreter 
+            -- commands ^     ^ name of utility 
+            parser_state_free(state);      -- discard state 
+        } 
+    } else 
+        usage(); 
+     
+   ftl_end();                              -- finalize library 
+   return 0; 
+} 
+ </pre><p>
+In the above <tt class="western">init</tt> can be set to a string
+(such as &quot;sleep; echo done; exit&quot;) which will be executed
+before commands are taken from the terminal. The <tt class="western">app_argc</tt>
+and <tt class="western">app_argv</tt> values optionally give scripts
+access to command line arguments. (The function <tt class="western">parse_args</tt>
+is not provided as part of the library.) The string <tt class="western">&quot;mytester&quot;</tt>
+provides a name for the utility that will be used when providing
+error messages etc. 
+</p>
+<h3 class="western">Parsing Support</h3>
 <p>Each command function has the form: 
 </p>
-
-<pre style="margin-left: 40px;">static value_t * <br>cmd_sleep(const char **ref_line, value_t *this_cmd, parser_state_t *state) <br></pre>
-
- 
+<pre class="western" style="margin-left: 0.71cm">static value_t * 
+cmd_sleep(const char **ref_line, value_t *this_cmd, parser_state_t *state) </pre><p>
 in which: 
+</p>
 <ul>
-<li> <i>ref_line</i> is a pointer to a pointer to a zero terminated string of arguments 
-</li><li> <i>this_cmd</i> represents the command that is being executed 
-</li><li> <i>state</i> indirects to various pieces of information such as the execution stack and the list of commands currently in scope </li>
+	<li><p style="margin-bottom: 0cm"><i>ref_line</i> is a pointer to a
+	pointer to a zero terminated string of arguments 
+	</p>
+	<li><p style="margin-bottom: 0cm"><i>this_cmd</i> represents the
+	command that is being executed 
+	</p>
+	<li><p><i>state</i> indirects to various pieces of information such
+	as the execution stack and the list of commands currently in scope 
+	</p>
 </ul>
-
 <p>The argument line has already been assembled from input text -
-splitting at each ";", combining lines ending "\", and expanding any
-macros (specified as "$&lt;name&gt;" or "${&lt;name&gt;}") etc. </p>
-
+splitting at each &quot;;&quot;, combining lines ending &quot;\&quot;,
+and expanding any macros (specified as &quot;$&lt;name&gt;&quot; or
+&quot;${&lt;name&gt;}&quot;) etc. 
+</p>
 <p>The command must update ref_line to point to the end of the
 string, otherwise the interpreter will warn that there was unparsed
-input. </p>
-
-<p>A number of functions are available to help with this with the general format: 
+input. 
 </p>
-
-<pre>bool parse_&lt;something&gt;(const char **ref_line, &lt;output args&gt;) <br></pre>
-
- which can conveniently be combined (for simple command lines)
-into a single if condition that checks the correctness of the syntax.
-In general each function will parse a &lt;something&gt;, updating
+<p>A number of functions are available to help with this with the
+general format: 
+</p>
+<pre class="western" style="margin-bottom: 0.5cm">bool parse_&lt;something&gt;(const char **ref_line, &lt;output args&gt;) </pre><p>
+which can conveniently be combined (for simple command lines) into a
+single if condition that checks the correctness of the syntax. In
+general each function will parse a &lt;something&gt;, updating
 ref_line to skip over it if successful. 
+</p>
 <p>These functions include: 
 </p>
-
-<table border="1" cellpadding="3" cellspacing="0">
-
-<tbody>
-<tr>
-<td>parse_empty(ref_line);                      </td>
-<td> succeeds only if the line contains no more characters - this should always be called as a final parse function </td>
-</tr>
-<tr>
-<td>parse_white(ref_line);                      </td>
-<td> true iff there is leading white space on the line (and fails if there is not) </td>
-</tr>
-<tr>
-<td>parse_space(ref_line);                      </td>
-<td> always true - this function simply skips over any white space </td>
-</tr>
-<tr>
-<td>parse_key(ref_line, "keyword");             </td>
-<td> true iff the text "keyword" is next on the line </td>
-</tr>
-<tr>
-<td>parse_int(ref_line, &amp;longint);              </td>
-<td> true iff the next characters specify a decimal number </td>
-</tr>
-<tr>
-<td>parse_hex(ref_line, &amp;usigned_longint);      </td>
-<td> true iff the next character specify a hexadecimal number </td>
-</tr>
-<tr>
-<td>parse_hex_width(ref_line, width, &amp;unsigned_longint); </td>
-<td> true iff the next &lt;width&gt; characters specify a hexadecimal number </td>
-</tr>
-<tr>
-<td>parse_int_val(ref_line, &amp;longint);          </td>
-<td> true iff the next characters are a number specified [-]0x&lt;hex&gt; or [-]&lt;decimal&gt; </td>
-</tr>
-<tr>
-<td>parse_int_expr(ref_line, state, &amp;longint)   </td>
-<td>
-true iff the next characters can be parsed as a numeric expression
-potentially involving brackets, +, -, *, /, rsh, lsh, ge, le, gt, lt,
-==, != with the normal priorities (rsh &amp; lsh are shifts) - an ftl
-expression can occur (only) within brackets </td>
-</tr>
-<tr>
-<td>parse_item(ref_line, delims, ndelims, buf, len); </td>
-<td> true iff there is a non-empty item of non-delimiter characters - which are placed in the buffer provided </td>
-</tr>
-<tr>
-<td>parse_id(ref_line, buf, len);               </td>
-<td> true iff there is an identifier (alphabetic or '_' followed by alphanumerics or '_') which is written to the buffer provided </td>
-</tr>
-<tr>
-<td>parse_string(ref_line, buf, len);           </td>
-<td> true iff there is a string beginning " or ' - written to the buffer </td>
-</tr>
-<tr>
-<td>parse_string_expr(ref_line, state, buf, len, &amp;string_value) </td>
-<td>
-true iff the next characters can be parsed as a numeric expression
-potentially involving brackets and + (concatenation) - an ftl
-expression can occur (only) within brackets </td>
-</tr>
-<tr>
-<td>parse_itemstr(ref_line, buf, len);          </td>
-<td> true iff there is either an item or a string on the command line </td>
-</tr>
-<tr>
-<td>parse_ipaddr(ref_line, &amp;ipaddr);            </td>
-<td> true iff there is a dotted quad (n.n.n.n) on the command line </td>
-</tr>
-<tr>
-<td>parse_macaddr(ref_line, &amp;macaddr);          </td>
-<td> true iff there is a mac address (h:h:h:h:h:h) on the command line </td>
-</tr>
-</tbody>
+<table cellpadding="3" cellspacing="0">
+	<tr>
+		<td style="border-top: 1px solid #808080; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding: 0.05cm"><p>
+			parsew_empty(ref_line); 
+			</p>
+		</td>
+		<td style="border-top: 1px solid #808080; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding: 0.05cm"><p>
+			succeeds only if the line contains no more characters - this
+			should always be called as a final parse function 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_white(ref_line); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff (if and only if) there is leading white space on the line
+			(and fails if there is not) 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_space(ref_line); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			always true - this function simply skips over any white space 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_key(ref_line, &quot;keyword&quot;); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the text &quot;keyword&quot; is next on the line 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_int(ref_line, &amp;longint); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next characters specify a decimal number 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_hex(ref_line, &amp;usigned_longint); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next character specify a hexadecimal number 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_hex_width(ref_line, width, &amp;unsigned_longint); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next &lt;width&gt; characters specify a hexadecimal
+			number 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_int_val(ref_line, &amp;longint); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next characters are a number specified [-]0x&lt;hex&gt;
+			or [-]&lt;decimal&gt; 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_int_expr(ref_line, state, &amp;longint) 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next characters can be parsed as a numeric expression
+			potentially involving brackets, +, -, *, /, rsh, lsh, ge, le, gt,
+			lt, ==, != with the normal priorities (rsh &amp; lsh are shifts) -
+			an ftl expression can occur (only) within brackets 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_item(ref_line, delims, ndelims, buf, len); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is a non-empty item of non-delimiter characters -
+			which are placed in the buffer provided 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_id(ref_line, buf, len); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is an identifier (alphabetic or '_' followed by
+			alphanumerics or '_') which is written to the buffer provided 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_string(ref_line, buf, len); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is a string beginning &quot; or ' - written to the
+			buffer 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_string_expr(ref_line, state, buf, len, &amp;string_value) 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff the next characters can be parsed as a numeric expression
+			potentially involving brackets and + (concatenation) - an ftl
+			expression can occur (only) within brackets 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_itemstr(ref_line, buf, len); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is either an item or a string on the command line 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_ipaddr(ref_line, &amp;ipaddr); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is a dotted quad (n.n.n.n) on the command line 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			parsew_macaddr(ref_line, &amp;macaddr); 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			true iff there is a mac address (h:h:h:h:h:h) on the command line 
+			</p>
+		</td>
+	</tr>
 </table>
-
-<p>For example to parse the syntax "&lt;integer&gt; [name
-&lt;string&gt;] &lt;possibly-quoted-item&gt;" the following could be
-used </p>
-
-<pre>    char **ref_line = ... /* position in string to be parsed */ <br>    int i; <br>    bool name_is_set; <br>    char name[32]; <br>    char item[32]; <br>     <br>    if (parse_int_val(ref_line, &amp;i) &amp;&amp;  <br>        parse_space(ref_line) &amp;&amp; <br> <br>        (!(name_is_set = parse_key(ref_line, "name")) ||  <br>         (parse_space(ref_line) &amp;&amp;  <br>          parse_string(ref_line, &amp;name[0], sizeof(name)) &amp;&amp;  <br>          parse_space(ref_line)) <br>        ) &amp;&amp; <br> <br>        parse_itemstr(ref_line, &amp;item[0], sizeof(item)) &amp;&amp; <br>        parse_empty(ref_line)) <br>    { <br>        /* function using i, name_is_set, name and item */ <br>    }  <br>    else <br>        /* syntax error */ <br>        ... <br></pre>
-
-
-<h3>Subcommands</h3>
-
-<p>It is possible to specify a set of commands as a kind of command itself.  For example if the <i>cmds_mine</i> function above had been written as follows: 
+<p>For example to parse the syntax &quot;&lt;integer&gt; [name
+&lt;string&gt;] &lt;possibly-quoted-item&gt;&quot; the following
+could be used 
 </p>
-
-<pre style="margin-left: 40px;">static void <br>cmds_mine(mod_t *cmds) <br>{   dir_t *mycmds = dir_id_new(); <br> <br>    if (NULL != mycmds) <br>    {   mod_add(mycmds, "dothis", "&lt;syntax&gt; - do this", &amp;cmd_dothis); <br>        mod_add(mycmds, "dothat", "&lt;thatstuff&gt; - do that", &amp;cmd_dothat); <br>        : <br>        mod_add(mycmds, "sleep", "&lt;number&gt; - sleeps for &lt;number&gt; seconds", &amp;cmd_sleep); <br> <br>        mod_add_dir(cmds, "my", mycmds); <br>    } <br>} <br></pre>
-
-<p>then commands "my dothis", "my dothat", ... "my sleep", "my help"
-would be available in place of "dothis", "dothat" ... "sleep". The
-command "help" is predefined by the library and will be able to be used
-as "my help" - showing help about only the "my" subcommands. </p>
-
-<p>There is also another way to add commands by adding new
-functions to the testing language - this is described "Adding built-in
-commands" below. </p>
-
-
-<h2>Built-in Commands</h2>
-
+<pre class="western">    char **ref_line = ... /* position in string to be parsed */ 
+    const char *lineend = &amp;(*ref_line)[strlen(*ref_line)];
+    int i; 
+    bool name_is_set; 
+    char name[32]; 
+    char item[32]; 
+     
+    if (parsew_int_val(ref_line, lineend, &amp;i) &amp;&amp;  
+        parsew_space(ref_line, lineend) &amp;&amp; 
+ 
+        (!(name_is_set = parsew_key(ref_line, lineend, &quot;name&quot;)) ||  
+         (parsew_space(ref_line, lineend) &amp;&amp;  
+          parsew_string(ref_line, lineend, &amp;name[0], sizeof(name)) &amp;&amp;  
+          parsew_space(ref_line, lineend)) 
+        ) &amp;&amp; 
+ 
+        parsew_itemstr(ref_line, lineend, &amp;item[0], sizeof(item)) &amp;&amp; 
+        parsew_empty(ref_line, lineend)) 
+    { 
+        /* function using i, name_is_set, name and item */ 
+    }  
+    else 
+        /* syntax error */ 
+        ... </pre><h3 class="western">
+Subcommands</h3>
+<p>It is possible to specify a set of commands as a kind of command
+itself. For example if the <i>cmds_mine</i> function above had been
+written as follows: 
+</p>
+<pre class="western" style="margin-left: 0.71cm">static void 
+cmds_mine(parser_state_t *state, <font face="Liberation Mono, monospace"><font size="2" style="font-size: 10pt">dir</font></font>_t *cmds) 
+{   dir_t *mycmds = dir_id_lnew(state); 
+ 
+    if (NULL != mycmds) 
+    {   smod_add(state, mycmds, &quot;dothis&quot;, &quot;&lt;syntax&gt; - do this&quot;,    &amp;cmd_dothis); 
+        smod_add(state, mycmds, &quot;dothat&quot;, &quot;&lt;thatstuff&gt; - do that&quot;, &amp;cmd_dothat); 
+        : 
+        smod_add(state, mycmds, &quot;sleep&quot;, &quot;&lt;number&gt; - sleeps for &lt;number&gt; seconds&quot;, &amp;cmd_sleep); 
+ 
+        smod_add_dir(state, cmds, &quot;my&quot;, mycmds); 
+    } 
+} </pre><p>
+then commands &quot;my dothis&quot;, &quot;my dothat&quot;, ... &quot;my
+sleep&quot;, &quot;my help&quot; would be available in place of
+&quot;dothis&quot;, &quot;dothat&quot; ... &quot;sleep&quot;. The
+command &quot;help&quot; is predefined by the library and will be
+able to be used as &quot;my help&quot; - showing help about only the
+&quot;my&quot; subcommands. 
+</p>
+<p>There is also another way to add commands by adding new functions
+to the testing language - this is described &quot;Adding built-in
+commands&quot; below. 
+</p>
+<h2 class="western">Built-in Commands</h2>
 <p>In the above example the line 
 </p>
-
-<pre>        cmds_generic(state); <br></pre>
-
- 
-provides a number of commands (that may grow in the future).  They are divided into groups with prefixes 
-<ul>
-<li> &lt;none&gt; - language features 
-</li><li> io - input and output 
-</li><li> sys - operating system interface 
-</li><li> parse - language parsing library 
-</li><li> reg - Windows registry (Windows only) </li>
-</ul>
-
-<p>The language features can be divided into those for: </p>
-
-<ul>
-<li> Program control 
-</li><li> General features 
-</li><li> Types 
-</li><li> Booleans 
-</li><li> Integers 
-</li><li> Environments and directories 
-</li><li> Character handling 
-</li><li> Input and Output 
-</li><li> Parser interface 
-</li><li> Operating System interface 
-</li><li> Windows-only interface </li>
-</ul>
-These are described in more detail <a href="https://sites.google.com/site/graygirling/ftl/ftl-user-guide">elsewhere</a>.<br>
-<br>
-<h2>Adding FTL Functions</h2>
-<p>"Simple Use", above described how a command that parses its own arguments can be created. 
+<pre class="western" style="margin-bottom: 0.5cm">        cmds_generic(state); </pre><p>
+provides a number of commands (that may grow in the future). They are
+divided into groups with prefixes 
 </p>
-
+<ul>
+	<li><p style="margin-bottom: 0cm">&lt;none&gt; - language features 
+	</p>
+	<li><p style="margin-bottom: 0cm">io - input and output 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys - operating system interface 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse - language parsing library 
+	</p>
+	<li><p>reg - Windows registry (Windows only) 
+	</p>
+</ul>
+<p>The language features can be divided into those for: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">Program control 
+	</p>
+	<li><p style="margin-bottom: 0cm">General features 
+	</p>
+	<li><p style="margin-bottom: 0cm">Types 
+	</p>
+	<li><p style="margin-bottom: 0cm">Booleans 
+	</p>
+	<li><p style="margin-bottom: 0cm">Integers 
+	</p>
+	<li><p style="margin-bottom: 0cm">Environments and directories 
+	</p>
+	<li><p style="margin-bottom: 0cm">Character handling 
+	</p>
+	<li><p style="margin-bottom: 0cm">Input and Output 
+	</p>
+	<li><p style="margin-bottom: 0cm">Parser interface 
+	</p>
+	<li><p style="margin-bottom: 0cm">Operating System interface 
+	</p>
+	<li><p>Windows-only interface 
+	</p>
+</ul>
+<p>These are described in more detail <a href="https://sites.google.com/site/graygirling/ftl/ftl-user-guide">elsewhere</a>.</p>
+<h2 class="western">Adding FTL Functions</h2>
+<p>&quot;Simple Use&quot;, above described how a command that parses
+its own arguments can be created. 
+</p>
 <p>It is also possible to add FTL functions - which are presented
 with a fixed number of FTL values to operate on. For example, the
-implementation of the "rnd" functions is: </p>
-
-<pre>    static const value_t * <br>    fn_rnd(const value_t *this_fn, parser_state_t *state) <br>    {   const value_t *upb = parser_builtin_arg(state, 1); /* get the first argument */ <br>        const value_t *val = &amp;value_null;                  /* default return value */ <br>     <br>        if (value_istype(upb, type_int)) <br>        {   number_t upbval = value_int_number(upb); <br>            val = value_int_new((int)(((float)upbval)*rand()/(RAND_MAX+1.0))); <br>        } else <br>            parser_report_help(state, this_fn); <br> <br>        return val; <br>    } <br></pre>
-
+implementation of the &quot;rnd&quot; functions is: 
+</p>
+<pre class="western">    static const value_t * 
+    fn_rnd(const value_t *this_fn, parser_state_t *state) 
+    {   const value_t *upb = parser_builtin_arg(state, 1); /* get the first argument */ 
+        const value_t *val = &amp;value_null;                  /* default return value */ 
+     
+        if (value_istype(upb, type_int)) 
+        {   number_t upbval = value_int_number(upb); 
+            val = value_int_new((int)(((float)upbval)*rand()/(RAND_MAX+1.0))); 
+        } else 
+            parser_report_help(state, this_fn); 
  
+        return val; 
+    } </pre><p>
 and it was added to the functions in the library using 
-<pre>    mod_addfn(cmds, "rnd", <br>              "&lt;n&gt; - return random number less than &lt;n&gt;",  &amp;fn_rnd, /*no of args*/ 1); <br></pre>
+</p>
+<pre class="western">    mod_addfn(cmds, &quot;rnd&quot;, 
+              &quot;&lt;n&gt; - return random number less than &lt;n&gt;&quot;,  &amp;fn_rnd, /*no of args*/ 1); </pre><p>
+Other functions can easily be added. FTL values can be of a number of
+types including: null values, type values, integer values, string
+values, FTL code values, environment values, closure values, and
+stream values. Each of these has their own support provided by
+functions declared in the header &quot;ftl.h&quot;. 
+</p>
+<p><br/>
+<br/>
 
-<p>Other functions can easily be added. FTL values can be of a number
-of types including: null values, type values, integer values, string
-values, FTL code values, environment values, closure values, and stream
-values. Each of these has their own support provided by functions
-declared in the header "ftl.h". </p>
-
-  
-
-</body></html>
+</p>
+</body>
+</html>

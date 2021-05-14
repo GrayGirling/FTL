@@ -1,13 +1,15 @@
 ## Recommended Build Environments
 
-This code can be built under Windows, Linux and Mac OSX. Each has a
-recommended tool set that may need to be installed before building is
-possible.
+This code can be built under Windows, Linux (including the Windows
+Subsystem for Linux) and Mac OSX. Each has a recommended tool set that
+may need to be installed before building is possible.
 
 In brief the tools are as follows:
 
   - Windows - MinGW (minmalist GNU for Windows)
+
   - Linux - standard gcc tools from the Linux distribution
+
   - Mac OS X - the MacPort tools
 
 ## Windows Build Environment - MinGW
@@ -17,13 +19,20 @@ Install MinGW <http://www.mingw.org/> by downloading the installer
 <http://sourceforge.net/projects/mingw/files/>.
 
   - During installation (run and click on the 'Install' button)
+
   - (Keep the graphical interface.)
+
   - Wait for the download.
+
   - Click on 'Continue' button when it has finished.
+
   - Select 'mingw32-32-gcc-g++' and 'mingw32-base' and 'msys-base'
+
   - Click on menu Installation \> Apply Changes
+
   - Then on the Apply button in the next dialogue 'Schedule of Pending
     Actions'
+
   - Wait for the download to complete, then click on 'Close'
 
 Normally this will normally install the tools at C:\\MinGW
@@ -42,11 +51,13 @@ In general you should look for the package which provides you with the
 'gcc' compiler. These are example commands that you may need to run
 
   - Redhat Enterprise or Centos Linux distribution: rpm -ivh gcc
+
   - Fedora Linux distribution: yum install gcc
+
   - Debian or Ubuntu Linux distribution: apt-get install gcc
 
 Note that you will usually need to be running as 'root' when installing
 new software. Often this can be achieved by putting the command 'sudo'
 in front of the relevant command.
 
-## Mac OS X Build Environment - MacPort
+## Mac OS X Build Environment – MacPort
