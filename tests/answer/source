@@ -23,7 +23,7 @@ Running line from test
 Finished in test
 > 
 > set src[f]:{if TRUE {source f!}{}!;echo "Done now"!}
-> src "test"
+> src "ftltest.tmp"
 Running line from test
 Finished in test
 Done now

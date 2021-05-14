@@ -6,7 +6,7 @@ set hdump[str]:{
 } 
 
 set printf io.fprintf io.out
-printf "tokens %[one]t (not %[one]v) and %[two]t\n" [one="string", two=9]
+printf "tokens %[one]s (not %[one]v) and %[two]d\n" [one="string", two=9]
 #tokens string (not "string") and 9
 #35
 

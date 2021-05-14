@@ -6,14 +6,9 @@
 > } 
 > 
 > set printf io.fprintf io.out
-> printf "tokens %[one]t (not %[one]v) and %[two]t\n" [one="string", two=9]
-ftl $*console*:+9 in
-ftl $*console*:10: invalid format item syntax - '%[one]t (not %[one]v) and %[two]t
-'
-ftl $*console*:+9: invalid format item syntax - '%[two]t
-'
-tokens t (not "string") and t
-30
+> printf "tokens %[one]s (not %[one]v) and %[two]d\n" [one="string", two=9]
+tokens string (not "string") and 9
+35
 > #tokens string (not "string") and 9
 > #35
 > 
@@ -56,7 +51,6 @@ c <f> <p> <val> - %c character format
 b <f> <p> <val> - %b little endian binary format
 B <f> <p> <val> - %B big endian binary format
 v <f> <p> <val> - %v value format
-p <f> <p> <val> - %p internal pointer
 j <f> <p> <val> - %j (JSON) value format
 J <f> <p> <val> - %J (pretty JSON) value format
 > #d <f> <p> <val> - %d integer format

@@ -16,4 +16,4 @@ source ftltest.tmp
 source "ftltest.tmp"
 
 set src[f]:{if TRUE {source f!}{}!;echo "Done now"!}
-src "test"
+src "ftltest.tmp"
