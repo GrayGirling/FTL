@@ -212,7 +212,6 @@ parsew_json_value(const char **ref_line, const char *lineend,
     /* syntax: <string> | <number> | <object> | <array> | true | false | null */
     bool ok = true;
     const char *line = *ref_line;
-    number_t numb = 0;
     char stringbuf[JSON_STRING_MAX];
     size_t stringbufused = 0;
 
@@ -237,8 +236,8 @@ parsew_json_value(const char **ref_line, const char *lineend,
         }
         *ref_line = line;
     } else
-    if (parsew_int_val(&line, lineend, &numb))
-    {   *out_val = value_int_lnew(state, numb);
+    if (parsew_numeric_val(&line, lineend, state, out_val))
+    {   /* nothing to do */
     } else
     if (parsew_string(&line, lineend,
                       &stringbuf[0], sizeof(stringbuf), &stringbufused))

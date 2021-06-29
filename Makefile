@@ -7,6 +7,7 @@ ftl2=no
 use_elf=yes
 use_xml=yes
 use_json=yes
+use_reals=yes
 elf_lib_type=ELF
 force_native=no
 ndebug=no
@@ -105,6 +106,8 @@ DEFS_LIBELF=
 INCS_LIBELF=
 OBJS_LIBELF=
 
+LIBS_MATH=-lm
+
 EXE :=
 OBJ := .o
 
@@ -154,6 +157,11 @@ else
 endif
 endif
 
+ifneq ($(use_reals),yes)
+LIBS_MATH=
+endif
+
+
 $(info Building for OSARCH $(OSARCH) using $(CC) (building for $(BUILDARCH)))
 
 # default build target
@@ -166,6 +174,7 @@ help:
 	@echo "        use_xml=yes/no (default $(use_xml))"
 	@echo "        use_json=yes/no (default $(use_json)"
 	@echo "        use_elf =yes/no (default $(use_elf)"
+	@echo "        use_reals =yes/no (default $(use_reals)"
 	@echo "        elf_lib_type=ELF/GELF (default $(elf_lib_type)"
 	@echo "        force_native=yes/no (default $force_native)"
 	@echo "        ndebug=yes/no default $(ndebug)"
@@ -187,7 +196,7 @@ help:
 	@echo "        help - prints this text"
 
 DEFINES  := 
-LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF)
+LIBS     := $(LIBS_READLINE) $(LIB_DYNLIB) $(LIB_SOCKET) $(LIB_ELF) $(LIBS_MATH)
 INCLUDES := -I include
 ifeq ($(ndebug),yes)
     CC_OPT_DEBUGSYMS :=
@@ -237,9 +246,18 @@ FTL_DEFS += -DUSE_FTLLIB_XML
 endif
 
 ifeq ($(use_json),yes)
+LIBJSON_DEFS :=
 FTL_OBJS += libftl_json$(OBJ)
 FTL_DEFS += -DUSE_FTLLIB_JSON
 endif
+
+
+ifeq ($(use_reals),yes)
+LIBFTL_DEFS  += -DUSE_REALS
+LIBJSON_DEFS += -DUSE_REALS
+endif
+
+
 
 vpath %.c tools:lib
 vpath %.h include
@@ -265,6 +283,9 @@ libftl$(FTLVER)$(OBJ): libftl.c
 
 libftl_elf$(OBJ): libftl_elf.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBELF_DEFS) $(LIBELF_INCS) -c -o $@ $<
+
+libftl_json$(OBJ): libftl_json.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LIBJSON_DEFS) -c -o $@ $<
 
 libdyn$(OBJ): libdyn.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<

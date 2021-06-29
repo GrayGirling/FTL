@@ -33,7 +33,7 @@
 
 /* author  Gray Girling
 ** brief   Framework for Testing Command-line Library
-** date    April 2021
+** date    July 2021
 **/
 
 /*! \cidoxg_lib_libftl */
@@ -425,6 +425,8 @@
 #include <stddef.h> /* for ptrdiff_t */
 #include <setjmp.h>
 #include <errno.h>
+
+#include <math.h>
 
 
 #include "ftl_api.h" /* also defines bool */
@@ -6499,6 +6501,7 @@ value_uint_lnew(parser_state_t *state, unumber_t number)
 
 
 
+/* unused? */
 extern void
 value_int_lupdate(parser_state_t *state,
                   const value_t **ref_value, number_t number)
@@ -6538,12 +6541,17 @@ value_int_number(const value_t *value)
 
 
 
+#define DEBUG_SCAN_LNEW OMIT
+
+
+
+
 /*! Parse a sequence of digits optionally interspersed with a
  *  separator character
  *    @param ref_line  - pointer to position in string being parsed (updated)
  *    @param lineend   - pointer 1 char past the last char of the line
  *    @param base      - numeric base of digits
- *    @param sepch     - negative number or separator character
+ *    @param sepch     - ignored separator character
  *
  *    @returns TRUE only if the parse succeeds
  *
@@ -6559,8 +6567,8 @@ value_int_number(const value_t *value)
  *   sometimes every four digits); and binary, hex or octal numbers with a "_"
  *   separator (often every four or eight digits).
  *
- *   This routine distinguishes itself from e.g. strtol insofar as it will
- *   parse no more than linelen characters.
+ *   This routine distinguishes itself from e.g. \c strtol insofar as it will
+ *   parse no further than \c lineend (in the same string as *ref_line).
  */
 static bool
 parsew_uintbase(const char **ref_line, const char *lineend, int base, int sepch,
@@ -6721,12 +6729,6 @@ parsew_hex_width(const char **ref_line, const char *lineend, unsigned width,
 
 
 
-extern bool
-parsew_int_expr(const char **ref_line, const char *lineend,
-                parser_state_t *state, number_t *out_int);
-
-
-
 /*! Parse a decimal integer with the following syntax
  *  That is parse: <space>* [+|-] [[0x|0X]<intbase16> | [0o|0O]<intbase8> |
  *                                 [0b|0B]<intbase2> | <intbase10>]
@@ -6734,19 +6736,22 @@ parsew_int_expr(const char **ref_line, const char *lineend,
  *    @param ref_line  - pointer to position in string being parsed (updated)
  *    @param lineend   - pointer 1 char past the last char of the line
  *    @param out_int   - location for parsed value to be written to
+ *    @param out_base  - numeric base used to specify the value
  *
  *    @returns TRUE only if the parse succeeds
  *
  *    The value *ref_line is updated to the first character following those
  *    parsed only if TRUE is returned.
  */
-extern bool
-parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int)
+static bool
+parsew_int_base_val(const char **ref_line, const char *lineend,
+                    number_t *out_int, unsigned *out_base)
 {   const char *line = *ref_line;
-    bool ok = FALSE;
+    bool ok;
     bool positive = TRUE;
     unumber_t num;
     int sepch = '_';
+    unsigned base = 10;
 
     parsew_space(&line, lineend);
     if (parsew_key(&line, lineend, "-"))
@@ -6755,21 +6760,24 @@ parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int)
     }
     if (parsew_key(&line, lineend, "0x") ||
         parsew_key(&line, lineend, "0X") )
-        ok = parsew_uintbase(&line, lineend, 16, sepch, &num);
+        base = 16;
     else if (parsew_key(&line, lineend, "0o") ||
              parsew_key(&line, lineend, "0O") )
-        ok = parsew_uintbase(&line, lineend, 8, sepch, &num);
+        base = 8;
     else if (parsew_key(&line, lineend, "0b") ||
              parsew_key(&line, lineend, "0B") )
-        ok = parsew_uintbase(&line, lineend, 2, sepch, &num);
-    else
-        ok = parsew_uintbase(&line, lineend, 10, sepch, &num);
+        base = 2;
+
+    ok = parsew_uintbase(&line, lineend, base, sepch, &num);
 
     if (ok)
     {   if (positive)
             *out_int = num;
         else
             *out_int = -(number_t)num;
+        if (out_base != NULL)
+            *out_base = base;
+       
         OMIT(DPRINTF("%s: int val '%.*s' = %" F_NUMBER_T "\n",
                      codeid(), (int)(line-*ref_line), *ref_line, *out_int););
         *ref_line = line;
@@ -6781,9 +6789,25 @@ parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int)
 
 
 
-/* This function may cause a garbage collection */
+
+
 extern bool
-parsew_int_base(const char **ref_line, const char *lineend,
+parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int)
+{   return parsew_int_base_val(ref_line, lineend, out_int, /*out_base*/NULL);
+}
+
+
+
+
+
+
+
+/*! Parse either an integer or a bracketed expression returning an integer
+ *  This function may cause a garbage collection
+ *  (once extern, but not in a header)
+ */
+extern bool
+parsew_int_expr(const char **ref_line, const char *lineend,
                 parser_state_t *state, number_t *out_int)
 {   /* syntax: (<int expression>) | <int> */
     bool ok;
@@ -7091,7 +7115,8 @@ static bool parse_int_or(const char **ref_line,
         return FALSE;
     }
 }
-#endif
+
+
 
 
 
@@ -7099,10 +7124,11 @@ static bool parse_int_or(const char **ref_line,
 extern bool
 parsew_int_expr(const char **ref_line, const char *lineend,
                 parser_state_t *state, number_t *out_int)
-{   /* return parsew_int_or(ref_line, lineend, state, out_int); */
-    /* return parsew_int_shift(ref_line, lineend, state, out_int); */
-    return parsew_int_base(ref_line, lineend, state, out_int);
+{   return parsew_int_or(ref_line, lineend, state, out_int);
 }
+#endif
+
+
 
 
 
@@ -7162,6 +7188,476 @@ values_int_init(void)
     value_int_init(&value_int_one,   1, /* on_heap */FALSE);
     value_int_init(&value_int_two,   2, /* on_heap */FALSE);
     value_int_init(&value_int_three, 3, /* on_heap */FALSE);
+}
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Real (floating point) Values                                     *
+ *          ============================                                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+#ifdef USE_REALS
+
+
+static value_type_t type_real_val;
+type_t type_real = &type_real_val;
+
+
+
+typedef struct
+{   value_t value;           /* real used as a value */
+    real_t  real;
+} value_real_t;
+
+
+
+
+
+
+
+
+static int value_real_print(parser_state_t *state, outchar_t *out,
+                           const value_t *root, const value_t *value,
+                           bool detailed)
+{   real_t fp = value_real_number(value);
+    real_t absfp = fp;
+    if (absfp < 0)
+        absfp = -absfp;
+    (void)root;
+    return outchar_printf(out, "%" F_REAL_T, fp);
+}
+
+
+
+
+
+static int /* <0 for less than, ==0 for equal, >0 for greater */
+value_real_compare(const value_t *v1, const value_t *v2)
+{   real_t real = ((const value_real_t *)v1)->real -
+                  ((const value_real_t *)v2)->real;
+    return (real>REAL(0.0)? 1: real<REAL(0.0)? -1: 0);
+    /* be cautious about truncating real_t to an int */
+}
+
+
+
+
+static value_t *
+value_real_init(value_real_t *no, real_t real, bool on_heap)
+{   no->real = real;
+    return value_init(&no->value, type_real, on_heap);
+}
+
+
+
+#if 0 != DEBUG_VALINIT(1+)0
+#define value_real_init(no, number, on_heap) \
+    value_info((value_real_init)(no, number, on_heap), __LINE__)
+#endif
+
+
+
+
+
+
+extern value_t *
+value_real_lnew(parser_state_t *state, real_t real)
+{   value_real_t *no = (value_real_t *)
+        value_malloc_lnew(state, sizeof(value_real_t));
+
+    if (PTRVALID(no))
+        return value_real_init(no, real, /*on_heap*/TRUE);
+    else
+        return NULL;
+}
+
+
+
+
+#if 0 != DEBUG_VALINIT(1+)0
+#define value_real_lnew(state, number)                    \
+    value_info((value_real_lnew)(state, number), __LINE__)
+#endif
+
+
+
+
+#if 0 /* unused */
+extern void
+value_real_lupdate(parser_state_t *state,
+                   const value_t **ref_value, real_t real)
+{   const value_t *val;
+    OMIT(printf("%s: update int at *%p - %d\n",
+                  codeid(), ref_value, (int)real););
+    val = *ref_value;
+    if (NULL == val || !value_type_equal(val, type_int))
+    {   *ref_value = value_real_lnew(state, real);
+    } else
+    {   value_real_t *no = (value_real_t *)val;
+        no->real = real;
+    }
+}
+#endif
+
+
+
+
+
+
+
+extern real_t
+value_real_number(const value_t *value)
+{   real_t real = 0;
+
+    if (value_istype(value, type_real))
+    {   value_real_t *no = (value_real_t *)value;
+        real = no->real;
+    }
+    /* else type error */
+
+    return real;
+}
+
+
+
+
+
+
+/*! Parse a real number following an initial sequence of digits, including a
+ *  decimal point and/or exponent character, optionally interspersed with
+ *  separator characters
+ *
+ *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
+ *    @param intpart   - initial integer part of value
+ *    @param base      - numeric base of further digits
+ *    @param sepch     - ignored separator character (or EOF if there is none)
+ *    @param pointch   - character used as decimal point
+ *    @param expch     - character parsed to introduce exponent (either case)
+ *
+ *    @returns TRUE only if the parse succeeds (the integer so far parsed
+ *             is not part of the parse of a real number if FALSE)
+ *
+ *    The value *ref_line is updated to the first character following those
+ *    parsed only if TRUE is returned.
+ *
+ *   Digits for the number are taken from the case-normalized sequence
+ *   0 .. 9 A .. Z
+ *   This is sufficient to represent digits in up to base 36, but no higher
+ *
+ *   Separator characters may occur only after a digit.  Examples might include
+ *   decimal numbers with a "," separator (often inserted every three, or
+ *   sometimes every four digits); and binary, hex or octal numbers with a "_"
+ *   separator (often every four or eight digits).
+ *
+ *   Sequence parsed is: [<pointch><digits>][<expch><digits>]
+ *       where at least one of <pointch> or <expch> is found.
+ *
+ *   This routine distinguishes itself from e.g. \c strtod insofar as it will
+ *   parse no further than \c lineend (in the same string as *ref_line).
+ */
+static bool
+parsew_realpartbase(const char **ref_line, const char *lineend,
+                    number_t intpart, int base, int sepch,
+                    char pointch, char expch, real_t *out_real)
+{   const char *line = *ref_line;
+    bool has_fracpart = line < lineend && *line == pointch;
+    bool ok = true;
+
+    unumber_t fracpart = 0;
+    int fracpart_len = 0;
+    number_t exponent = 1;
+    bool has_exponent = false;
+
+    if (has_fracpart)
+    {   const char *fracstart = ++line;
+        ok = parsew_uintbase(&line, lineend, base, sepch, &fracpart);
+        fracpart_len = line - fracstart;
+    }
+
+    if (ok)
+    {   has_exponent = line < lineend && tolower(*line) == expch;
+        if (has_exponent)
+        {   bool neg_exponent = false;
+            unumber_t exp = 1;
+            line++;
+            if (line < lineend)
+            {   if (*line == '+')
+                    line++;
+                else if (*line == '-')
+                {   neg_exponent = true;
+                    line++;
+                }
+            }
+            ok = parsew_uintbase(&line, lineend, base, sepch, &exp);
+            if (neg_exponent)
+                exponent = -exp;
+            else
+                exponent = exp;
+        }
+    }
+
+    if (ok)
+        ok = has_fracpart || has_exponent;
+
+    if (ok)
+    {   real_t real = (real_t)intpart;
+        if (has_fracpart)
+            real += ((real_t)fracpart)/powl((real_t)base, fracpart_len);
+        if (has_exponent && exponent != 1)
+        {   if (exponent == 0)
+                real = REAL(1.0);
+            else
+                real *= powl((real_t)base, (real_t)exponent);
+        }
+        *out_real = real;
+        *ref_line = line;
+    }
+
+    return ok;
+}
+    
+
+
+
+
+
+/*! Parse a sequence of digits, decimal point and exponent character denoting
+ *  a real number, optionally interspersed with separator characters
+ *  An integer with no \c pointch and no \c expch will fail this parse.
+ *
+ *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
+ *    @param base      - numeric base of digits
+ *    @param sepch     - ignored separator character (or EOF if there is none)
+ *    @param pointch   - character used as decimal point
+ *    @param expch     - character parsed to introduce exponent (either case)
+ *
+ *    @returns TRUE only if the parse succeeds
+ *
+ *    The value *ref_line is updated to the first character following those
+ *    parsed only if TRUE is returned.
+ *
+ *   Digits for the number are taken from the case-normalized sequence
+ *   0 .. 9 A .. Z
+ *   This is sufficient to represent digits in up to base 36, but no higher
+ *
+ *   Separator characters may occur only after a digit.  Examples might include
+ *   decimal numbers with a "," separator (often inserted every three, or
+ *   sometimes every four digits); and binary, hex or octal numbers with a "_"
+ *   separator (often every four or eight digits).
+ *
+ *   Sequence parsed is: [<digits>][<pointch><digits>][<expch><digits>]
+ *       where at least one of <pointch> or <expch> is found.
+ *
+ *   This routine distinguishes itself from e.g. \c strtod insofar as it will
+ *   parse no further than \c lineend (in the same string as *ref_line).
+ */
+static bool
+parsew_realbase(const char **ref_line, const char *lineend, int base, int sepch,
+                char pointch, char expch, real_t *out_real)
+{   const char *line = *ref_line;
+    unumber_t intpart = 0;
+    bool has_intpart = parsew_uintbase(&line, lineend, base, sepch, &intpart);
+    bool ok = has_intpart;
+    if (!has_intpart)
+        intpart = 0;
+    ok = parsew_realpartbase(&line, lineend, intpart, base, sepch, pointch,
+                             expch, out_real);
+    if (ok)
+        *ref_line = line;
+    return ok;
+}
+
+
+    
+
+
+
+
+/*! Parse a decimal real with a fixed line end location
+ */
+extern bool
+parsew_real(const char **ref_line, const char *lineend, real_t *out_real)
+{   return parsew_realbase(ref_line, lineend, 10,
+                           /*sep*/-1, /*pointch*/'.', /*expch*/'e',
+                           out_real);
+}
+
+
+
+
+
+
+/*! Parse a real number with the following syntax
+ *  That is parse: <space>* [-][[0x|0X]<realbase16> | [0o|0O]<realbase8> |
+ *                              [0b|0B]<realbase2> | <realbase10>]
+ *
+ *    @param ref_line  - pointer to position in string being parsed (updated)
+ *    @param lineend   - pointer 1 char past the last char of the line
+ *    @param out_real  - location for parsed value to be written to
+ *
+ *    @returns TRUE only if the parse succeeds
+ *
+ *    The value *ref_line is updated to the first character following those
+ *    parsed only if TRUE is returned.
+ */
+extern bool
+parsew_real_val(const char **ref_line, const char *lineend, real_t *out_real)
+{   const char *line = *ref_line;
+    bool ok = FALSE;
+    bool positive = TRUE;
+    real_t real;
+    int sepch = '_';
+    unsigned base = 10;
+
+    parsew_space(&line, lineend);
+    if (parsew_key(&line, lineend, "-"))
+    {   positive = FALSE;
+        parsew_space(&line, lineend);
+    }
+    if (parsew_key(&line, lineend, "0x") ||
+        parsew_key(&line, lineend, "0X") )
+        base = 16;
+    else if (parsew_key(&line, lineend, "0o") ||
+             parsew_key(&line, lineend, "0O") )
+        base = 8;
+    else if (parsew_key(&line, lineend, "0b") ||
+             parsew_key(&line, lineend, "0B") )
+        base = 2;
+
+    ok = parsew_realbase(&line, lineend, base,
+                         sepch, '.', base<15? 'e': 'p', &real);
+
+    if (ok)
+    {   if (positive)
+            *out_real = real;
+        else
+            *out_real = -(real_t)real;
+        OMIT(DPRINTF("%s: int val '%.*s' = %" F_real_t "\n",
+                     codeid(), (int)(line-*ref_line), *ref_line, *out_real););
+        *ref_line = line;
+    }
+    return ok;
+}
+
+
+
+
+
+static const value_t *
+value_real_parse(const char **ref_line, const value_t *this_cmd,
+                 parser_state_t *state)
+{   real_t rnum;
+    const char *line = *ref_line;
+    size_t linelen = strlen(line);
+    const char *lineend = &line[linelen];
+
+    if (parsew_real_val(ref_line, lineend, &rnum))
+        return value_real_lnew(state, rnum);
+    else
+        return &value_null;
+}
+
+
+
+
+
+/*! Parse either a valid integer denotation or a valid real
+ *  Reals parsed with this function must always contain an integer part
+ *  e.g. 0.5 - not .5,  1e4 - not e4, and; 0b0.101 - not 0b.101
+ */
+extern bool
+parsew_numeric_val(const char **ref_line, const char *lineend,
+                   parser_state_t *state, const value_t **out_lval)
+{   number_t intval = 0;
+    unsigned intbase = 10;
+    if (parsew_int_base_val(ref_line, lineend, &intval, &intbase))
+    {   real_t realval = REAL(0.0);
+        if (parsew_realpartbase(ref_line, lineend, intval, intbase,
+                                /*sepch*/'_', '.', intbase<15? 'e': 'p',
+                                &realval))
+            *out_lval = value_real_lnew(state, realval);
+        else
+            *out_lval = value_int_lnew(state, intval);
+        DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
+        return true;
+    } else
+        return false;
+}
+
+
+
+
+#else
+
+
+
+
+
+/*! Parse only a valid integer denotation (no reals)
+ */
+extern bool
+parsew_numeric_val(const char **ref_line, const char *lineend,
+                   parser_state_t *state, const value_t **out_lval)
+{   number_t intval = 0;
+    if (parsew_int_val(ref_line, lineend, &intval))
+    {   *out_lval = value_int_lnew(state, intval);
+        DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
+        return true;
+    } else
+        return false;
+}
+
+
+
+
+#endif /*USE_REALS*/
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Real Values                                                      *
+ *          ===========                                                      *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+value_real_t value_real_zero;
+value_real_t value_real_one;
+
+const value_t *value_zero_real = &value_real_zero.value;
+const value_t *value_one_real  = &value_real_one.value;
+
+
+
+
+extern void
+values_real_init(void)
+{
+    type_init(&type_real_val, /*on_heap*/FALSE, type_id_new(), "real",
+              &value_real_print, &value_real_parse,
+              &value_real_compare, &value_delete_alloced, /*mark*/NULL);
+    value_real_init(&value_real_zero,  REAL(0.0), /* on_heap */FALSE);
+    value_real_init(&value_real_one,   REAL(1.0), /* on_heap */FALSE);
 }
 
 
@@ -18737,7 +19233,7 @@ parsew_id(const char **ref_line, const char *lineend, char *buf, size_t buflen)
                             *ref_line, lineend););
 
 #if BUILTIN_ARG_CH1 == '_'
-        if (ch=='_' || isalnum((unsigned char)ch))
+        if (ch=='_' || isalpha((unsigned char)ch))
             do {
                 if (len > 1)
                 {   len--;
@@ -19830,11 +20326,6 @@ parsew_opterm(const char **ref_line, const char *lineend, parser_state_t *state,
 }
 
 
-
-
-
-
-#define DEBUG_SCAN_LNEW OMIT
 
 
 
@@ -22570,7 +23061,7 @@ parsew_index_path(const char **ref_line, const char *lineend,
         const value_t *ival = /*lnew*/dir_dot_lookup(state, parent, new_id);
 
         if (NULL == ival)
-        {   parser_error(state, "undefined index symbol '");
+        {   parser_error(state, "index symbol undefined '");
             parser_value_print(state, new_id);
             OMIT(printf("' in %s", value_type_name(dir_value(parent)));)
             fprintf(stderr, "'\n");
@@ -22621,6 +23112,7 @@ parsew_index_path(const char **ref_line, const char *lineend,
  *    @param ref_line  - pointer to position in string being parsed (updated)
  *    @param lineend   - pointer 1 char past the last char of the line
  *    @param state     - current parser state
+ *    @param asindex   - syntax can be as an index, else must be a symbol
  *    @param env       - initial environment
  *    @param out_parent- directory in which left hand value will reside
  *    @param out_id    - ID in directory that is referred to (a local value)
@@ -22632,15 +23124,30 @@ parsew_index_path(const char **ref_line, const char *lineend,
 */
 /**/extern bool
 parsew_index_fullpath(const char **ref_line, const char *lineend,
-                      parser_state_t *state, dir_t *env, dir_t **out_parent,
-                      const value_t **out_id/*local*/)
+                      parser_state_t *state, bool asindex, dir_t *env,
+                      dir_t **out_parent, const value_t **out_id/*local*/)
 {   
     bool ok;
     const value_t *indexname = NULL;
 
-    ok = parsew_indexname_expr(ref_line, lineend, state,
-                               &indexname/*lnew*/) &&
-         parsew_space(ref_line, lineend);
+    if (asindex)
+        ok = parsew_indexname_expr(ref_line, lineend, state,
+                                   &indexname/*lnew*/) &&
+             parsew_space(ref_line, lineend);
+    else
+    {   char id[FTL_ID_MAX];
+        if (parsew_id(ref_line, lineend, &id[0], sizeof(id)) &&
+                      parsew_space(ref_line, lineend))
+        {   indexname = value_string_lnew_measured(state, &id[0]);
+            DEBUG_CLI_LNEW(LOCS(state, indexname));
+            DEBUG_PARSE_INDEXNAME(printf("%s: parsed ID %s\n", codeid(),
+                                         &id[0]);)
+            ok = true;
+        }
+        else
+            ok = false;
+    }
+        
     OMIT(printf("%s: indexname was %s ...%s\n",
               codeid(), ok? "before": "not at", *ref_line);)
     if (ok)
@@ -22695,10 +23202,10 @@ parsew_lvalue(const char **ref_line, const char *lineend, parser_state_t *state,
               const value_t **out_id/*local*/)
 {   if (parsew_space(ref_line, lineend) && parsew_dot(ref_line, lineend))
     {   dir_t *localdir = dir_stack_top(parser_env_stack(state));
-        return parsew_index_fullpath(ref_line, lineend, state,
+        return parsew_index_fullpath(ref_line, lineend, state, /*asindex*/true,
                                      localdir, out_parent, /*lnew*/out_id);
     } else
-        return parsew_index_fullpath(ref_line, lineend, state,
+        return parsew_index_fullpath(ref_line, lineend, state, /*asindex*/false,
                                      indexed, out_parent, /*lnew*/out_id);
 }
 
@@ -22805,9 +23312,8 @@ parsew_base_env(const char **ref_line, const char *lineend,
                 bool *out_isenv)
 {   /* syntax: '(' <expr> ') | '[' <id-dir> ']' |
                '<' <vec> '>' | '{' <code> '}' |
-               <identifier> | <string> | <integer expression>
+               <identifier> | <string> | <integer> | <real>
     */
-    number_t val;
     bool ok = TRUE;
     const value_t *strval;
     const char *def_source;
@@ -22826,14 +23332,14 @@ parsew_base_env(const char **ref_line, const char *lineend,
             parsew_key_always(ref_line, lineend, state, ")");
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
     } else
-        if (parsew_key(ref_line, lineend, "["))
+    if (parsew_key(ref_line, lineend, "["))
     {   ok = parsew_env(ref_line, lineend, state, out_lval) &&
             parsew_key_always(ref_line, lineend, state, "]");
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
         if (NULL != out_isenv)
             *out_isenv = TRUE;
     } else
-            if (parsew_key(ref_line, lineend, "<"))
+    if (parsew_key(ref_line, lineend, "<"))
     {   ok = parsew_vecarg(ref_line, lineend, state, ",", out_lval);
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
         if (ok && !(parsew_key_always(ref_line, lineend, state, ">") &&
@@ -22842,7 +23348,7 @@ parsew_base_env(const char **ref_line, const char *lineend,
             value_unlocal(*out_lval);
         }
     } else
-        if (parsew_code(ref_line, lineend, state,
+    if (parsew_code(ref_line, lineend, state,
                     /*lnew*/&strval,&def_source, &def_lineno)) {
         DEBUG_LNO(printf("%s: new code parsed at %s:%d\n",
                          codeid(), def_source, def_lineno);); 
@@ -22850,10 +23356,7 @@ parsew_base_env(const char **ref_line, const char *lineend,
         DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
         value_unlocal(strval);
     } else
-    if (parsew_int_expr(ref_line, lineend, state, &val))
-    {   *out_lval = value_int_lnew(state, val);
-        DEBUG_SCAN_LNEW(LOCS(state, (value_t *)*out_lval));
-    } else
+    if (! parsew_numeric_val(ref_line, lineend, state, out_lval))
     {   char strbuf[FTL_STRING_MAX];
         if (parsew_id(ref_line, lineend, &strbuf[0], sizeof(strbuf)))
         {   const value_t *v = /*lnew*/
@@ -31021,6 +31524,8 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
               &fn_int_set_hexbits, 1);
     smod_add(state, cmds, "int",
              "<integer expr> - numeric value",  &value_int_parse);
+    smod_add(state, cmds, "real",
+             "<real expr> - real value",  &value_real_parse);
 
     mod_add_op(parser_opdefs(state), OP_PREC_SIGN,   assoc_fy,  "-",   op_neg);
     mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "*",   op_mul);
@@ -35524,6 +36029,7 @@ ftl_init(void)
     values_null_init();
     DEBUG_FINIT(DPRINTF("init - null\n"););
     values_int_init();
+    values_real_init();
     values_ipaddr_init();
     values_macaddr_init();
     DEBUG_FINIT(DPRINTF("init - int/ip/mac\n"););

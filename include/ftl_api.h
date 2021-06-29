@@ -123,14 +123,28 @@ typedef pthread_t thread_os_t;
 #endif /* thread compiler choice for threads */
 
     
-/*          Numbers                                          */
+/*          Numbers                                */
 
 
+/* The aim is that number_t should be a 64-bit integer, and that real_t
+   should be an 80-bit floating point number
+*/
+
+    
+typedef long double real_t;
+
+#define REAL(float) float##l
+#define FF_REAL_T "Lf"
+#define FFC_REAL_T "LF"
+#define FE_REAL_T "Le"
+#define FEC_REAL_T "LE"
+#define F_REAL_T "Lg"
+#define FC_REAL_T "LG"
+
+#define os_strtoreal strtold
+
+    
 #ifdef _WIN32 /* targeting the WINDOWS environment/libraries */
-#else
-#endif
-
-#ifdef _WIN32
 
 typedef __int64 number_t;
 typedef unsigned __int64 unumber_t;
@@ -825,6 +839,27 @@ value_int_lupdate(parser_state_t *state, const value_t **ref_value, number_t n);
 
 extern number_t
 value_int_number(const value_t *value);
+
+/*          Real Values                                      */
+
+#ifdef USE_REALS
+extern type_t type_real;
+extern const value_t *value_zero_real;
+extern const value_t *value_one_real;
+
+extern value_t *
+value_real_lnew(parser_state_t *state, real_t real);
+
+/* unused
+extern void
+value_real_lupdate(parser_state_t *state, const value_t **ref_value, real_t n);
+*/
+
+extern real_t
+value_real_number(const value_t *value);
+
+#endif /*USE_REALS*/
+
 
 /*          IP Address Values                                    */
 
@@ -1973,7 +2008,7 @@ extern bool
 parsew_hex_width(const char **ref_line, const char *lineend, unsigned width,
                 unumber_t *out_int);
 
-/*! parse [-] [ 0[x|X]<nex> | 0[o|O]<octal> | <decimal> ] */
+/*! parse [-] [ 0[x|X]<hex> | 0[o|O]<octal> | 0[b|B]<binary> | <decimal> ] */
 extern bool
 parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int);
 
@@ -1981,6 +2016,26 @@ parsew_int_val(const char **ref_line, const char *lineend, number_t *out_int);
 extern bool
 parsew_int_expr(const char **ref_line, const char *lineend,
                 parser_state_t *state, number_t *out_int);
+
+#ifdef USE_REALS
+/*! parse [-] [ 0[x|X]<hex>[.<hex>][[p|P]<hex>] |
+ *              0[o|O]<octal>[.<octal>][[e|E]<octal>] |
+ *              0[b|B]<binary>[.<binary>][[e|E]<binary>] |
+ *              <decimal>[.<decimal>][[e|E]<decimal> ]
+ */
+extern bool
+parsew_real_val(const char **ref_line, const char *lineend, real_t *out_real);
+#endif
+
+/*! Parse either a valid integer denotation or a valid real denotation
+ *  (see \c parsew_int_val and \c parsew_real_val)
+ *  Reals parsed with this function must always contain an integer part
+ *  e.g. 0.5 - not .5,  1e4 - not e4, and; 0b0.101 - not 0b.101
+ */
+extern bool
+parsew_numeric_val(const char **ref_line, const char *lineend,
+                   parser_state_t *state, const value_t **out_lval);
+
 
 /*! parse <non-space-non-delim>* */
 extern bool
@@ -2171,10 +2226,6 @@ substitute(const value_t *code, const value_t *arg, parser_state_t *state,
 /*! Invoke a binding (returning a local value) */
 extern const value_t *
 invoke(const value_t *code, parser_state_t *state);
-
-extern bool
-parse_int_base(const char **ref_line, parser_state_t *state,
-           number_t *out_int);
 
 extern bool
 parsew_code(const char **ref_line, const char *lineend, parser_state_t *state,

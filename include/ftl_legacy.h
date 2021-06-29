@@ -106,7 +106,7 @@
 
 #define value_uint_new(n) value_uint_lnew(root_state, n)
 
-#define value_int_update(ref_val, n) value_int_pupdate(root_state, ref_val, n)
+#define value_int_update(ref_val, n) value_int_lupdate(root_state, ref_val, n)
 
 
 /*          IP Address Values                                    */
