@@ -133,7 +133,7 @@ typedef pthread_t thread_os_t;
     
 typedef long double real_t;
 
-#define REAL(float) float##l
+#define REALNUM(float) float##l
 #define FF_REAL_T "Lf"
 #define FFC_REAL_T "LF"
 #define FE_REAL_T "Le"
@@ -141,6 +141,28 @@ typedef long double real_t;
 #define F_REAL_T "Lg"
 #define FC_REAL_T "LG"
 
+/* Many of these functions on reals require the <math.h> header */
+#define real_abs   fabsl
+#define real_mod   fmodl
+#define real_ceil  ceill
+#define real_floor floorl
+#define real_trunc truncl
+#define real_round roundl
+#define real_sin   sinl
+#define real_cos   cosl
+#define real_tan   tanl
+#define real_sinh  sinhl
+#define real_cosh  coshl
+#define real_tanh  tanhl
+#define real_asin  asinl
+#define real_acos  acosl
+#define real_atan  atanl
+#define real_asinh asinhl
+#define real_acosh acoshl
+#define real_atanh atanhl
+#define real_exp   expl
+#define real_log   logl
+    
 #define os_strtoreal strtold
 
     

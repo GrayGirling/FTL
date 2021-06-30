@@ -1,0 +1,120 @@
+> int 42
+42
+> int 0b100
+4
+> int 0o700
+448
+> int 0xF00
+3840
+> real 42.42
+42.42
+> real 42e10
+4.2e+11
+> real .5
+0.5
+> real 1.6e+4
+16000
+> real .6e-4
+6e-05
+> real 0xF00.8p-2
+15.002
+> real 0x.8p2
+128
+> real 0o7.77E2
+511
+> real 0b101.1E11
+44
+> 
+> eval 42
+42
+> eval 0b100
+4
+> eval 0o700
+448
+> eval 0xF00
+3840
+> eval 42.42
+42.42
+> eval 42e10
+4.2e+11
+> eval 0.5
+0.5
+> eval .5
+ftl $*console*:+22 in
+ftl $*console*:23: index symbol undefined in parent '5'
+ftl $*console*:+22: failed to evaluate expression
+> # fails - must begin with numeric
+> eval 1.6e+4
+16000
+> eval .6e-4
+ftl $*console*:+25 in
+ftl $*console*:26: index symbol undefined in parent '6'
+ftl $*console*:+25: failed to evaluate expression
+ftl $*console*:+25: warning - trailing text ...e-4
+> # fails - must begin with numeric
+> eval 0xF00.8p-2
+15.002
+> eval 0x.8p2
+ftl $*console*:+28 in
+ftl $*console*:29: failed to evaluate expression
+ftl $*console*:+28: warning - trailing text ...0x.8p2
+> # fails - must begin with numeric
+> eval 0o7.77E2
+511
+> eval 0b101.1E11
+44
+> 
+> 
+> eval 1
+1
+> eval -1
+-1
+> eval 2.0
+2
+> eval -2.0
+-2
+> 
+> eval 1+2
+3
+> eval 1.0+2
+3
+> eval 1+2.0
+3
+> eval 1.0+2.0
+3
+> eval 1-2
+-1
+> eval 1.0-2
+-1
+> eval 1-2.0
+-1
+> eval 1.0-2.0
+-1
+> eval 1*2
+2
+> eval 1.0*2
+2
+> eval 1*2.0
+2
+> eval 1.0*2.0
+2
+> eval 1/2
+0
+> eval 1.0/2
+0.5
+> eval 1/2.0
+0.5
+> eval 1.0/2.0
+0.5
+> eval 1 _rem_ 2
+1
+> eval 1.0 _rem_ 2
+1
+> eval 1 _rem_ 2.0
+1
+> eval 1.0 _rem_ 2.0
+1
+> 
+> eval 1.0/7
+0.142857
+> 

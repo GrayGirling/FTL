@@ -5755,7 +5755,8 @@ value_type_equal(const value_t *val, type_t kind)
 
 
 
-/*! Check that the type of a value is the one specified (giving an error if not)
+/*! Check that the type of a value is the one specified (giving an error if
+ *  not)
  */
 extern bool
 value_istype(const value_t *val, type_t kind)
@@ -7244,7 +7245,7 @@ static int /* <0 for less than, ==0 for equal, >0 for greater */
 value_real_compare(const value_t *v1, const value_t *v2)
 {   real_t real = ((const value_real_t *)v1)->real -
                   ((const value_real_t *)v2)->real;
-    return (real>REAL(0.0)? 1: real<REAL(0.0)? -1: 0);
+    return (real>REALNUM(0.0)? 1: real<REALNUM(0.0)? -1: 0);
     /* be cautious about truncating real_t to an int */
 }
 
@@ -7415,7 +7416,7 @@ parsew_realpartbase(const char **ref_line, const char *lineend,
             real += ((real_t)fracpart)/powl((real_t)base, fracpart_len);
         if (has_exponent && exponent != 1)
         {   if (exponent == 0)
-                real = REAL(1.0);
+                real = REALNUM(1.0);
             else
                 real *= powl((real_t)base, (real_t)exponent);
         }
@@ -7582,7 +7583,7 @@ parsew_numeric_val(const char **ref_line, const char *lineend,
 {   number_t intval = 0;
     unsigned intbase = 10;
     if (parsew_int_base_val(ref_line, lineend, &intval, &intbase))
-    {   real_t realval = REAL(0.0);
+    {   real_t realval = REALNUM(0.0);
         if (parsew_realpartbase(ref_line, lineend, intval, intbase,
                                 /*sepch*/'_', '.', intbase<15? 'e': 'p',
                                 &realval))
@@ -7656,8 +7657,8 @@ values_real_init(void)
     type_init(&type_real_val, /*on_heap*/FALSE, type_id_new(), "real",
               &value_real_print, &value_real_parse,
               &value_real_compare, &value_delete_alloced, /*mark*/NULL);
-    value_real_init(&value_real_zero,  REAL(0.0), /* on_heap */FALSE);
-    value_real_init(&value_real_one,   REAL(1.0), /* on_heap */FALSE);
+    value_real_init(&value_real_zero,  REALNUM(0.0), /* on_heap */FALSE);
+    value_real_init(&value_real_one,   REALNUM(1.0), /* on_heap */FALSE);
 }
 
 
@@ -31143,14 +31144,31 @@ cmds_generic_bool(parser_state_t *state, dir_t *cmds)
 
 
 static const value_t *
-fn_int_neg(const value_t *this_fn, parser_state_t *state)
-{   const value_t *nval = parser_builtin_arg(state, 1);
+mthd_int_neg(const value_t *this_fn, parser_state_t *state, const value_t *nval)
+{   number_t n = value_int_number(nval);
+    return value_int_lnew(state, -n);
+}
+
+
+
+
+
+static const value_t *
+mthd_int_add(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
     const value_t *val = &value_null;
 
-    if (value_istype(nval, type_int))
-    {   number_t n = value_int_number(nval);
-        val = value_int_lnew(state, -n);
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, n1+n2);
     } else
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, (real_t)n1+n2);
+    } else
+#endif
         parser_report_help(state, this_fn);
 
     return val;
@@ -31161,16 +31179,21 @@ fn_int_neg(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fn_int_add(const value_t *this_fn, parser_state_t *state)
-{   const value_t *n1val = parser_builtin_arg(state, 1);
-    const value_t *n2val = parser_builtin_arg(state, 2);
+mthd_int_sub(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
     const value_t *val = &value_null;
 
-    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
-    {   number_t n1 = value_int_number(n1val);
-        number_t n2 = value_int_number(n2val);
-        val = value_int_lnew(state, n1+n2);
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, n1-n2);
     } else
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, (real_t)n1-n2);
+    } else
+#endif
         parser_report_help(state, this_fn);
 
     return val;
@@ -31181,16 +31204,21 @@ fn_int_add(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fn_int_sub(const value_t *this_fn, parser_state_t *state)
-{   const value_t *n1val = parser_builtin_arg(state, 1);
-    const value_t *n2val = parser_builtin_arg(state, 2);
+mthd_int_mul(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
     const value_t *val = &value_null;
 
-    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
-    {   number_t n1 = value_int_number(n1val);
-        number_t n2 = value_int_number(n2val);
-        val = value_int_lnew(state, n1-n2);
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, n1*n2);
     } else
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, (real_t)n1*n2);
+    } else
+#endif
         parser_report_help(state, this_fn);
 
     return val;
@@ -31201,16 +31229,21 @@ fn_int_sub(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fn_int_mul(const value_t *this_fn, parser_state_t *state)
-{   const value_t *n1val = parser_builtin_arg(state, 1);
-    const value_t *n2val = parser_builtin_arg(state, 2);
+mthd_int_div(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
     const value_t *val = &value_null;
 
-    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
-    {   number_t n1 = value_int_number(n1val);
-        number_t n2 = value_int_number(n2val);
-        val = value_int_lnew(state, n1*n2);
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, n1/n2);
     } else
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, (real_t)n1/n2);
+    } else
+#endif
         parser_report_help(state, this_fn);
 
     return val;
@@ -31221,36 +31254,21 @@ fn_int_mul(const value_t *this_fn, parser_state_t *state)
 
 
 static const value_t *
-fn_int_div(const value_t *this_fn, parser_state_t *state)
-{   const value_t *n1val = parser_builtin_arg(state, 1);
-    const value_t *n2val = parser_builtin_arg(state, 2);
+mthd_int_mod(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
     const value_t *val = &value_null;
 
-    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
-    {   number_t n1 = value_int_number(n1val);
-        number_t n2 = value_int_number(n2val);
-        val = value_int_lnew(state, n1/n2);
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, n1%n2);
     } else
-        parser_report_help(state, this_fn);
-
-    return val;
-}
-
-
-
-
-
-static const value_t *
-fn_int_mod(const value_t *this_fn, parser_state_t *state)
-{   const value_t *n1val = parser_builtin_arg(state, 1);
-    const value_t *n2val = parser_builtin_arg(state, 2);
-    const value_t *val = &value_null;
-
-    if (value_istype(n1val, type_int) && value_istype(n2val, type_int))
-    {   number_t n1 = value_int_number(n1val);
-        number_t n2 = value_int_number(n2val);
-        val = value_int_lnew(state, n1%n2);
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, real_mod((real_t)n1, n2));
     } else
+#endif
         parser_report_help(state, this_fn);
 
     return val;
@@ -31481,24 +31499,12 @@ fn_int_set_hexbits(const value_t *this_fn, parser_state_t *state)
 
 static void
 cmds_generic_int(parser_state_t *state, dir_t *cmds)
-{   value_t *op_add = smod_addfn_lnew(state, cmds, "add",
-              "<n1> <n2> - return n1 with n2 added",  &fn_int_add, 2);
-    value_t *op_sub = smod_addfn_lnew(state, cmds, "sub",
-              "<n1> <n2> - return n1 with n2 subtracted",  &fn_int_sub, 2);
-    value_t *op_mul = smod_addfn_lnew(state, cmds, "mul",
-              "<n1> <n2> - return n1 multiplied by n2",  &fn_int_mul, 2);
-    value_t *op_div = smod_addfn_lnew(state, cmds, "div",
-              "<n1> <n2> - return n1 divided by n2",  &fn_int_div, 2);
-    value_t *op_mod = smod_addfn_lnew(state, cmds, "mod",
-              "<n1> <n2> - return n1 modulus n2",  &fn_int_mod, 2);
-    value_t *op_shl = smod_addfn_lnew(state, cmds, "shiftl",
+{   value_t *op_shl = smod_addfn_lnew(state, cmds, "shiftl",
               "<n1> <n2> - return n1 left shifted by n2 bits",
                                 &fn_int_shl, 2);
     value_t *op_shr = smod_addfn_lnew(state, cmds, "shiftr",
               "<n1> <n2> - return n1 right shifted by n2 bits",
                                 &fn_int_shr, 2);
-    value_t *op_neg = smod_addfn_lnew(state, cmds, "neg",
-              "<n> - return negated <n>",  &fn_int_neg, 1);
     value_t *op_bitand = smod_addfn_lnew(state, cmds, "bitand",
               "<n1> <n2> - return bit values of <n1> anded with <n2>",
                               &fn_int_bitand, 2);
@@ -31524,16 +31530,7 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
               &fn_int_set_hexbits, 1);
     smod_add(state, cmds, "int",
              "<integer expr> - numeric value",  &value_int_parse);
-    smod_add(state, cmds, "real",
-             "<real expr> - real value",  &value_real_parse);
 
-    mod_add_op(parser_opdefs(state), OP_PREC_SIGN,   assoc_fy,  "-",   op_neg);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "*",   op_mul);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "/",   op_div);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "rem", op_mod);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "_rem_",op_mod);
-    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "+",   op_add);
-    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "-",   op_sub);
     mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "shl", op_shl);
     mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "_shl_",op_shl);
     mod_add_op(parser_opdefs(state), OP_PREC_SHIFT,  assoc_xfy, "shr", op_shr);
@@ -31548,18 +31545,400 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
     mod_add_op(parser_opdefs(state), OP_PREC_BITOR,  assoc_xfy, "_bitor_",
                op_bitor);
 
+    value_unlocal(op_shl);
+    value_unlocal(op_shr);
+    value_unlocal(op_bitand);
+    value_unlocal(op_bitor);
+    value_unlocal(op_bitxor);
+    value_unlocal(op_bitnot);
+}
+
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Commands - Real                                                  *
+ *          ===============                                                  *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+#ifdef USE_REALS
+
+
+
+static const value_t *
+mthd_real_neg(const value_t *this_fn, parser_state_t *state,
+              const value_t *nval)
+{   real_t n = value_real_number(nval);
+    return value_int_lnew(state, -n);
+}
+
+
+
+
+
+static const value_t *
+mthd_real_add(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1 = value_real_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_real_lnew(state, n1+(real_t)n2);
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, n1+n2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+mthd_real_sub(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1 = value_real_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_real_lnew(state, n1-(real_t)n2);
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, n1-n2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+mthd_real_mul(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1 = value_real_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_real_lnew(state, n1*(real_t)n2);
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, n1*n2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+mthd_real_div(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1 = value_real_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_real_lnew(state, n1/(real_t)n2);
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, n1/n2);
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+mthd_real_mod(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1 = value_real_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_real_lnew(state, real_mod(n1, (real_t)n2));
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, real_mod(n1,n2));
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static void
+cmds_generic_real(parser_state_t *state, dir_t *cmds)
+{   smod_add(state, cmds, "real",
+             "<real expr> - real value",  &value_real_parse);
+}
+
+
+
+
+
+#else /* not USE_REALS */
+
+
+
+
+
+static void
+cmds_generic_real(parser_state_t *state, dir_t *cmds)
+{
+}
+
+
+
+
+#endif /* USE_REALS */
+
+
+
+
+
+
+
+
+/*****************************************************************************
+ *                                                                           *
+ *          Commands - General Numeric (Integer or Real)                     *
+ *          ============================================                     *
+ *                                                                           *
+ *****************************************************************************/
+
+
+
+
+
+
+
+static bool value_isnumeric(const value_t *num)
+{   if (value_type_equal(num, type_int) 
+#ifdef USE_REALS
+        || value_type_equal(num, type_real)
+#endif
+        )
+        return TRUE;
+    else
+    {   fprintf(stderr, "%s: value has wrong type - type is %s, expected int"
+#ifdef USE_REALS
+                " or real"
+#endif
+                "\n", codeid(), value_type_name(num));
+        return FALSE;
+    }
+}
+
+
+
+
+
+
+static const value_t *
+fn_numeric_neg(const value_t *this_fn, parser_state_t *state)
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(nval))
+    {   if (value_type_equal(nval, type_int))
+            val = mthd_int_neg(this_fn, state, nval);
+        else
+#ifdef USE_REALS
+        if (value_type_equal(nval, type_real))
+            val = mthd_real_neg(this_fn, state, nval);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_add(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_add(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_add(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_sub(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_sub(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_sub(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_mul(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_mul(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_mul(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_div(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_div(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_div(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_mod(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_mod(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_mod(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+static void
+cmds_generic_numeric(parser_state_t *state, dir_t *cmds)
+{   value_t *op_add = smod_addfn_lnew(state, cmds, "add",
+              "<n1> <n2> - return n1 with n2 added",  &fn_numeric_add, 2);
+    value_t *op_sub = smod_addfn_lnew(state, cmds, "sub",
+              "<n1> <n2> - return n1 with n2 subtracted",  &fn_numeric_sub, 2);
+    value_t *op_mul = smod_addfn_lnew(state, cmds, "mul",
+              "<n1> <n2> - return n1 multiplied by n2",  &fn_numeric_mul, 2);
+    value_t *op_div = smod_addfn_lnew(state, cmds, "div",
+              "<n1> <n2> - return n1 divided by n2",  &fn_numeric_div, 2);
+    value_t *op_mod = smod_addfn_lnew(state, cmds, "mod",
+              "<n1> <n2> - return n1 modulus n2",  &fn_numeric_mod, 2);
+    value_t *op_neg = smod_addfn_lnew(state, cmds, "neg",
+              "<n> - return negated <n>",  &fn_numeric_neg, 1);
+
+    mod_add_op(parser_opdefs(state), OP_PREC_SIGN,   assoc_fy,  "-",   op_neg);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "*",   op_mul);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "/",   op_div);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "rem", op_mod);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "_rem_",op_mod);
+    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "+",   op_add);
+    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "-",   op_sub);
+
     value_unlocal(op_add);
     value_unlocal(op_sub);
     value_unlocal(op_mul);
     value_unlocal(op_div);
     value_unlocal(op_mod);
-    value_unlocal(op_shl);
-    value_unlocal(op_shr);
     value_unlocal(op_neg);
-    value_unlocal(op_bitand);
-    value_unlocal(op_bitor);
-    value_unlocal(op_bitxor);
-    value_unlocal(op_bitnot);
 }
 
 
@@ -35918,6 +36297,8 @@ cmds_generic(parser_state_t *state, int argc, const char **argv)
     cmds_generic_stream(state, cmds);
     cmds_generic_nul(state, cmds);
     cmds_generic_int(state, cmds);
+    cmds_generic_real(state, cmds);
+    cmds_generic_numeric(state, cmds);
     DEBUG_GENC(DPRINTF("cmds - bool\n"););
     cmds_generic_bool(state, cmds);
     cmds_generic_string(state, cmds);
