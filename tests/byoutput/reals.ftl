@@ -8,7 +8,7 @@ real .5
 real 1.6e+4
 real .6e-4
 real 0xF00.8p-2
-real 0x.8p2
+real 0x.8P2
 real 0o7.77E2
 real 0b101.1E11
 
@@ -58,3 +58,12 @@ eval 1 _rem_ 2.0
 eval 1.0 _rem_ 2.0
 
 eval 1.0/7
+
+set INF 1.0/0
+set NAN INF-INF
+
+eval INF
+eval NAN
+cmp INF INF
+cmp INF NAN
+cmp NAN NAN

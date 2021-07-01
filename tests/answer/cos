@@ -1,0 +1,44 @@
+> set digits9[x]:{round x*1000000000!}
+> 
+> cos 0
+1
+> digits9 (cos PI/3!)
+500000000
+> digits9 (cos PI/2!)
+0
+> digits9 (cos PI/4!)**2
+500000000
+> 
+> acos (cos 0!)
+0
+> acos (cos PI/2!)
+1.5707963267948966
+> digits9 (acos (cos 0.3456!)!)
+345600000
+> 
+> set one[x]:{(cos x!)**2 + (cos (PI/2 - x)!)**2}
+> digits9 (one PI/2!)
+1000000000
+> digits9 (one PI/2 - 0.0000002!)
+1000000000
+> digits9 (one 0.7!)
+1000000000
+> digits9 (one (-0.7)!)
+1000000000
+> digits9 (one 100000!)
+1000000000
+> digits9 (one (-100000)!)
+1000000000
+> digits9 (one 100000000!)
+999999999
+> # run out of resolution? - not 1000000000?
+> 
+> set INF 1.0/0
+> cos INF
+-nan
+> 
+> set NAN INF-INF
+> cos NAN
+-nan
+> 
+> 
