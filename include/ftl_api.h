@@ -162,6 +162,10 @@ typedef long double real_t;
 #define real_atanh atanhl
 #define real_exp   expl
 #define real_log   logl
+#define real_pow   powl
+#define real_sqrt  sqrtl
+#define real_rint  llrintl
+#define int_abs    llabs
     
 #define os_strtoreal strtold
 
@@ -173,6 +177,7 @@ typedef unsigned __int64 unumber_t;
 
 #define os_strtonumber  _strtoi64
 #define os_strtounumber _strtoui64
+#define int_abs         _abs64
     
 #define NUMBER(digits) digits##ll
 #define UNUMBER(digits) digits##ull
@@ -220,6 +225,7 @@ typedef number_t       ftl_s64_t;
 
 #define os_strtonumber  strtoll
 #define os_strtounumber strtoull
+#define int_abs         llabs
 
 #if defined(__SIZEOF_LONG__)
 #define _SIZEOF_LONG __SIZEOF_LONG__
@@ -280,6 +286,7 @@ typedef signed short   ftl_s16_t;
 
 #define os_strtonumber  strtoll
 #define os_strtounumber strtoull
+#define int_abs         llabs
 
 typedef unsigned char  ftl_u8_t;
 typedef signed char    ftl_s8_t;
@@ -868,6 +875,8 @@ value_int_number(const value_t *value);
 extern type_t type_real;
 extern const value_t *value_zero_real;
 extern const value_t *value_one_real;
+extern const value_t *value_pi_real;
+extern const value_t *value_e_real;
 
 extern value_t *
 value_real_lnew(parser_state_t *state, real_t real);

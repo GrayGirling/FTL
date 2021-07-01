@@ -7234,7 +7234,7 @@ static int value_real_print(parser_state_t *state, outchar_t *out,
     if (absfp < 0)
         absfp = -absfp;
     (void)root;
-    return outchar_printf(out, "%" F_REAL_T, fp);
+    return outchar_printf(out, "%.17" F_REAL_T, fp);
 }
 
 
@@ -7247,6 +7247,7 @@ value_real_compare(const value_t *v1, const value_t *v2)
                   ((const value_real_t *)v2)->real;
     return (real>REALNUM(0.0)? 1: real<REALNUM(0.0)? -1: 0);
     /* be cautious about truncating real_t to an int */
+    /* N.B. if one of v1 and v2 are NaN this will give 0! */
 }
 
 
@@ -7327,6 +7328,23 @@ value_real_number(const value_t *value)
 
     return real;
 }
+
+
+
+
+
+
+static unumber_t int_pow(number_t base, unumber_t exp)
+{   unumber_t power = 1;
+    while (exp > 0)
+    {   if ((exp & 1) != 0)
+            power *= base;
+        base *= base;
+        exp >>= 1;
+    }
+    return power;
+}
+
 
 
 
@@ -7644,9 +7662,13 @@ parsew_numeric_val(const char **ref_line, const char *lineend,
 
 value_real_t value_real_zero;
 value_real_t value_real_one;
+value_real_t value_real_pi;
+value_real_t value_real_e;
 
 const value_t *value_zero_real = &value_real_zero.value;
 const value_t *value_one_real  = &value_real_one.value;
+const value_t *value_pi_real   = &value_real_pi.value;
+const value_t *value_e_real    = &value_real_e.value;
 
 
 
@@ -7659,6 +7681,10 @@ values_real_init(void)
               &value_real_compare, &value_delete_alloced, /*mark*/NULL);
     value_real_init(&value_real_zero,  REALNUM(0.0), /* on_heap */FALSE);
     value_real_init(&value_real_one,   REALNUM(1.0), /* on_heap */FALSE);
+    value_real_init(&value_real_pi,    REALNUM(3.14159265358979323846),
+                    /* on_heap */FALSE);
+    value_real_init(&value_real_e,     REALNUM(2.71828182845904523536),
+                    /* on_heap */FALSE);
 }
 
 
@@ -21687,6 +21713,7 @@ static bool argv_sentence_next(argv_token_t *args)
 #define OP_PREC_SIGN   9
 #define OP_PREC_SUM    10
 #define OP_PREC_PROD   11
+#define OP_PREC_EXP    12
 
 
 
@@ -26773,11 +26800,11 @@ parsew_format(const char **ref_line, const char *lineend, parser_state_t *state,
     const char *line = *ref_line;
     const value_t *fmtfn = NULL;
 
-    while ((!left && (left = parsew_key(ref_line, lineend,"-"))) ||
-           (!posv && (sign = parsew_key(ref_line, lineend,"+"))) ||
-           (!sign && (sign = parsew_key(ref_line, lineend," "))) ||
-           (!zero && (zero = parsew_key(ref_line, lineend,"0"))) ||
-           (!alt && (alt = parsew_key(ref_line, lineend,"#"))))
+    while ((!left && (left = parsew_key(ref_line, lineend, "-"))) ||
+           (!posv && (posv = parsew_key(ref_line, lineend, "+"))) ||
+           (!sign && (sign = parsew_key(ref_line, lineend, " "))) ||
+           (!zero && (zero = parsew_key(ref_line, lineend, "0"))) ||
+           (!alt  && (alt  = parsew_key(ref_line, lineend, "#"))))
         continue;
 
     OMIT(printf("%s: %sleft %ssign %szero\n", codeid(),
@@ -26839,7 +26866,8 @@ value_string_fmtfn(parser_state_t *state, const value_t *fmtfn,
     const value_t *bind1;
     const value_t *str = NULL;
     const value_t *flagval = value_int_lnew(state, flags &
-                                            ((1<<ff_sign) | (1<<ff_zero)));
+                                            ((1<<ff_posv) | (1<<ff_zero)));
+    /* Currently we support only ff_posv and ff_zero */
 
     bind1 = /*lnew*/substitute(fmtfn, flagval, state, /*unstrict*/FALSE);
     if (NULL != bind1)
@@ -26972,9 +27000,21 @@ value_fprintfmt(parser_state_t *state, charsink_t *sink,
                     parser_report(state, "no value found to format - '%s'\n",
                                   fmtstart);
                 else
-                {   int chars = value_string_printfmt(sink, state, fmtfn,
-                                                      flags, precision, width,
-                                                      arg);
+                {   int chars;
+                    OMIT(fprintf(stderr,
+                                 "%s: format '%.*s' flags(0x%x)=(%s%s%s%s%s) "
+                                 "width %d precision %d\n",
+                                 codeid(), (int)(format - fmtstart), fmtstart,
+                                 flags,
+                                 (flags & (1<<ff_left))!=0? "left ":"",
+                                 (flags & (1<<ff_posv))!=0? "posv ": "",
+                                 (flags & (1<<ff_sign))!=0? "sign ": "",
+                                 (flags & (1<<ff_zero))!=0? "zero ": "",
+                                 (flags & (1<<ff_alt)) !=0? "alt " : "",
+                                 (int)width, (int)precision););
+                    chars = value_string_printfmt(sink, state, fmtfn,
+                                                  flags, precision, width,
+                                                  arg);
                     if (chars >= 0)
                         len += chars;
                 }
@@ -31154,6 +31194,16 @@ mthd_int_neg(const value_t *this_fn, parser_state_t *state, const value_t *nval)
 
 
 static const value_t *
+mthd_int_abs(const value_t *this_fn, parser_state_t *state, const value_t *nval)
+{   number_t n = value_int_number(nval);
+    return value_int_lnew(state, int_abs(n));
+}
+
+
+
+
+
+static const value_t *
 mthd_int_add(const value_t *this_fn, parser_state_t *state,
              const value_t *n1val, const value_t *n2val)
 {   number_t n1 = value_int_number(n1val);
@@ -31267,6 +31317,31 @@ mthd_int_mod(const value_t *this_fn, parser_state_t *state,
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
         return value_real_lnew(state, real_mod((real_t)n1, n2));
+    } else
+#endif
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+mthd_int_pow(const value_t *this_fn, parser_state_t *state,
+             const value_t *n1val, const value_t *n2val)
+{   number_t n1 = value_int_number(n1val);
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        return value_int_lnew(state, int_pow(n1, n2));
+    } else
+#ifdef USE_REALS
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        return value_real_lnew(state, real_pow((real_t)n1, n2));
     } else
 #endif
         parser_report_help(state, this_fn);
@@ -31573,6 +31648,28 @@ cmds_generic_int(parser_state_t *state, dir_t *cmds)
 
 
 
+static bool value_isnumeric(const value_t *num)
+{   if (value_type_equal(num, type_int) 
+#ifdef USE_REALS
+        || value_type_equal(num, type_real)
+#endif
+        )
+        return TRUE;
+    else
+    {   fprintf(stderr, "%s: value has wrong type - type is %s, expected int"
+#ifdef USE_REALS
+                " or real"
+#endif
+                "\n", codeid(), value_type_name(num));
+        return FALSE;
+    }
+}
+
+
+
+
+
+
 #ifdef USE_REALS
 
 
@@ -31581,7 +31678,18 @@ static const value_t *
 mthd_real_neg(const value_t *this_fn, parser_state_t *state,
               const value_t *nval)
 {   real_t n = value_real_number(nval);
-    return value_int_lnew(state, -n);
+    return value_real_lnew(state, -n);
+}
+
+
+
+
+
+static const value_t *
+mthd_real_abs(const value_t *this_fn, parser_state_t *state,
+              const value_t *nval)
+{   real_t n = value_real_number(nval);
+    return value_real_lnew(state, real_abs(n));
 }
 
 
@@ -31596,11 +31704,11 @@ mthd_real_add(const value_t *this_fn, parser_state_t *state,
 
     if (value_type_equal(n2val, type_int))
     {   number_t n2 = value_int_number(n2val);
-        return value_real_lnew(state, n1+(real_t)n2);
+        val = value_real_lnew(state, n1+(real_t)n2);
     } else
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
-        return value_real_lnew(state, n1+n2);
+        val = value_real_lnew(state, n1+n2);
     } else
         parser_report_help(state, this_fn);
 
@@ -31619,11 +31727,11 @@ mthd_real_sub(const value_t *this_fn, parser_state_t *state,
 
     if (value_type_equal(n2val, type_int))
     {   number_t n2 = value_int_number(n2val);
-        return value_real_lnew(state, n1-(real_t)n2);
+        val = value_real_lnew(state, n1-(real_t)n2);
     } else
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
-        return value_real_lnew(state, n1-n2);
+        val = value_real_lnew(state, n1-n2);
     } else
         parser_report_help(state, this_fn);
 
@@ -31642,11 +31750,11 @@ mthd_real_mul(const value_t *this_fn, parser_state_t *state,
 
     if (value_type_equal(n2val, type_int))
     {   number_t n2 = value_int_number(n2val);
-        return value_real_lnew(state, n1*(real_t)n2);
+        val = value_real_lnew(state, n1*(real_t)n2);
     } else
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
-        return value_real_lnew(state, n1*n2);
+        val = value_real_lnew(state, n1*n2);
     } else
         parser_report_help(state, this_fn);
 
@@ -31665,11 +31773,11 @@ mthd_real_div(const value_t *this_fn, parser_state_t *state,
 
     if (value_type_equal(n2val, type_int))
     {   number_t n2 = value_int_number(n2val);
-        return value_real_lnew(state, n1/(real_t)n2);
+        val = value_real_lnew(state, n1/(real_t)n2);
     } else
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
-        return value_real_lnew(state, n1/n2);
+        val = value_real_lnew(state, n1/n2);
     } else
         parser_report_help(state, this_fn);
 
@@ -31688,11 +31796,11 @@ mthd_real_mod(const value_t *this_fn, parser_state_t *state,
 
     if (value_type_equal(n2val, type_int))
     {   number_t n2 = value_int_number(n2val);
-        return value_real_lnew(state, real_mod(n1, (real_t)n2));
+        val = value_real_lnew(state, real_mod(n1, (real_t)n2));
     } else
     if (value_type_equal(n2val, type_real))
     {   real_t n2 = value_real_number(n2val);
-        return value_real_lnew(state, real_mod(n1,n2));
+        val = value_real_lnew(state, real_mod(n1,n2));
     } else
         parser_report_help(state, this_fn);
 
@@ -31703,10 +31811,269 @@ mthd_real_mod(const value_t *this_fn, parser_state_t *state,
 
 
 
+static const value_t *
+mthd_real_pow(const value_t *this_fn, parser_state_t *state,
+              const value_t *n1val, const value_t *n2val)
+{   real_t n1;
+    const value_t *val = &value_null;
+
+    if (value_type_equal(n1val, type_int))
+        n1 = (real_t)value_int_number(n1val);
+    else
+        n1 = value_real_number(n1val);
+        
+    if (value_type_equal(n2val, type_int))
+    {   number_t n2 = value_int_number(n2val);
+        val = value_real_lnew(state, real_pow(n1, (real_t)n2));
+    } else
+    if (value_type_equal(n2val, type_real))
+    {   real_t n2 = value_real_number(n2val);
+        val = value_real_lnew(state, real_pow(n1,n2));
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_real_toint(const value_t *this_fn, parser_state_t *state)
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(nval))
+    {   if (value_type_equal(nval, type_real))
+        {   real_t n = value_real_number(nval);
+            val = value_int_lnew(state, real_rint(n));
+        } else
+            val = nval;
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
+genfn_real_toint(const value_t *this_fn, parser_state_t *state,
+                 real_t(*trfn)(real_t))
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(nval))
+    {   if (value_type_equal(nval, type_real))
+        {   real_t n = value_real_number(nval);
+            val = value_real_lnew(state, (*trfn)(n));
+        } else
+            val = nval;
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
+fn_real_ceil(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_toint(this_fn, state, &real_ceil);
+}
+
+
+static const value_t *
+fn_real_floor(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_toint(this_fn, state, &real_floor);
+}
+
+
+static const value_t *
+fn_real_round(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_toint(this_fn, state, &real_round);
+}
+
+
+
+
+
+
+static const value_t *
+genfn_real_fn(const value_t *this_fn, parser_state_t *state,
+              real_t(*trfn)(real_t))
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(nval))
+    {   real_t n;
+        if (value_type_equal(nval, type_int))
+            n = (real_t)value_int_number(nval);
+        else
+            n = value_real_number(nval);
+        val = value_real_lnew(state, (*trfn)(n));
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_real_sqrt(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_sqrt);
+}
+
+
+static const value_t *
+fn_real_exp(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_exp);
+}
+
+
+static const value_t *
+fn_real_log(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_log);
+}
+
+
+static const value_t *
+fn_real_sin(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_sin);
+}
+
+
+static const value_t *
+fn_real_cos(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_cos);
+}
+
+
+static const value_t *
+fn_real_tan(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_tan);
+}
+
+
+static const value_t *
+fn_real_asin(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_asin);
+}
+
+
+static const value_t *
+fn_real_acos(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_acos);
+}
+
+
+static const value_t *
+fn_real_atan(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_atan);
+}
+
+
+
+static const value_t *
+fn_real_sinh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_sinh);
+}
+
+
+static const value_t *
+fn_real_cosh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_cosh);
+}
+
+
+static const value_t *
+fn_real_tanh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_tanh);
+}
+
+
+static const value_t *
+fn_real_asinh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_asinh);
+}
+
+
+static const value_t *
+fn_real_acosh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_acosh);
+}
+
+
+static const value_t *
+fn_real_atanh(const value_t *this_fn, parser_state_t *state)
+{   return genfn_real_fn(this_fn, state, &real_atanh);
+}
+
+
+
+
+
+
+
 static void
 cmds_generic_real(parser_state_t *state, dir_t *cmds)
-{   smod_add(state, cmds, "real",
+{
+    smod_addfn(state, cmds, "rint",
+              "<n> - nearby integer to <n>",
+              &fn_real_toint, 1);
+    smod_addfn(state, cmds, "ceil",
+              "<n> - number smallest integer not less than <n>",
+              &fn_real_ceil, 1);
+    smod_addfn(state, cmds, "floor",
+              "<n> - number largest integer not greater than <n>",
+              &fn_real_floor, 1);
+    smod_addfn(state, cmds, "round",
+              "<n> - number of the nearest integer",
+              &fn_real_round, 1);
+    smod_addfn(state, cmds, "sqrt",
+              "<x> - square root of <x>", &fn_real_sqrt, 1);
+    smod_addfn(state, cmds, "exp",
+              "<x> - e to the power of <x>", &fn_real_exp, 1);
+    smod_addfn(state, cmds, "log",
+              "<x> - logarithm of <x> base e", &fn_real_log, 1);
+    smod_addfn(state, cmds, "sin",
+              "<x> - trigonometric sine of <x> radians", &fn_real_sin, 1);
+    smod_addfn(state, cmds, "cos",
+              "<x> - trigonometric cosine of <x> radians", &fn_real_cos, 1);
+    smod_addfn(state, cmds, "tan",
+              "<x> - trigonometric tangent of <x> radians", &fn_real_tan, 1);
+    smod_addfn(state, cmds, "asin",
+              "<x> - trigonometric inverse sine of <x>", &fn_real_asin, 1);
+    smod_addfn(state, cmds, "acos",
+              "<x> - trigonometric inverse cosine of <x>", &fn_real_acos, 1);
+    smod_addfn(state, cmds, "atan",
+              "<x> - trigonometric inverse tangent of <x>", &fn_real_atan, 1);
+    smod_addfn(state, cmds, "sinh",
+              "<x> - hyperbolic sine of <x> radians", &fn_real_sinh, 1);
+    smod_addfn(state, cmds, "cosh",
+              "<x> - hyperbolic cosine of <x> radians", &fn_real_cosh, 1);
+    smod_addfn(state, cmds, "tanh",
+              "<x> - hyperbolic tangent of <x> radians", &fn_real_tanh, 1);
+    smod_addfn(state, cmds, "asinh",
+              "<x> - hyperbolic inverse sine of <x>", &fn_real_asinh, 1);
+    smod_addfn(state, cmds, "acosh",
+              "<x> - hyperbolic inverse cosine of <x>", &fn_real_acosh, 1);
+    smod_addfn(state, cmds, "atanh",
+              "<x> - hyperbolic inverse tangent of <x>", &fn_real_atanh, 1);
+    smod_add(state, cmds, "real",
              "<real expr> - real value",  &value_real_parse);
+    smod_add_val(state, cmds, "PI", value_pi_real);
+    smod_add_val(state, cmds, "E", value_e_real);
 }
 
 
@@ -31749,28 +32116,6 @@ cmds_generic_real(parser_state_t *state, dir_t *cmds)
 
 
 
-static bool value_isnumeric(const value_t *num)
-{   if (value_type_equal(num, type_int) 
-#ifdef USE_REALS
-        || value_type_equal(num, type_real)
-#endif
-        )
-        return TRUE;
-    else
-    {   fprintf(stderr, "%s: value has wrong type - type is %s, expected int"
-#ifdef USE_REALS
-                " or real"
-#endif
-                "\n", codeid(), value_type_name(num));
-        return FALSE;
-    }
-}
-
-
-
-
-
-
 static const value_t *
 fn_numeric_neg(const value_t *this_fn, parser_state_t *state)
 {   const value_t *nval = parser_builtin_arg(state, 1);
@@ -31783,6 +32128,29 @@ fn_numeric_neg(const value_t *this_fn, parser_state_t *state)
 #ifdef USE_REALS
         if (value_type_equal(nval, type_real))
             val = mthd_real_neg(this_fn, state, nval);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
+static const value_t *
+fn_numeric_abs(const value_t *this_fn, parser_state_t *state)
+{   const value_t *nval = parser_builtin_arg(state, 1);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(nval))
+    {   if (value_type_equal(nval, type_int))
+            val = mthd_int_abs(this_fn, state, nval);
+        else
+#ifdef USE_REALS
+        if (value_type_equal(nval, type_real))
+            val = mthd_real_abs(this_fn, state, nval);
 #endif
     } else
         parser_report_help(state, this_fn);
@@ -31910,6 +32278,29 @@ fn_numeric_mod(const value_t *this_fn, parser_state_t *state)
 
 
 
+static const value_t *
+fn_numeric_pow(const value_t *this_fn, parser_state_t *state)
+{   const value_t *n1val = parser_builtin_arg(state, 1);
+    const value_t *n2val = parser_builtin_arg(state, 2);
+    const value_t *val = &value_null;
+
+    if (value_isnumeric(n1val))
+    {   if (value_type_equal(n1val, type_int))
+            val = mthd_int_pow(this_fn, state, n1val, n2val);
+#ifdef USE_REALS
+        else
+            val = mthd_real_pow(this_fn, state, n1val, n2val);
+#endif
+    } else
+        parser_report_help(state, this_fn);
+
+    return val;
+}
+
+
+
+
+
 static void
 cmds_generic_numeric(parser_state_t *state, dir_t *cmds)
 {   value_t *op_add = smod_addfn_lnew(state, cmds, "add",
@@ -31924,14 +32315,20 @@ cmds_generic_numeric(parser_state_t *state, dir_t *cmds)
               "<n1> <n2> - return n1 modulus n2",  &fn_numeric_mod, 2);
     value_t *op_neg = smod_addfn_lnew(state, cmds, "neg",
               "<n> - return negated <n>",  &fn_numeric_neg, 1);
+    value_t *op_pow = smod_addfn_lnew(state, cmds, "pow",
+              "<n1> <n2> - return n1 to the power of n2",  &fn_numeric_pow, 2);
 
-    mod_add_op(parser_opdefs(state), OP_PREC_SIGN,   assoc_fy,  "-",   op_neg);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "*",   op_mul);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "/",   op_div);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "rem", op_mod);
-    mod_add_op(parser_opdefs(state), OP_PREC_PROD,   assoc_xfy, "_rem_",op_mod);
-    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "+",   op_add);
-    mod_add_op(parser_opdefs(state), OP_PREC_SUM,    assoc_xfy, "-",   op_sub);
+    smod_addfn(state, cmds, "abs",
+              "<n> - absolute (positive) value of <n>", &fn_numeric_abs, 1);
+
+    mod_add_op(parser_opdefs(state), OP_PREC_SIGN, assoc_fy,  "-",   op_neg);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD, assoc_xfy, "*",   op_mul);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD, assoc_xfy, "/",   op_div);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD, assoc_xfy, "rem", op_mod);
+    mod_add_op(parser_opdefs(state), OP_PREC_PROD, assoc_xfy, "_rem_",op_mod);
+    mod_add_op(parser_opdefs(state), OP_PREC_SUM,  assoc_xfy, "+",   op_add);
+    mod_add_op(parser_opdefs(state), OP_PREC_SUM,  assoc_xfy, "-",   op_sub);
+    mod_add_op(parser_opdefs(state), OP_PREC_EXP,  assoc_xfy, "**",  op_pow);
 
     value_unlocal(op_add);
     value_unlocal(op_sub);
@@ -31939,6 +32336,7 @@ cmds_generic_numeric(parser_state_t *state, dir_t *cmds)
     value_unlocal(op_div);
     value_unlocal(op_mod);
     value_unlocal(op_neg);
+    value_unlocal(op_pow);
 }
 
 
@@ -32156,7 +32554,7 @@ genfn_fmt_d(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         number_t arg = value_int_number(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "%+.*"F_NUMBER_T;
         else
             format = "%.*"F_NUMBER_T;
@@ -32170,6 +32568,96 @@ genfn_fmt_d(char *buf, size_t buflen, fprint_flags_t flags, int precision,
     return val;
 }
 
+
+
+
+#ifdef USE_REALS
+static const value_t *
+genfn_fmt_real(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+               const value_t *argval, parser_state_t *state,
+               const char *fmt_sgn, const char *fmt_unsgn)
+{   const value_t *val = &value_null;
+
+    if (value_istype(argval, type_real))
+    {   const char *format;
+        real_t arg = value_real_number(argval);
+        int len;
+
+        if (0 != (flags & (1<<ff_posv)))
+            format = fmt_sgn;
+        else
+            format = fmt_unsgn;
+
+        OMIT(fprintf(stderr,
+                     "%s: real format used '%s' precision %d flags 0x%X\n",
+                     codeid(), format, precision, flags););
+        len = os_snprintf(buf, buflen, format, precision, arg);
+
+        if (len >= 0)
+            val = value_string_lnew(state, buf, len);
+    }
+
+    return val;
+}
+
+
+
+
+
+
+static const value_t *
+genfn_fmt_f(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"FF_REAL_T, "%.*"FF_REAL_T);
+}
+
+
+
+static const value_t *
+genfn_fmt_f_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"FFC_REAL_T, "%.*"FFC_REAL_T);
+}
+
+
+
+static const value_t *
+genfn_fmt_e(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"FE_REAL_T, "%.*"FE_REAL_T);
+}
+
+
+
+static const value_t *
+genfn_fmt_e_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"FEC_REAL_T, "%.*"FEC_REAL_T);
+}
+
+
+
+
+static const value_t *
+genfn_fmt_g(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"F_REAL_T, "%.*"F_REAL_T);
+}
+
+
+
+static const value_t *
+genfn_fmt_g_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
+            const value_t *argval, parser_state_t *state)
+{   return genfn_fmt_real(buf, buflen, flags, precision, argval, state,
+                          "%+.*"FC_REAL_T, "%.*"FC_REAL_T);
+}
+#endif
 
 
 
@@ -32211,7 +32699,7 @@ genfn_fmt_o(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         number_t arg = value_int_number(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "%+.*"FO_UNUMBER_T;
         else
             format = "%.*"FO_UNUMBER_T;
@@ -32240,7 +32728,7 @@ genfn_fmt_u(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         unumber_t arg = value_int_number(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "%+.*"F_UNUMBER_T;
         else
             format = "%.*"F_UNUMBER_T;
@@ -32267,7 +32755,7 @@ genfn_fmt_x(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         unumber_t arg = value_int_number(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "%+.*"FX_UNUMBER_T;
         else
             format = "%.*"FX_UNUMBER_T;
@@ -32294,7 +32782,7 @@ genfn_fmt_x_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         unumber_t arg = value_int_number(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "%+.*"FXC_UNUMBER_T;
         else
             format = "%.*"FXC_UNUMBER_T;
@@ -32497,7 +32985,7 @@ genfn_fmt_p(char *buf, size_t buflen, fprint_flags_t flags, int precision,
         unumber_t arg = (unumber_t)(argval);
         int len;
 
-        if (0 != (flags & (1<<ff_sign)))
+        if (0 != (flags & (1<<ff_posv)))
             format = "0x%+.*"FX_UNUMBER_T;
         else
             format = "0x%.*"FX_UNUMBER_T;
@@ -32587,6 +33075,51 @@ static const value_t *
 fn_fmt_p(const value_t *this_fn, parser_state_t *state)
 {   return fn_fmt_generic(this_fn, state, &genfn_fmt_p);
 }
+#endif
+
+
+
+
+
+#if USE_REALS
+
+static const value_t *
+fn_fmt_f(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_f);
+}
+
+
+static const value_t *
+fn_fmt_f_uc(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_f_uc);
+}
+
+
+
+static const value_t *
+fn_fmt_e(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_e);
+}
+
+
+static const value_t *
+fn_fmt_e_uc(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_e_uc);
+}
+
+
+
+static const value_t *
+fn_fmt_g(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_g);
+}
+
+
+static const value_t *
+fn_fmt_g_uc(const value_t *this_fn, parser_state_t *state)
+{   return fn_fmt_generic(this_fn, state, &genfn_fmt_g_uc);
+}
+
 #endif
 
 
@@ -33375,6 +33908,7 @@ fn_split(const value_t *this_fn, parser_state_t *state)
 
 
 
+
 #if 0 // not yet in use
 /* cast binary string argument to provided datatype */
 static const value_t *
@@ -33647,6 +34181,20 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_b_uc);
     printf_addformat(type_int, "v", "<f> <p> <val> - %v value format",
                      &fn_fmt_v);
+#ifdef USE_REALS
+    printf_addformat(type_int, "f", "<f> <p> <val> - %f real fixed format",
+                     &fn_fmt_f);
+    printf_addformat(type_int, "F", "<f> <p> <val> - %F real fixed format",
+                     &fn_fmt_f_uc);
+    printf_addformat(type_int, "e", "<f> <p> <val> - %e real exponent format",
+                     &fn_fmt_e);
+    printf_addformat(type_int, "E", "<f> <p> <val> - %E real exponent format",
+                     &fn_fmt_e_uc);
+    printf_addformat(type_int, "g", "<f> <p> <val> - %e real general format",
+                     &fn_fmt_g);
+    printf_addformat(type_int, "G", "<f> <p> <val> - %E real general format",
+                     &fn_fmt_g_uc);
+#endif
 #if SUPPORT_FMT_P    
     printf_addformat(type_int, "p", "<f> <p> <val> - %p internal pointer",
                      &fn_fmt_p);
