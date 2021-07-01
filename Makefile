@@ -183,6 +183,7 @@ help:
 	@echo "  use_xml      - include commands for XML parsing"
 	@echo "  use_json     - include commands for JSON parsing"
 	@echo "  use_elf      - include commands for parsing ELF files"
+	@echo "  use_reals    - include commands for using real numbers"
 	@echo "  elf_lib_type - the name of the ELF API to use"
 	@echo "  force_native - (on win WSL) generate WIN32 code not Linux code"
 	@echo "  ndebug       - don't generate debuggable binaries"
