@@ -1,4 +1,4 @@
-	
+
 split "/" "dir/subdir/file"
 # <"dir", "subdir", "file">
 

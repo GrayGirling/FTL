@@ -25,8 +25,8 @@ equal basetype.int basetype.mac
 equal <> <>
 equal [] []
 
-set friends_a [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
-set friends_b [henry=TRUE, sophie=FALSE, antoine=TRUE, eric=TRUE, erica=FALSE]
+set friends_a [henry=TRUE, sophie=FALSE, eric=TRUE, erica=FALSE]
+set friends_b [henry=TRUE, sophie=FALSE, eric=TRUE, erica=FALSE]
 set friends_c new friends_a!
 
 equal friends_a friends_a

@@ -4,17 +4,21 @@ set ops <>           # op definitions with explicit priorities
 
 parse opset ops 6  parse.assoc."fy"  "_ng_"  neg
 parse opset ops 8  parse.assoc."xfy" "_sb_"  sub
-parse opset ops 8  parse.assoc."yfx" "_rsb_" [x,y]:{y-x}  # reverse subtract
+parse opset ops 8  parse.assoc."yfx" "_rsb_" [x,y]:{y-x} # rev -
 parse opset ops 10 parse.assoc."fy"  "_mi_"  neg
 
 set opdef range ops! # op definitions with relative priorities
 
 parse opeval opdef {20 _sb_ 4}
 parse opeval opdef {15 _rsb_ 30}
-parse opeval opdef {20 _rsb_ 15 _rsb_ 30} # 20 _rsb_ (15 _rsb_ 30)
-parse opeval opdef {20 _sb_ 4 _sb_ 6}     # (20 _sb_ 4) _sb_ 6
-parse opeval opdef {_ng_ 20 _sb_ 4}       # _ng_ (20 _sb_ 4)
-parse opeval opdef {_mi_ 20 _sb_ 4}       # (_mi_ 20) _sb_ 4
+parse opeval opdef {20 _rsb_ 15 _rsb_ 30}
+# 20 _rsb_ (15 _rsb_ 30)
+parse opeval opdef {20 _sb_ 4 _sb_ 6}
+# (20 _sb_ 4) _sb_ 6
+parse opeval opdef {_ng_ 20 _sb_ 4}
+# _ng_ (20 _sb_ 4)
+parse opeval opdef {_mi_ 20 _sb_ 4}
+# (_mi_ 20) _sb_ 4
 
 set ops <>      # op definitions with explicit priorities
 set opdef NULL  # op definitions with relative priorities

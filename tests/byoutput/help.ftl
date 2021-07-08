@@ -23,7 +23,9 @@ sys help time
 #time - system calendar time in seconds
 help sys.time
 #sys.time - system calendar time in seconds
-enter [fn = [_help="- my function"]:{echo _help!}, env = [x="variable"], var = "variable" ]
+enter [fn = [_help="- my function"]:{echo _help!},
+       env = [x="variable"],
+       var = "variable" ]
 help
 #fn - my function
 #env help - show subcommands

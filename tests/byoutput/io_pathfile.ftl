@@ -10,7 +10,9 @@ set include [name]:{
         rdf = io.pathfile sys.env.MYPATH name "r"!;
     }{  rdf = io.file name "r"!;
     }!;
-    if (equal NULL rdf!) { echo "can't read file "+(str name!)!; } {
+    if (equal NULL rdf!) {
+        echo "can't read file "+(str name!)!;
+    } {
         .ret = parse.exec "" rdf!;
         io.close rdf!;
         ret

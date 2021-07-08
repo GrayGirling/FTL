@@ -1,7 +1,9 @@
 # embedded closures
 
 set oobj[_help="- open obj",a]:{
-   [this=[_help="- say this",a]:{echo "this"!;io.fprintf io.out "a=%v\n"<a>!;},
+   [this=[_help="- say this",a]:{
+             echo "this"!;io.fprintf io.out "a=%v\n"<a>!;
+          },
     h=_help,
    ]
 }

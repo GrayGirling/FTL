@@ -74,7 +74,7 @@ runtest()
            rc=$PIPESTATUS[1]
        else
            $verbose && echo "$ftl_cmd -q < $testfile > $result 2>&1"
-           command $ftl_cmd -q < $testfile > $result 2>&1 
+           TERM= command $ftl_cmd -q < $testfile > $result 2>&1 
            rc=$?
        fi
 
