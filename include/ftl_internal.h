@@ -469,7 +469,7 @@ genfn_scanw_cb(const value_t *this_fn, parser_state_t *state,
 enum
 {   ff_left = 1,    /* (-) left justify in width - otherwise right */
     ff_zero,        /* (0) pad with leading zeros */
-    ff_sign,        /* ( ) always precede with place for a sign */
+    ff_sign,        /* ( ) always allow place for a sign */
     ff_posv,        /* (+) use positive sign as well as a negative one only */
     ff_alt          /* (#) "alternative" format */
 };

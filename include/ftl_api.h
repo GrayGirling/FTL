@@ -165,7 +165,6 @@ typedef long double real_t;
 #define real_pow   powl
 #define real_sqrt  sqrtl
 #define real_rint  llrintl
-#define int_abs    llabs
     
 #define os_strtoreal strtold
 
