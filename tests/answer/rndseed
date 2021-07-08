@@ -1,5 +1,8 @@
+> # This test is not repeatable over multiple operating systems
+> 
 > set test[]:{
->     io.fprintf io.out "%d.%d.%d.%d colour " <rnd 256!, rnd 256!, rnd 256!, rnd  256!>!;
+>     io.fprintf io.out "%d.%d.%d.%d colour " <
+>          rnd 256!, rnd 256!, rnd 256!, rnd 256!>!;
 >     echo <"red", "white", "blue">.(rnd 3!)!;
 > }
 > 

@@ -9,16 +9,20 @@ prints
 > FALSE {echo "doesn't print"!}   # returns FALSE
 FALSE
 > 
-> TRUE {echo "prints"!;TRUE}! {echo "prints again"!}       # returns TRUE
+> TRUE {echo "prints"!;TRUE}! {echo "prints again"!}
 prints
 prints again
-> TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}     # returns FALSE
+> # TRUE
+> TRUE {echo "prints"!;FALSE}! {echo "doesn't print"!}
 prints
 FALSE
-> FALSE {echo "doesn't print"!; TRUE}! {echo "doesn't print"!}   # returns FALSE [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[KE
+> # FALSE
+> FALSE {echo "doesn't print"!; TRUE}! {echo "doesn't print"!}
 FALSE
-> FALSE {echo "doesn't print"!; FALSE}! {echo "doesn't print"!}  # returns FALSE [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[KE
+> # FALSE
+> FALSE {echo "doesn't print"!; FALSE}! {echo "doesn't print"!}
 FALSE
+> # FALSE
 > 
 > invert TRUE
 FALSE

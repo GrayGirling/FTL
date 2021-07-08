@@ -7,17 +7,17 @@
 > int 0xF00
 3840
 > real 42.42
-42.42
+42.420000000000002
 > real 42e10
-4.2e+11
+419999999999.99994
 > real .5
 0.5
 > real 1.6e+4
 16000
 > real .6e-4
-6e-05
+6.0000000000000002e-05
 > real 0xF00.8p-2
-15.002
+15.001953125
 > real 0x.8P2
 128
 > real 0o7.77E2
@@ -34,9 +34,9 @@
 > eval 0xF00
 3840
 > eval 42.42
-42.42
+42.420000000000002
 > eval 42e10
-4.2e+11
+419999999999.99994
 > eval 0.5
 0.5
 > eval .5
@@ -53,7 +53,7 @@ ftl $*console*:+25: failed to evaluate expression
 ftl $*console*:+25: warning - trailing text ...e-4
 > # fails - must begin with numeric
 > eval 0xF00.8p-2
-15.002
+15.001953125
 > eval 0x.8p2
 ftl $*console*:+28 in
 ftl $*console*:29: failed to evaluate expression
@@ -116,5 +116,19 @@ ftl $*console*:+28: warning - trailing text ...0x.8p2
 1
 > 
 > eval 1.0/7
-0.142857
+0.14285714285714285
+> 
+> set INF 1.0/0
+> set NAN INF-INF
+> 
+> eval INF
+inf
+> eval NAN
+-nan
+> cmp INF INF
+0
+> cmp INF NAN
+0
+> cmp NAN NAN
+0
 > 

@@ -1,4 +1,4 @@
-> io fprintf io.out "€1 = £%[pounds]d.%[pennies]02d\n" [pennies=60, pounds=0]
+> io fprintf io.out "€1 = £%[pounds]d.%[p]02d\n" [p=60, pounds=0]
 €1 = £0.60
 14
 > #€1 = £0.60

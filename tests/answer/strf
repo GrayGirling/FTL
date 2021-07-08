@@ -51,6 +51,12 @@ c <f> <p> <val> - %c character format
 b <f> <p> <val> - %b little endian binary format
 B <f> <p> <val> - %B big endian binary format
 v <f> <p> <val> - %v value format
+f <f> <p> <val> - %f real fixed format
+F <f> <p> <val> - %F real fixed format
+e <f> <p> <val> - %e real exponent format
+E <f> <p> <val> - %E real exponent format
+g <f> <p> <val> - %e real general format
+G <f> <p> <val> - %E real general format
 j <f> <p> <val> - %j (JSON) value format
 J <f> <p> <val> - %J (pretty JSON) value format
 > #d <f> <p> <val> - %d integer format
