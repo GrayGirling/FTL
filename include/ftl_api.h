@@ -127,44 +127,15 @@ typedef pthread_t thread_os_t;
 
 
 /* The aim is that number_t should be a 64-bit integer, and that real_t
-   should be an 80-bit floating point number
+   should be an 80-bit floating point number.
+   
+   Unfortunately the Visual Studio libraries on windows have no real type larger
+   than "long double" - which is actually the same size as "double" in that
+   library.  Since these are 64-bit types on x86 architectures it means that
+   real_t will not be able to store a number_t precisely.
 */
 
-    
-typedef long double real_t;
 
-#define REALNUM(float) float##l
-#define FF_REAL_T "Lf"
-#define FFC_REAL_T "LF"
-#define FE_REAL_T "Le"
-#define FEC_REAL_T "LE"
-#define F_REAL_T "Lg"
-#define FC_REAL_T "LG"
-
-/* Many of these functions on reals require the <math.h> header */
-#define real_abs   fabsl
-#define real_mod   fmodl
-#define real_ceil  ceill
-#define real_floor floorl
-#define real_trunc truncl
-#define real_round roundl
-#define real_sin   sinl
-#define real_cos   cosl
-#define real_tan   tanl
-#define real_sinh  sinhl
-#define real_cosh  coshl
-#define real_tanh  tanhl
-#define real_asin  asinl
-#define real_acos  acosl
-#define real_atan  atanl
-#define real_asinh asinhl
-#define real_acosh acoshl
-#define real_atanh atanhl
-#define real_exp   expl
-#define real_log   logl
-#define real_pow   powl
-#define real_sqrt  sqrtl
-#define real_rint  llrintl
     
 #define os_strtoreal strtold
 
@@ -187,9 +158,21 @@ typedef unsigned __int64 unumber_t;
 #ifndef _WINDOWS_NATIVE_STDIO
 #define _WINDOWS_NATIVE_STDIO 1
 #endif
+
+/* Note: Windows compilers do not accept L for long double (because they're the
+ * same same size as double anyway) */
+#define _REAL_USE_DOUBLE
+#define FF_REAL_T "f"
+#define FFC_REAL_T "F"
+#define FE_REAL_T "e"
+#define FEC_REAL_T "E"
+#define F_REAL_T "g"
+#define FC_REAL_T "G"
+
 #if _WINDOWS_NATIVE_STDIO
 /* use msvcrt.dll formats including %I64d etc. */
-//#warning Using windows native print formats 
+/* Using windows native print formats */
+
 #define F_NUMBER_T "I64d"
 #define FX_UNUMBER_T "I64x"
 #define FXC_UNUMBER_T "I64X"
@@ -198,7 +181,8 @@ typedef unsigned __int64 unumber_t;
 #define F_U32_T "u"
 #define F_S32_T ""
 #else
-//#warning Using C99 print formats 
+/* Using C99 print formats */
+
 #define F_NUMBER_T "lld"
 #define FX_UNUMBER_T "llx"
 #define FXC_UNUMBER_T "llX"
@@ -238,6 +222,8 @@ typedef number_t       ftl_s64_t;
 #define _SIZEOF_LONG 4
 #endif
 
+#define _REAL_USE_LONGDOUBLE
+    
 #if _SIZEOF_LONG == 8
 typedef long number_t;
 typedef unsigned long unumber_t;
@@ -311,6 +297,93 @@ typedef number_t       ftl_s64_t;
 #endif /* compiler selection */
 
 
+    #ifdef _REAL_USE_DOUBLE
+    
+typedef double real_t;
+
+#define REALNUM(float) float
+
+#define FF_REAL_T "f"
+#define FFC_REAL_T "F"
+#define FE_REAL_T "e"
+#define FEC_REAL_T "E"
+#define F_REAL_T "g"
+#define FC_REAL_T "G"
+
+/* Many of these functions on reals require the <math.h> header */
+#define real_abs   fabs
+#define real_mod   fmod
+#define real_ceil  ceil
+#define real_floor floor
+#define real_trunc trunc
+#define real_round round
+#define real_sin   sin
+#define real_cos   cos
+#define real_tan   tan
+#define real_sinh  sinh
+#define real_cosh  cosh
+#define real_tanh  tanh
+#define real_asin  asin
+#define real_acos  acos
+#define real_atan  atan
+#define real_asinh asinh
+#define real_acosh acosh
+#define real_atanh atanh
+#define real_exp   exp
+#define real_log   log
+#define real_pow   pow
+#define real_sqrt  sqrt
+#define real_rint  llrint
+
+#elif defined(_REAL_USE_LONGDOUBLE)
+
+typedef long double real_t;
+
+#define REALNUM(float) float##l
+
+#define FF_REAL_T "Lf"
+#define FFC_REAL_T "LF"
+#define FE_REAL_T "Le"
+#define FEC_REAL_T "LE"
+#define F_REAL_T "Lg"
+#define FC_REAL_T "LG"
+
+/* Many of these functions on reals require the <math.h> header */
+#define real_abs   fabsl
+#define real_mod   fmodl
+#define real_ceil  ceill
+#define real_floor floorl
+#define real_trunc truncl
+#define real_round roundl
+#define real_sin   sinl
+#define real_cos   cosl
+#define real_tan   tanl
+#define real_sinh  sinhl
+#define real_cosh  coshl
+#define real_tanh  tanhl
+#define real_asin  asinl
+#define real_acos  acosl
+#define real_atan  atanl
+#define real_asinh asinhl
+#define real_acosh acoshl
+#define real_atanh atanhl
+#define real_exp   expl
+#define real_log   logl
+#define real_pow   powl
+#define real_sqrt  sqrtl
+#define real_rint  llrintl
+
+#else
+
+#error Format of REAL_T undecided! (Header error)
+    
+#endif /* type for real_t */
+    
+    
+
+
+
+    
 /*          O/S Independence - Threads                               */
 
 #define THREAD_DEFAULT_SIZE (64<<10)

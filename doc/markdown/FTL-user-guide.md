@@ -4,7 +4,7 @@ FTL User's Guide
 
 ### Version
 
-This guide applies to the FTL run-time library with version 1.27. 
+This guide applies to the FTL run-time library with version 1.28. 
 
 ### Overview
 
@@ -167,7 +167,9 @@ definition and extension.
 
 > \<code\_literal\> ::= '{' \[ '\\' \<char\> | \<char\> \]\* \] '}'  
 > \<string\> ::= '"' \['\\' \<escape\> | \<char\> \]\* '"'  
-> \<integer\> ::= \[\<base\>\] \<digit\> (\<digit\> | '\_')\*  
+> \<integer\> ::= \[\<base\>\] \<basedigits\>  
+> \<real\> ::= \[\<base\>\] \<basedigits\> '.' \[\<basedigits\>\]
+> \[\<exp\>\<basedigits\>\]  
 > \<base\> ::= '0x' | '0X' | '0o' | '0O' | '0b' | '0B'  
 > \<identifier\> ::= \<common\_identifier\> | \<builtin\_identifier\>  
 > \<common\_identifier\> ::= \<alphabetic\> (\<alphabetic\> | '\_' |
@@ -185,6 +187,8 @@ In a \<string\> all characters between an initial double quote (") and
 its matching closing double quote are included except '\\' which is used
 to introduce one or more characters in an escape sequence.
 
+> \<basedigits\> ::= \<digit\> (\<digit\> | '\_')\*
+
 For \<integers\> the numeric base 16 is specified by '0x' and '0X'; the
 base 8 is specified by '0o' and '0O'; and the base 2 is specified by
 '0b' and '0B'. Integers beginning with a numeric base specification use
@@ -195,7 +199,20 @@ required by base 16. Following the initial digit the character '\_' can
 be used – it is ignored in the value and is accepted only to aid the
 comprehension of long numbers (e.g. it might be used every three
 characters as a thousands separator, or every eight binary digits as a
-byte separator).   
+byte separator). 
+
+> \<exp\> ::= \<exp14\> | \<exp25\>  
+> \<exp14\> ::= 'e' | 'E'  
+> \<exp25\> ::= 'p' | 'P'
+
+Note that \<real\>s are supported only as a compile time option in the
+library. When they are available the same base selection is used for
+\<integer\>s and applied to each of the optional \<basedigits\> parts of
+the literal. The first of these provides the integer part and is always
+present (it may be zero). The second is the factional part, and the
+third specifies the exponent (of the base used). The character
+introducing the exponent is \<exp25\> (e.g. 'p') for hex real literals
+and \<exp14\> (e.g. 'e') otherwise (following the convention used in C).
 
 ### FTL Expression Syntax
 
@@ -211,9 +228,7 @@ byte separator).
 
 \<retrieval\> ::= \[\<closure\>\]\['.' \<fieldsindex\>\]\*
 
-\<fieldsindex\> ::= '(' \<expression\> ')' |
-
-\<index\> |
+\<fieldsindex\> ::= \<index\> |
 
 \<vector\> |
 
@@ -233,12 +248,16 @@ byte separator).
 
 \<type\_literal\>
 
-\<code\> ::= \<code\_literal\>
+\<code\> ::= \<code\_literal\>  
+\<type\_literal\> ::= \<integer\> | \<real\> | \<string\> 
 
 \<expression\_list\> ::= \<expression\> (';' \<expression\>)\* \[';'\]
 
-\<id\_environment\> ::= '\[' \[\<binding\_list\> | \<binding\_list\> ','
-\<unbound\_list\> | \<unbound\_list\>\] '\]' 
+\<id\_environment\> ::= '\[' \[\<binding\_list\> | 
+
+\<binding\_list\> ',' \<unbound\_list\> |
+
+\<unbound\_list\>\] '\]' 
 
 \<binding\_list\> ::= \[\<binding\> (',' \<binding\>)\*\] 
 
@@ -248,11 +267,8 @@ byte separator).
 
 \<vector\> ::= '\<' \<implied\_series\> | \<series\> '\>'
 
-\<index\> ::= \<identifier\> | \<type\_literal\>
-
-\<type\_literal\> ::= \<integer\> |
-
-\<string\> 
+\<index\> ::= \<identifier\> | \<integer\> | \<string\> | '('
+\<expression\> ')'
 
 \<series\> ::= \[\<series\_binding\> (',' \<seres\_binding\>)\*\]
 
@@ -314,6 +330,8 @@ initially contains:
 | \-       | sub        | xfy      |       |
 | 11       | \*         | mul      | xfy   |
 | /        | div        | xfy      |       |
+| \_rem\_  | mod        | xfy      |       |
+| 12       | \*\*       | pow      | xfy   |
 
 Note that the priorities refer to the relative position in the vector
 parse.op - their absolute value is not relevant.
@@ -418,7 +436,7 @@ Similarly if Y is itself a literal environment each of the values in it
 will be interpreted as names in X and will be replaced by their values
 in X.  This applies recursively to any values in Y that are
 environments.  Currently the convenience of using string values without
-a string denotation does not also apply to literal environments.   
+a string denotation does not also apply to literal environments.  
   
 The syntax 
 
@@ -584,44 +602,50 @@ following:
 <td>This type is used for integers.  The integers supported are those that can be represented in 64 bits.  Denotations are available for specifying both positive and negative integer values however denotations that appear more than  9223372036854775807 (0x7fffffffffffffff) can be expected to be indistinguishable from values for negative numbers. </td>
 </tr>
 <tr class="odd">
-<td>bool</td>
-<td>This type contains the values TRUE and FALSE.</td>
+<td>real</td>
+<td>This type is used for floating point values. The number of bits used in this representation depends on the compiler used. Ideally it would allow the precise representation of a signed 63-bit integer, but on many Windows compilers this is unfortunately not possible (only a signed 52-bit integer).<br />
+This type is available depending on a compile-time option.</td>
 </tr>
 <tr class="even">
+<td>bool</td>
+<td>This type contains the values TRUE and FALSE.<br />
+This is not a true built-in type as the others are, TRUE and FALSE are both actually closures (see below).</td>
+</tr>
+<tr class="odd">
 <td>string</td>
 <td>This type is used for a sequence of 8-bit octets (bytes). Memory-size permitting, the sequence can contain an implementation-defined number of bytes which must be at least 2^31.  The bytes in the sequence can contain any 8-bit value (including zero).  Denotations are available that allow specific hexadecimal byte values to be inserted, byte values taken from the default character set; and, multi-byte sequences corresponding both to specific characters from a wide (normally Unicode) character set and from the input character set.  In general the run-time library provides support for access to strings treated as octet containers separately from those treated as characters containers.  Each character is encoded as a fixed sized, possibly multi-byte, sequence of octets.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>code</td>
 <td>This type is used for program text.  Normally this text can not be "executed" until an environment in which its values can be interpreted is supplied.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>dir</td>
 <td>This type is used to contain a mapping between "names" and values.  The names are themselves values and these types must come from types that support a comparison operator.  Currently the types are limited to integers and strings.   Currently separate denotations are available for string indexed directories, integer indexed directories and integer indexed integer sequences.  Currently the storage requirement for an integer indexed directory is proportional to the maximum index used, and only positive indeces are supported.<br />
 In addition to "names" with associated values directories can also contain an ordered set of unbound names with no associated value.  </td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>closure</td>
 <td>This type incorporates both a code value and a dir value that specifies the environment in which code should be interpreted.  Values can be bound to unbound names held in their dir values.  These values can not be "executed" unless there are no unbound names in their dir value.  When they are executed their code value is interpreted in the environment specified by their dir value.<br />
 Closures can be marked for automatic execution. If they are not marked for automatic execution, execution requires an explicit “!”. Otherwise execution will occur automatically when the closure has no unbound names.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>cmd</td>
 <td>This type supports different kind of executable value from a closure.  Each value incorporates an executable program which will parse a single string argument.  A number of commands are built-in in the run time library.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>function</td>
 <td>This type supports built-in closure values that use a fixed number of arguments taken from a specific range of names ("_1", "_2" ... etc.).  The run-time library provides a number of these values.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>stream</td>
 <td>This type supports values that can either supply or consume a series of octets (bytes).</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>ipaddr</td>
 <td>This type is used to contain an Internet IP address.  Denotations are available both for specifying the address as a  "dotted quad" or an Internet host name. Currently only addresses for IPv4 are supported.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>macaddr</td>
 <td>This type is used to contain an IEEE 802.3 MAC address.  A denotation is available for specifying the address as a colon-separated sextet. Currently only 48-bit addresses are supported.</td>
 </tr>
@@ -682,8 +706,12 @@ For this reason, for convenience, a closure can be marked for automatic
 execution, whereby such closures are executed automatically if they
 occur with no bound variables.
 
-None of the built-in functions have closure values values marked for
-automatic execution.
+By default none of the built-in functions have closure values values
+marked for automatic execution. However this is dependent on a compile
+time option. When provided this option will make all the built in
+functions execute automatically and effectively results in a completely
+different dialect, which is not used in the examples provided by this
+document.
 
 The func command is provided to mark a normal closure as one for
 automatic execution. One closure created from another by substituting a
@@ -881,7 +909,7 @@ following categories.
         \<n\>\!=FALSE
       - return \<rc\> - abandon current command input returning \<rc\>
       - source \<filename\> - read from file \<filename\>
-      - sourcetext \<strin\>|\<code\> - read characters from string or
+      - sourcetext \<string\>|\<code\> - read characters from string or
         code
       - throw \<value\> - signal an exception with \<value\>, exit outer
         'catch'
@@ -930,26 +958,55 @@ following categories.
 
   - Integers 
     
-      - add \<n1\> \<n2\> - return n1 with n2 added
       - bitor \<n1\> \<n2\> - return n1 "or"ed with n2 
       - bitxor \<n1\> \<n2\> - return n1 exclusive "or"ed with n2 
       - bitand \<n1\> \<n2\> - return n1 "and"ed with n2 
       - bitnot \<n\> - return the bitwise "not" of n 
-      - div \<n1\> \<n2\> - return n1 divided by n2
       - int \<integer expr\> - numeric value 
       - intseq \<first\> \<inc\> \<last\> - vector of integers
         incrementing by \<inc\> 
       - int\_fmt\_hexbits \<n\> - print decimal if all bits in this
         mask, else hex
-      - mul \<n1\> \<n2\> - return n1 multiplied by n2
-      - neg \<n\> - return negated \<n\>
       - rndseed \<n\> | \<string\> - set random seed based on argument
       - rndseq \<n\> - vector of integers containing 0..\<n\>-1 in a
         random order
       - rnd \<n\> - return random number less than \<n\>
       - shiftl \<n1\> \<n2\> - return n1 left shifted by n2 bits
       - shiftr \<n1\> \<n2\> - return n1 right shifted by n2 bits
+
+  - Integers or Reals
+    
+      - abs \<n\> - absolute (positive) value of \<n\>
+      - add \<n1\> \<n2\> - return n1 with n2 added
+      - div \<n1\> \<n2\> - return n1 divided by n2
+      - mod \<n1\> \<n2\> - return n1 modulus n2
+      - mul \<n1\> \<n2\> - return n1 multiplied by n2
+      - neg \<n\> - return negated \<n\>
+      - pow \<n1\> \<n2\> - return n1 to the power of n2
       - sub \<n1\> \<n2\> - return n1 with n2 subtracted
+
+  - Reals
+    
+      - real \<real expr\> - real value
+      - rint \<n\> - nearby integer to \<n\>
+      - ceil \<n\> - number smallest integer not less than \<n\>
+      - floor \<n\> - number largest integer not greater than \<n\>
+      - round \<n\> - number of the nearest integer
+      - sqrt \<x\> - square root of \<x\>
+      - exp \<x\> - e to the power of \<x\>
+      - log \<x\> - logarithm of \<x\> base e
+      - sin \<x\> - trigonometric sine of \<x\> radians
+      - cos \<x\> - trigonometric cosine of \<x\> radians
+      - tan \<x\> - trigonometric tangent of \<x\> radians
+      - asin \<x\> - trigonometric inverse sine of \<x\>
+      - acos \<x\> - trigonometric inverse cosine of \<x\>
+      - atan \<x\> - trigonometric inverse tangent of \<x\>
+      - sinh \<x\> - hyperbolic sine of \<x\> radians
+      - cosh \<x\> - hyperbolic cosine of \<x\> radians
+      - tanh \<x\> - hyperbolic tangent of \<x\> radians
+      - asinh \<x\> - hyperbolic inverse sine of \<x\>
+      - acosh \<x\> - hyperbolic inverse cosine of \<x\>
+      - atanh \<x\> - hyperbolic inverse tangent of \<x\>
 
   - Environments and directories 
     
@@ -1236,32 +1293,40 @@ description using the name "label".
 <td>FTL expression returning an integer value</td>
 </tr>
 <tr class="odd">
+<td>real</td>
+<td>FTL expression returning a real value (when optionally supported)</td>
+</tr>
+<tr class="even">
 <td>bool</td>
 <td>FTL expression returning either TRUE or FALSE</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>code</td>
 <td>FTL expression returning a code value</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>dir</td>
 <td>FTL expression rerturning a directory value</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>closure</td>
 <td>FTL expression rerturning a closure value</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>clodir</td>
 <td>&lt;closure&gt; | &lt;dir&gt;</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>clocode</td>
 <td>&lt;closure&gt; | &lt;code&gt;</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>intordir</td>
 <td>&lt;int&gt; | &lt;dir&gt;</td>
+</tr>
+<tr class="odd">
+<td>number</td>
+<td>&lt;int&gt; | &lt;real&gt;</td>
 </tr>
 <tr class="even">
 <td>string</td>
@@ -1295,7 +1360,46 @@ description using the name "label".
 The names in the default run-time library are presented in alphabetic
 order below. 
 
-### add \<int\> \<int\> 
+### **abs** \<**number**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>abs</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n:number&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes an integer or real and returns its absolute (i.e. positive) value.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An integer or real with the value |n|.<br />
+See also: neg, add, sub, mul, div, pow</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; abs 10</p>
+<p>10</p>
+<p>&gt; abs -10</p>
+<p>10</p>
+<p>&gt; abs -10.10</p>
+<p>10.1</p>
+<p>&gt; abs 10.10</p>
+<p>10.1</p></td>
+</tr>
+</tbody>
+</table>
+
+### add \<**number**\> \<**number**\> 
 
 <table>
 <tbody>
@@ -1309,23 +1413,26 @@ order below.
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;n1:int&gt; &lt;n2:int&gt;</td>
+<td>&lt;n1:number&gt; &lt;n2:number&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Takes two integers and adds them together.</td>
+<td>Takes two integers or reals and adds them together.<br />
+If either n1 or n2 are real numbers the result will be a real.</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
-<td>An integer with the value n1+n2.<br />
-See also: sub, mul, div, shiftl, shiftr, neg</td>
+<td>An integer or real with the value n1+n2.<br />
+See also: sub, mul, div, pow, abs, neg, shiftr, shiftl</td>
 </tr>
 <tr class="even">
 <td>Example</td>
 <td><p>&gt; add 0x100 12</p>
 <p>268</p>
 <p>&gt; sys localtimef "%T" (add (sys.time!) 600!)</p>
-<p>"17:30:14"</p></td>
+<p>"17:30:14"</p>
+<p>&gt; eval add 4 0.3!</p>
+<p>4.3</p></td>
 </tr>
 </tbody>
 </table>
@@ -1704,6 +1811,50 @@ See also: and, bitand, bitor, bitnot</td>
 <p>255</p>
 <p>&gt; strf "0x%09x" &lt;bitxor 0x000fff000 0x555555555!&gt;</p>
 <p>"0x555aaa555"</p></td>
+</tr>
+</tbody>
+</table>
+
+### **ceil** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>ceil</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real and returns a real number representing the smallest integer not less than n (the ceiling of the integral part of the real).</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An real with the smallest integral number less than n.<br />
+Note: the result is not an integer – rint can be used to convert it to an integer though.<br />
+See also: rint, floor, round</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; ceil 10.1</p>
+<p>11</p>
+<p>&gt; ceil 10.9</p>
+<p>11</p>
+<p>&gt; ceil -10.1</p>
+<p>-10</p>
+<p>&gt; ceil -10.9</p>
+<p>-10</p>
+<p>&gt; typeof (ceil 10!)</p>
+<p>$basetype.int</p>
+<p>&gt; typeof (ceil 10.1!)</p>
+<p>$basetype.real</p></td>
 </tr>
 </tbody>
 </table>
@@ -2183,7 +2334,7 @@ See also: bind, code, closure, argname, argnames</td>
 </tbody>
 </table>
 
-### div \<int\> \<int\> 
+### div \<**number**\> \<**number**\> 
 
 <table>
 <tbody>
@@ -2197,16 +2348,18 @@ See also: bind, code, closure, argname, argnames</td>
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;n1:int&gt; &lt;n2:int&gt;</td>
+<td>&lt;n1:number&gt; &lt;n2:number&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Takes two integers and divides the first by the second returning the integer part of the result.</td>
+<td>Takes two integer or reals and divides the first by the second returning the result.<br />
+If either n1 or n2 are real numbers the result will be a real.<br />
+If both n1 and n2 are integers the result is the integer part of the division (given as an integer).</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
-<td>An integer with the value n1/n2.<br />
-See also: add, sub, mul, shiftl, shiftr, neg</td>
+<td>An integer or real with the value n1/n2.<br />
+See also: add, sub, mul, pow, abs, neg, shiftr, shiftl</td>
 </tr>
 <tr class="even">
 <td>Example</td>
@@ -2217,7 +2370,12 @@ See also: add, sub, mul, shiftl, shiftr, neg</td>
 <p>&gt; div 14 (-6)</p>
 <p>-2</p>
 <p>&gt; div -14 (-6)</p>
-<p>2</p></td>
+<p>2</p>
+<p>&gt; eval div 4 3!</p>
+<p>1</p>
+<p>&gt; eval div 4 3.0!</p>
+<p>1.333333333333333</p>
+<p>&gt;</p></td>
 </tr>
 </tbody>
 </table>
@@ -2593,6 +2751,44 @@ See also: sleep</p>
 </tbody>
 </table>
 
+### **exp** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>exp</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns Euler's number (e) raised to that power.<br />
+The inverse function to log.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value e<sup>x</sup>.<br />
+See also: mul, pow, sqrt, log</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; exp 0</p>
+<p>1</p>
+<p>&gt; exp 1</p>
+<p>2.718281828459045</p>
+<p>&gt; exp (log 3!)</p>
+<p>3</p></td>
+</tr>
+</tbody>
+</table>
+
 ### FALSE
 
 <table>
@@ -2629,6 +2825,50 @@ Note that the value used for FALSE behaves as if it were defined as follows:</p>
 <p>}</p>
 <p>&gt; eval FALSE {echo "never run"!}!</p>
 <p>FALSE</p></td>
+</tr>
+</tbody>
+</table>
+
+### **floor** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>floor</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real and returns a real number representing the smallest integer not less than n (the floor of the integral part of the real).</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An real with the largest integral number not greater than n.<br />
+Note: the result is not an integer – rint can be used to convert it to an integer though.<br />
+See also: rint, ceil, round</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; floor 10.1</p>
+<p>10</p>
+<p>&gt; floor 10.9</p>
+<p>10</p>
+<p>&gt; floor -10.1</p>
+<p>-11</p>
+<p>&gt; floor -10.9</p>
+<p>-11</p>
+<p>&gt; typeof (floor 10!)</p>
+<p>$basetype.int</p>
+<p>&gt; typeof (floor 10.1!)</p>
+<p>$basetype.real</p></td>
 </tr>
 </tbody>
 </table>
@@ -3974,6 +4214,386 @@ See also: new.</td>
 </tbody>
 </table>
 
+### **log** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>log</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its natural logarithm (logarithm to the base of Euler's number (e)).<br />
+The inverse function to exp.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value e<sup>x</sup>.<br />
+See also: mul, pow, sqrt, exp</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; log 0</p>
+<p>-inf</p>
+<p>&gt; log 1</p>
+<p>0</p>
+<p>&gt; log E</p>
+<p>1</p>
+<p>&gt; log E**2</p>
+<p>2</p>
+<p>&gt; log (exp 3.4!)</p>
+<p>3.4</p></td>
+</tr>
+</tbody>
+</table>
+
+### **acos** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>acos</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric cosine would equal that value.<br />
+The inverse function to cos.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cos<sup>-1</sup>(x).<br />
+See also: asin, atan, sin, cos, tan, acosh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (acos 0.0!)/PI</p>
+<p>0.500000000000</p>
+<p>&gt; preal (acos 0.75**0.5!)/PI</p>
+<p>0.166666666667</p>
+<p>&gt; preal (acos 0.5**0.5!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (acos 0.0!)/PI</p>
+<p>0.500000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **acosh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>acosh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic cosine would equal that value.<br />
+The inverse function to cosh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cosh<sup>-1</sup>(x).<br />
+See also: asinh, atanh, sinh, cosh, tanh, acos</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (acosh 0.0!)</p>
+<p>-nan</p>
+<p>&gt; preal (acosh 1.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (acosh (-1.0)!)</p>
+<p>-nan</p>
+<p>&gt; preal (acosh (cosh 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **asin** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>asin</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric sine would equal that value.<br />
+The inverse function to sin.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sin<sup>-1</sup>(x).<br />
+See also: acos, atan, sin, cos, tan, asinh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (asin 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (asin 0.75**0.5!)/PI</p>
+<p>0.333333333333</p>
+<p>&gt; preal (asin 0.5**0.5!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (asin 1.0!)/PI</p>
+<p>0.500000000000</p>
+<p>&gt; preal (asin (sin 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **asinh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>asinh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic sine would equal that value.<br />
+The inverse function to sinh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sinh<sup>-1</sup>(x).<br />
+See also: acosh, atanh, sinh, cosh, tanh, asin</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (asinh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (asinh 1.0!)</p>
+<p>0.881373587020</p>
+<p>&gt; preal (asinh (-1.0)!)</p>
+<p>-0.881373587020</p>
+<p>&gt; preal (asinh (sinh 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **atan** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>atan</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric tangent would equal that value.<br />
+The inverse function to tan.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tan<sup>-1</sup>(x).<br />
+See also: sin, cos, asin, acos, atan, tanh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (atan 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (atan 3.0**0.5!)/PI</p>
+<p>0.333333333333</p>
+<p>&gt; preal (atan 1.0!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (atan (tan 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **atanh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>atanh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic tangent would equal that value.<br />
+The inverse function to tanh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tanh<sup>-1</sup>(x) (which is sin(x)/cos(x)).<br />
+See also: sinh, cosh, asinh, acosh, atanh, tan</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (atanh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (atanh 1.0!)</p>
+<p>inf</p>
+<p>&gt; preal (atanh (-1.0)!)</p>
+<p>-inf</p>
+<p>&gt; preal (atanh 0.5!)</p>
+<p>0.549306144334</p>
+<p>&gt; preal (atanh (tanh 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **cos** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>cos</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number of radians and returns its trigonometric cosine.<br />
+The inverse function to acos.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cos(x).<br />
+See also: sin, tan, asin, acos, atan, cosh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (cos 0.0!)</p>
+<p>1.000000000000</p>
+<p>&gt; preal (cos PI/3!)**2</p>
+<p>0.250000000000</p>
+<p>&gt; preal (cos (-PI/3)!)**2</p>
+<p>0.250000000000</p>
+<p>&gt; preal (cos PI/4!)**2</p>
+<p>0.500000000000</p>
+<p>&gt; preal (cos PI/2!)**2</p>
+<p>0.000000000000</p>
+<p>&gt; preal (cos (acos 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **cosh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>cosh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its hyperbolic cosine (½(e<sup>x</sup>-e<sup>-x</sup>)).<br />
+The inverse function to acosh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cosh(x).<br />
+See also: sinh, tanh, asinh, acosh, atanh, cos</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (cosh (0.0)!)</p>
+<p>1.000000000000</p>
+<p>&gt; preal (cosh (1.0)!)</p>
+<p>1.543080634815</p>
+<p>&gt; preal (cosh (-1.0)!)</p>
+<p>1.543080634815</p>
+<p>&gt; preal (cosh (acosh 0.123!)!)</p>
+<p>-nan</p>
+<p>&gt; preal (cosh (acosh 1.23!)!)</p>
+<p>1.230000000000</p></td>
+</tr>
+</tbody>
+</table>
+
 ### logand \<bool\> \<bool\> 
 
 <table>
@@ -4122,7 +4742,7 @@ Normally this function is associated with the ge operator.</p></td>
 </tbody>
 </table>
 
-### mul \<int\> \<int\> 
+### mul \<**number**\> \<**number**\> 
 
 <table>
 <tbody>
@@ -4136,26 +4756,31 @@ Normally this function is associated with the ge operator.</p></td>
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;n1:int&gt; &lt;n2:int&gt;</td>
+<td>&lt;n1:number&gt; &lt;n2:number&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Takes two integers and multiplies them together.</td>
+<td>Takes two integer or reals and multiplies them together.<br />
+If either n1 or n2 are real numbers the result will be a real.</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
-<td>An integer with the value n1*n2.<br />
-See also: add, sub, div, shiftl, shiftr, neg</td>
+<td>An integer or real with the value n1*n2.<br />
+See also: add, sub, div, pow, shiftl, shiftr, abs, neg</td>
 </tr>
 <tr class="even">
 <td>Example</td>
 <td><p>&gt; mul 7 24</p>
-<p>168</p></td>
+<p>168</p>
+<p>&gt; mul 12 1/15.0</p>
+<p>0.8</p>
+<p>&gt; mul 90 0.1</p>
+<p>9</p></td>
 </tr>
 </tbody>
 </table>
 
-### neg \<int\> 
+### neg \<**number**\> 
 
 <table>
 <tbody>
@@ -4169,23 +4794,27 @@ See also: add, sub, div, shiftl, shiftr, neg</td>
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;n:int&gt;</td>
+<td>&lt;n:number&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Takes an integer and returns its negated value.</td>
+<td>Takes an integer or real and returns its negated value.</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
-<td>An integer with the value -n.<br />
-See also: add, sub, mul, shiftl, shiftr</td>
+<td>An integer or real with the value -n.<br />
+See also: abs, add, sub, mul, div, pow</td>
 </tr>
 <tr class="even">
 <td>Example</td>
 <td><p>&gt; neg 10</p>
 <p>-10</p>
 <p>&gt; neg -10</p>
-<p>10</p></td>
+<p>10</p>
+<p>&gt; neg 010.10</p>
+<p>-10.1</p>
+<p>&gt; neg -10.10</p>
+<p>10.1</p></td>
 </tr>
 </tbody>
 </table>
@@ -5647,6 +6276,52 @@ See also: parse.line </td>
 </tbody>
 </table>
 
+### **pow** \<**number**\> \<**number**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>pow</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n1:number&gt; &lt;n2:number&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes two integer or reals and raises the first to the power of the second returning the result. n2 is treated as an unsigned number.<br />
+If either n1 or n2 are real numbers the result will be a real otherwise it is an integer. (Note that powers that are too large to be represented as integers are not converted to reals.)</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An integer or real with the value n1<sup>n2</sup>.<br />
+See also: add, sub, mul, div, abs, neg, shiftr, shiftl</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; pow 2 32</p>
+<p>4294967296</p>
+<p>&gt; pow (-2) 3</p>
+<p>-8</p>
+<p>&gt; pow (-2) 31</p>
+<p>-2147483648</p>
+<p>&gt; pow (-2.0000000001) 31</p>
+<p>-2147483651.3286</p>
+<p>&gt; pow 2147483648 (1.0/31)</p>
+<p>2</p>
+<p>&gt; eval pow 3 (-1)!</p>
+<p>-6148914691236517205</p>
+<p>&gt; eval pow 3 0xffffffffffffffff!</p>
+<p>-6148914691236517205</p></td>
+</tr>
+</tbody>
+</table>
+
 ### range \<env\>
 
 <table>
@@ -5772,6 +6447,98 @@ See also: enter, leave, lock, cmd, parse.exec</td>
 <p>2</p>
 <p>&gt; eval rc</p>
 <p>2</p></td>
+</tr>
+</tbody>
+</table>
+
+### **rint** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>rint</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real (normally representing an integer) and returns an integer. The nearest integer is given.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An integer with the integral number nearest to n. (Other than the type of the result this function is very similar to round.)<br />
+Note: the result is always an integer, not a real.<br />
+See also: round, floor, ceil</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; rint 10.0</p>
+<p>10</p>
+<p>&gt; rint 10.1</p>
+<p>10</p>
+<p>&gt; rint 10.9</p>
+<p>11</p>
+<p>&gt; rint -10.0</p>
+<p>-10</p>
+<p>&gt; rint -10.1</p>
+<p>-10</p>
+<p>&gt; rint -10.9</p>
+<p>-11</p>
+<p>&gt; typeof (rint 10!)</p>
+<p>$basetype.int</p>
+<p>&gt; typeof (rint 10.0!)</p>
+<p>$basetype.int</p></td>
+</tr>
+</tbody>
+</table>
+
+### **round** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>round</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;n:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real and returns a real number representing the nearest integer.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>An real with the integral number nearest to n.<br />
+Note: the result is not an integer – rint can be used to convert it to an integer though.<br />
+See also: rint, floor, ceil</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; round 10.1</p>
+<p>10</p>
+<p>&gt; round 10.9</p>
+<p>11</p>
+<p>&gt; round -10.1</p>
+<p>-10</p>
+<p>&gt; round -10.9</p>
+<p>-11</p>
+<p>&gt; typeof (round 10!)</p>
+<p>$basetype.int</p>
+<p>&gt; typeof (round 10.1!)</p>
+<p>$basetype.real</p></td>
 </tr>
 </tbody>
 </table>
@@ -5985,7 +6752,7 @@ Shifts by a negative amount leave the value unchanged.</td>
 <tr class="odd">
 <td>Returns</td>
 <td>An integer with the value n1 shifted left by n2.<br />
-See also: add, sub, mul, div, shiftl, shiftr, neg</td>
+See also: add, sub, mul, div, pow, shiftr, abs, neg</td>
 </tr>
 <tr class="even">
 <td>Example</td>
@@ -6024,7 +6791,7 @@ Shifts by negative amounts leave the value unchanged.</td>
 <tr class="odd">
 <td>Returns</td>
 <td>An integer with the value n1 shifted left by n2.<br />
-See also: add, sub, mul, div, shiftl, shiftr, neg</td>
+See also: add, sub, mul, div, pow, shiftl, abs, neg</td>
 </tr>
 <tr class="even">
 <td>Example</td>
@@ -6034,6 +6801,92 @@ See also: add, sub, mul, div, shiftl, shiftr, neg</td>
 <p>16</p>
 <p>&gt; shiftr -16 3</p>
 <p>2305843009213693950</p></td>
+</tr>
+</tbody>
+</table>
+
+### **sin** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>sin</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number of radians and returns its trigonometric sine.<br />
+The inverse function to asin.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sin(x).<br />
+See also: cos, tan, asin, acos, atan, sinh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (sin 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (sin PI/3!)**2</p>
+<p>0.750000000000</p>
+<p>&gt; preal (sin (-PI/3)!)**2</p>
+<p>0.750000000000</p>
+<p>&gt; preal (sin PI/4!)**2</p>
+<p>0.500000000000</p>
+<p>&gt; preal (sin PI/2!)**2</p>
+<p>1.000000000000</p>
+<p>&gt; preal (sin (asin 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **sinh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>sin</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its hyperbolic sine (½(e<sup>x</sup>+e<sup>-x</sup>)).<br />
+The inverse function to asinh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sinh(x).<br />
+See also: cosh, tanh, asinh, acosh, atanh, sin</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (sinh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (sinh 1.0!)</p>
+<p>1.175201193644</p>
+<p>&gt; preal (sinh (-1.0)!)</p>
+<p>-1.175201193644</p>
+<p>&gt; preal (sinh (asinh 0.123!)!)</p>
+<p>0.123000000000</p></td>
 </tr>
 </tbody>
 </table>
@@ -6390,6 +7243,48 @@ See also: join, joinchr, len, strlen</td>
 </tbody>
 </table>
 
+### **sqrt** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>sqrt</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its positive square root.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value √x (a number which, when multiplied by itself gives x).<br />
+See also: mul, pow, exp, log, shiftr</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; sqrt 625</p>
+<p>25</p>
+<p>&gt; sqrt -625</p>
+<p>-nan</p>
+<p>&gt; sqrt 0</p>
+<p>0</p>
+<p>&gt; sqrt 0.0625</p>
+<p>0.25</p>
+<p>&gt; set diag[x,y]:{sqrt x**2 + y**2!}</p>
+<p>&gt; diag 3 4</p>
+<p>5</p></td>
+</tr>
+</tbody>
+</table>
+
 ### str \<expr\>
 
 <table>
@@ -6569,7 +7464,7 @@ See also: len, split, joinchr </td>
 </tbody>
 </table>
 
-### sub \<int\> \<int\> 
+### sub \<**number**\> \<**number**\> 
 
 <table>
 <tbody>
@@ -6583,23 +7478,26 @@ See also: len, split, joinchr </td>
 </tr>
 <tr class="odd">
 <td>Arg syntax</td>
-<td>&lt;n1:int&gt; &lt;n2:int&gt;</td>
+<td>&lt;n1:number&gt; &lt;n2:number&gt;</td>
 </tr>
 <tr class="even">
 <td>Description</td>
-<td>Takes two integers and subtracts the second from the first.</td>
+<td>Takes two integers or reals and subtracts the second from the first.<br />
+If either n1 or n2 are real numbers the result will be a real.</td>
 </tr>
 <tr class="odd">
 <td>Returns</td>
 <td>An integer with the value n1-n2.<br />
-See also: add, mul, div, shiftl, shiftr, neg</td>
+See also: add, mul, div, pow, abs, neg, shiftr, shiftl</td>
 </tr>
 <tr class="even">
 <td>Example</td>
 <td><p>&gt; sub 0x100 12</p>
 <p>244</p>
 <p>&gt; sys localtimef "%T" (sub (sys.time!) 600!)</p>
-<p>"17:10:14"</p></td>
+<p>"15:10:14"</p>
+<p>&gt; eval sub 6 0.5!</p>
+<p>5.5</p></td>
 </tr>
 </tbody>
 </table>
@@ -6941,6 +7839,90 @@ See also: sys.localtimef, sys.utctime, sys.time</td>
 <td><p>&gt; set stamp {sys.utctimef "%T%z" (sys.time!)!}</p>
 <p>&gt; stamp</p>
 <p>"00:06:52+0000"</p></td>
+</tr>
+</tbody>
+</table>
+
+### **tan** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>tan</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number of radians and returns its trigonometric tangent.<br />
+The inverse function to atan.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tan(x) (which is sin(x)/cos(x)).<br />
+See also: sin, cos, asin, acos, atan, tanh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (tan 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (tan PI/3!)**2</p>
+<p>3.000000000000</p>
+<p>&gt; preal (tan PI/4!)</p>
+<p>1.000000000000</p>
+<p>&gt; preal (tan PI/2!)</p>
+<p>16331239353195370.000000000000</p>
+<p>&gt; preal (tan (atan 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **tanh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>tanh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its hyperbolic tangent (sinh(x)/cosh(x)).<br />
+The inverse function to atanh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tanh(x) (which is sinh(x)/cosh(x)).<br />
+See also: sinh, cosh, asinh, acosh, atanh, tan</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (tanh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (tanh 1.0!)</p>
+<p>0.761594155956</p>
+<p>&gt; preal (tanh (-1.0)!)</p>
+<p>-0.761594155956</p>
+<p>&gt; preal (tanh (atanh 0.123!)!)</p>
+<p>0.123000000000</p></td>
 </tr>
 </tbody>
 </table>

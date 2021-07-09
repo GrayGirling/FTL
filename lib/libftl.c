@@ -216,7 +216,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 27
+#define VERSION_MIN 28
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -7231,10 +7231,13 @@ static int value_real_print(parser_state_t *state, outchar_t *out,
                            bool detailed)
 {   real_t fp = value_real_number(value);
     real_t absfp = fp;
+    int precision = 16;
+    if (sizeof(real_t) == 8)
+        precision = 15;
     if (absfp < 0)
         absfp = -absfp;
     (void)root;
-    return outchar_printf(out, "%.17" F_REAL_T, fp);
+    return outchar_printf(out, "%.*" F_REAL_T, precision, fp);
 }
 
 
@@ -7562,7 +7565,7 @@ parsew_real_val(const char **ref_line, const char *lineend, real_t *out_real)
             *out_real = real;
         else
             *out_real = -(real_t)real;
-        OMIT(DPRINTF("%s: int val '%.*s' = %" F_real_t "\n",
+        OMIT(DPRINTF("%s: int val '%.*s' = %" F_REAL_T "\n",
                      codeid(), (int)(line-*ref_line), *ref_line, *out_real););
         *ref_line = line;
     }
