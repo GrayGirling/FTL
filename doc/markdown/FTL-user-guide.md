@@ -1399,6 +1399,88 @@ See also: neg, add, sub, mul, div, pow</td>
 </tbody>
 </table>
 
+### **acos** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>acos</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric cosine would equal that value.<br />
+The inverse function to cos.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cos<sup>-1</sup>(x).<br />
+See also: asin, atan, sin, cos, tan, acosh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (acos 0.0!)/PI</p>
+<p>0.500000000000</p>
+<p>&gt; preal (acos 0.75**0.5!)/PI</p>
+<p>0.166666666667</p>
+<p>&gt; preal (acos 0.5**0.5!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (acos 0.0!)/PI</p>
+<p>0.500000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **acosh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>acosh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic cosine would equal that value.<br />
+The inverse function to cosh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cosh<sup>-1</sup>(x).<br />
+See also: asinh, atanh, sinh, cosh, tanh, acos</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (acosh 0.0!)</p>
+<p>-nan</p>
+<p>&gt; preal (acosh 1.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (acosh (-1.0)!)</p>
+<p>-nan</p>
+<p>&gt; preal (acosh (cosh 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
 ### add \<**number**\> \<**number**\> 
 
 <table>
@@ -1513,6 +1595,174 @@ See also: bind, code, context, closure, argname</td>
 <p>&gt; set argument_count[fn]:{len (argnames fn!)!}</p>
 <p>&gt; argument_count add</p>
 <p>2</p></td>
+</tr>
+</tbody>
+</table>
+
+### **asin** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>asin</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric sine would equal that value.<br />
+The inverse function to sin.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sin<sup>-1</sup>(x).<br />
+See also: acos, atan, sin, cos, tan, asinh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (asin 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (asin 0.75**0.5!)/PI</p>
+<p>0.333333333333</p>
+<p>&gt; preal (asin 0.5**0.5!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (asin 1.0!)/PI</p>
+<p>0.500000000000</p>
+<p>&gt; preal (asin (sin 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **asinh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>asinh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic sine would equal that value.<br />
+The inverse function to sinh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value sinh<sup>-1</sup>(x).<br />
+See also: acosh, atanh, sinh, cosh, tanh, asin</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (asinh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (asinh 1.0!)</p>
+<p>0.881373587020</p>
+<p>&gt; preal (asinh (-1.0)!)</p>
+<p>-0.881373587020</p>
+<p>&gt; preal (asinh (sinh 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **atan** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>atan</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number of radians whose trigonometric tangent would equal that value.<br />
+The inverse function to tan.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tan<sup>-1</sup>(x).<br />
+See also: sin, cos, asin, acos, atan, tanh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (atan 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (atan 3.0**0.5!)/PI</p>
+<p>0.333333333333</p>
+<p>&gt; preal (atan 1.0!)/PI</p>
+<p>0.250000000000</p>
+<p>&gt; preal (atan (tan 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **atanh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>atanh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns a number whose hyperbolic tangent would equal that value.<br />
+The inverse function to tanh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value tanh<sup>-1</sup>(x).<br />
+See also: sinh, cosh, asinh, acosh, atanh, tan</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (atanh 0.0!)</p>
+<p>0.000000000000</p>
+<p>&gt; preal (atanh 1.0!)</p>
+<p>inf</p>
+<p>&gt; preal (atanh (-1.0)!)</p>
+<p>-inf</p>
+<p>&gt; preal (atanh 0.5!)</p>
+<p>0.549306144334</p>
+<p>&gt; preal (atanh (tanh 0.123!)!)</p>
+<p>0.123000000000</p></td>
 </tr>
 </tbody>
 </table>
@@ -4252,256 +4502,6 @@ See also: mul, pow, sqrt, exp</td>
 <p>2</p>
 <p>&gt; log (exp 3.4!)</p>
 <p>3.4</p></td>
-</tr>
-</tbody>
-</table>
-
-### **acos** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>acos</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number of radians whose trigonometric cosine would equal that value.<br />
-The inverse function to cos.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value cos<sup>-1</sup>(x).<br />
-See also: asin, atan, sin, cos, tan, acosh</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (acos 0.0!)/PI</p>
-<p>0.500000000000</p>
-<p>&gt; preal (acos 0.75**0.5!)/PI</p>
-<p>0.166666666667</p>
-<p>&gt; preal (acos 0.5**0.5!)/PI</p>
-<p>0.250000000000</p>
-<p>&gt; preal (acos 0.0!)/PI</p>
-<p>0.500000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **acosh** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>acosh</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number whose hyperbolic cosine would equal that value.<br />
-The inverse function to cosh.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value cosh<sup>-1</sup>(x).<br />
-See also: asinh, atanh, sinh, cosh, tanh, acos</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (acosh 0.0!)</p>
-<p>-nan</p>
-<p>&gt; preal (acosh 1.0!)</p>
-<p>0.000000000000</p>
-<p>&gt; preal (acosh (-1.0)!)</p>
-<p>-nan</p>
-<p>&gt; preal (acosh (cosh 0.123!)!)</p>
-<p>0.123000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **asin** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>asin</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number of radians whose trigonometric sine would equal that value.<br />
-The inverse function to sin.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value sin<sup>-1</sup>(x).<br />
-See also: acos, atan, sin, cos, tan, asinh</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (asin 0.0!)</p>
-<p>0.000000000000</p>
-<p>&gt; preal (asin 0.75**0.5!)/PI</p>
-<p>0.333333333333</p>
-<p>&gt; preal (asin 0.5**0.5!)/PI</p>
-<p>0.250000000000</p>
-<p>&gt; preal (asin 1.0!)/PI</p>
-<p>0.500000000000</p>
-<p>&gt; preal (asin (sin 0.123!)!)</p>
-<p>0.123000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **asinh** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>asinh</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number whose hyperbolic sine would equal that value.<br />
-The inverse function to sinh.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value sinh<sup>-1</sup>(x).<br />
-See also: acosh, atanh, sinh, cosh, tanh, asin</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (asinh 0.0!)</p>
-<p>0.000000000000</p>
-<p>&gt; preal (asinh 1.0!)</p>
-<p>0.881373587020</p>
-<p>&gt; preal (asinh (-1.0)!)</p>
-<p>-0.881373587020</p>
-<p>&gt; preal (asinh (sinh 0.123!)!)</p>
-<p>0.123000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **atan** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>atan</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number of radians whose trigonometric tangent would equal that value.<br />
-The inverse function to tan.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value tan<sup>-1</sup>(x).<br />
-See also: sin, cos, asin, acos, atan, tanh</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (atan 0.0!)</p>
-<p>0.000000000000</p>
-<p>&gt; preal (atan 3.0**0.5!)/PI</p>
-<p>0.333333333333</p>
-<p>&gt; preal (atan 1.0!)/PI</p>
-<p>0.250000000000</p>
-<p>&gt; preal (atan (tan 0.123!)!)</p>
-<p>0.123000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **atanh** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>atanh</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns a number whose hyperbolic tangent would equal that value.<br />
-The inverse function to tanh.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value tanh<sup>-1</sup>(x) (which is sin(x)/cos(x)).<br />
-See also: sinh, cosh, asinh, acosh, atanh, tan</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (atanh 0.0!)</p>
-<p>0.000000000000</p>
-<p>&gt; preal (atanh 1.0!)</p>
-<p>inf</p>
-<p>&gt; preal (atanh (-1.0)!)</p>
-<p>-inf</p>
-<p>&gt; preal (atanh 0.5!)</p>
-<p>0.549306144334</p>
-<p>&gt; preal (atanh (tanh 0.123!)!)</p>
-<p>0.123000000000</p></td>
 </tr>
 </tbody>
 </table>
