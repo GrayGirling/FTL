@@ -27254,7 +27254,7 @@ fn_argnames(const value_t *this_fn, parser_state_t *state)
 static void
 cmds_generic_closure(parser_state_t *state, dir_t *cmds)
 {   smod_addfn(state, cmds, "closure",
-               "<push> <dir> <code> - create closure from code and dir (+ stack if push)",
+               "<push> <dir> <code> - new closure from code and dir (+ stack if push)",
                &fn_closure, 3);
     smod_addfn(state, cmds, "bind",
                "<closure> <arg> - bind argument to unbound closure argument",
@@ -29176,71 +29176,71 @@ cmds_generic_parser(parser_state_t *state, dir_t *cmds,
               &fn_stack, 0);
 
     smod_addfn(state, pcmds, "scan",
-              "<string> - return <parseobj> for string",
+              "<string> - return parse object <po> for string",
               &fn_scan, 1);
     smod_addfn(state, pcmds, "scanned",
-              "<parseobj> - return text remaining in <parseobj>",
+              "<po> - return text remaining in <po>",
               &fn_scanned, 1);
     smod_addfn(state, pcmds, "scanempty",
-              "<parseobj> - TRUE if no characters remain in <parseobj>",
+              "<po> - TRUE if no characters remain in <po>",
               &fn_scan_empty, 1);
     smod_addfn(state, pcmds, "scanwhite",
-              "<parseobj> - parse some white space in <parseobj>",
+              "<po> - parse some white space in <po>",
               &fn_scan_white, 1);
     smod_addfn(state, pcmds, "scanspace",
-              "<parseobj> - parse over optional white space in <parseobj>",
+              "<po> - parse over optional white space in <po>",
               &fn_scan_space, 1);
     smod_addfn(state, pcmds, "scanint",
-              "<@int> <parseobj> - parse integer in <parseobj>",
+              "<@int> <po> - parse integer in <po>",
               &fn_scan_int, 2);
     smod_addfn(state, pcmds, "scanintval",
-              "<@int> <parseobj> - parse signed based integer in <parseobj>",
+              "<@int> <po> - parse signed based integer in <po>",
               &fn_scan_intval, 2);
     smod_addfn(state, pcmds, "scanhex",
-              "<@int> <parseobj> - parse hex in <parseobj>",
+              "<@int> <po> - parse hex in <po>",
               &fn_scan_hex, 2);
     smod_addfn(state, pcmds, "scanhexw",
-              "<width> <@int> <parseobj> - parse hex in <width> chars in "
-              "<parseobj>, update string",
+              "<width> <@int> <po> - parse hex in <width> chars in "
+              "<po>",
               &fn_scan_hexw, 3);
     smod_addfn(state, pcmds, "scanstr",
-              "<@string> <parseobj> - parse single or double-quoted string "
-              "in <parseobj>",
+              "<@string> <po> - parse single or double-quoted string "
+              "in <po>",
               &fn_scan_string, 2);
     smod_addfn(state, pcmds, "scanid",
-              "<@string> <parseobj> - parse identifier in <parseobj>",
+              "<@string> <po> - parse identifier in <po>",
               &fn_scan_id, 2);
     smod_addfn(state, pcmds, "scanitemstr",
-              "<@string> <parseobj> - parse item or string in <parseobj>",
+              "<@string> <po> - parse item or string in <po>",
               &fn_scan_itemstr, 2);
     smod_addfn(state, pcmds, "scancode",
-              "<@string> <parseobj> - parse {code} block in <parseobj>",
+              "<@string> <po> - parse {code} block in <po>",
               &fn_scan_code, 2);
     smod_addfn(state, pcmds, "scanvalue",
-              "<@string> <parseobj> - parse a basic value in <parseobj>",
+              "<@string> <po> - parse a basic value in <po>",
               &fn_scan_value, 2);
     smod_addfn(state, pcmds, "scanitem",
-              "<delims> <@string> <parseobj> - parse item until non-blank or "
-              "delimiter in <parseobj>",
+              "<dir> <@string> <po> - parse until non-blank or "
+              "delimiter in <dir>",
               &fn_scan_item, 3);
     smod_addfn(state, pcmds, "scanmatch",
-              "<dir> <@val> <parseobj> - parse prefix in dir in "
-              "<parseobj> giving matching value",
+              "<dir> <@val> <po> - parse prefix in dir in "
+              "<po> giving matching value",
               &fn_scan_match, 3);
     smod_addfn(state, pcmds, "scantomatch",
-              "<dir> <@val> <parseobj> - parse up to delimiter named in dir in "
-              "<parseobj> giving matching value",
+              "<dir> <@val> <po> - parse up to delimiter dir in "
+              "<po> giving index",
               &fn_scan_ending, 3);
     smod_addfn(state, pcmds, "scanopterm",
-              "<opdefs> <scanfn> <@val> <parseobj> - parse term using "
-              "<opdefs> & base <scanfn>",
+              "<ops> <scanfn> <@val> <po> - parse term using "
+              "<ops> & base <scanfn>",
               &fn_scan_opterm, 4);
     smod_addfn(state, pcmds, "opset",
-              "<opdefs> <prec> <assoc> <name> <function> - define an operator "
-              "in opdefs",
+              "<ops> <prec> <assoc> <name> <function> - define an operator "
+              "in ops",
               &fn_opset, 5);
     smod_addfn(state, pcmds, "opeval",
-              "<opdefs> <code> - execute code according to operator "
+              "<ops> <code> - execute code according to operator "
               "definitions",
               &fn_opeval, 2);
     smod_add_dir(state, pcmds, "op", parser_opdefs(state));
@@ -34232,18 +34232,18 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
               "<string> - returns ordinal of the first character of string",
               &fn_chrcode, 1);
     smod_addfn(state, cmds, "split",
-              "<delim> <str> - make vector of strings separated by <delim>s",
+              "<delim> <str> - vector of strings separated by <delim>s",
               &fn_split, 2);
     smod_addfn(state, cmds, "binsplit",
-              "<le?> <signed?> <n> <str> - make vector of <signed>> <n>-byte "
-              "ints with <le?> endianness",
+              "<le?> <sign?> <n> <str> - vector of <sign?>ed n-byte "
+              "<le?> endian ints",
               &fn_binsplit, 4);
     smod_addfn(state, cmds, "chop",
-              "<stride> <str> - make vector of strings each <stride> bytes "
+              "<stride> <str> - vector of strings each <stride> bytes "
               "or less",
               &fn_chop, 2);
     smod_addfn(state, cmds, "chopn",
-              "<n> <stride> <str> - make vector of <n> strings each <stride> "
+              "<n> <stride> <str> - vector of <n> strings each <stride> "
               "bytes or less",
               &fn_chopn, 3);
     smod_addfn(state, cmds, "join",
@@ -35290,8 +35290,8 @@ cmds_generic_dir(parser_state_t *state, dir_t *cmds)
               "with <env1> values",
               &fn_envjoin, 2);
     smod_addfn(state, cmds, "zip",
-              "<dom> <range> - generate environment with given domain and "
-              "range taken from <range>",
+              "<dom> <range> - make environment with domain cyclically matched "
+              "to <range>",
               &fn_zip, 2);
     smod_addfnscope(state, cmds, "sort",
               "<env> - sorted vector of values in <env>",
@@ -35945,16 +35945,16 @@ cmds_generic_lang(parser_state_t *state, dir_t *cmds)
              &cmd_func);
     smod_addfn(state, cmds, "exit", "- abandon all command inputs", &fn_exit, 0);
     smod_addfnscope(state, cmds, "for",
-              "<env> <binding> - execute <binding> <val> for every <env> value",
+              "<env> <fn> - execute <fn> <val> for every <env> value",
               &fn_for, 2, scope);
     smod_addfnscope(state, cmds, "forall",
-              "<env> <binding> - execute <binding> <val> <name> for all entries in <env>",
+              "<env> <fn> - execute <fn> <val> <name> for all entries in <env>",
               &fn_forall, 2, scope);
     smod_addfnscope(state, cmds, "forwhile",
-              "<env> <binding> - for <binding> while it is not FALSE",
+              "<env> <fn> - for <fn> while it is not FALSE",
               &fn_forwhile, 2, scope);
     smod_addfnscope(state, cmds, "forallwhile",
-              "<env> <binding> - forall <binding> while it is not FALSE",
+              "<env> <fn> - forall <fn> while it is not FALSE",
               &fn_forallwhile, 2, scope);
     smod_addfnscope(state, cmds, "if",
               "<b> <then-code> <else-code> - execute <then-code> if "

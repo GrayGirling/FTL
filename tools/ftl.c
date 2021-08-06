@@ -550,7 +550,7 @@ cmds_ftl_end(parser_state_t *state)
  *****************************************************************************/
 
 
-
+#if 0 /* Demonstration code - with integer handles */
 
 
 /* Objects */
@@ -685,7 +685,7 @@ static void cmds_obj(parser_state_t *state)
 
     values_obj_init(state);
     smod_add_dir(state, cmds, "obj", objcmds);
-    smod_addfn(state, objcmds, "new", "<n> - create object holing <n>",
+    smod_addfn(state, objcmds, "new", "<n> - create object holding <n>",
                &fn_obj_new, 1);
     smod_addfn(state, objcmds, "status", "<obj> - report status of obj",
                &fn_obj_state, 1);
@@ -699,6 +699,16 @@ static void cmds_obj(parser_state_t *state)
 static void cmds_obj_end(void)
 {
 }
+
+
+
+#else
+
+#define cmds_obj(state)
+#define cmds_obj_end()
+
+
+#endif
 
 
 
@@ -829,8 +839,7 @@ static void ftl_libs_end(parser_state_t *state)
 
 
 typedef struct optresult_s
-{
-    bool badopt;
+{   bool badopt;
 } optresult_t;
 
 

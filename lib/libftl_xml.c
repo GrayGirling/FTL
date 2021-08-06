@@ -1044,11 +1044,11 @@ extern bool
 cmds_xml(parser_state_t *state, dir_t *cmds)
 {
     smod_addfn(state, cmds, "scanxmlid",
-              "<@string> <parseobj> - parse XML-style name in <parseobj>",
+              "<@string> <po> - parse XML-style name in <parseobj>",
               &fn_scan_xml_name, 2);
     smod_addfn(state, cmds, "scanxml",
-              "<d> <@fn> <parseobj> - bind d.pi|cmt|decl|mttag|stag|etag|text "
-              "to XML item",
+              "<d> <@fn> <po> - bind d.pi|cmt|decl|mttag|stag|etag|text "
+              "to XML items",
               &fn_scan_xml_itemfn, 3);
     return TRUE;
 }
