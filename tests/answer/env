@@ -41,3 +41,8 @@ FALSE
 TRUE
 > #TRUE
 > 
+> set ix[]:{<"local">.0}
+> ix
+"local"
+> # "local" (fails in some pre 1.29 builds)
+> 

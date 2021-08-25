@@ -13,6 +13,7 @@ all basetype <subcommand> - commands:
     code - type value
     closure - type value
     int - type value
+    real - type value
     dir - type value
     cmd - type value
     fn - type value
@@ -21,5 +22,4 @@ all basetype <subcommand> - commands:
     mac - type value
     coroutine - type value
     mem - type value
-    obj - type value
 > 

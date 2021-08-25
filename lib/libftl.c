@@ -216,7 +216,7 @@
 #define VERSION_MAJ 1
 #endif
 
-#define VERSION_MIN 28
+#define VERSION_MIN 29
 
 #if defined(USE_READLINE) && defined(USE_LINENOISE)
 #error you can define only one of USE_READLINE and USE_LINENOISE
@@ -17567,7 +17567,7 @@ value_closure_lnew(parser_state_t *state,
 
 
 
-/*! TODO: not sure why we have removecode here */
+/*! TODO: not sure why we have removecode here - it's never set */
 static value_t *
 value_closure_copy_lnew(parser_state_t *state, const value_t *oldclosureval,
                         bool removecode, bool autorun)
@@ -17581,12 +17581,13 @@ value_closure_copy_lnew(parser_state_t *state, const value_t *oldclosureval,
 
         if (PTRVALID(closure))
         {   const value_t *code = NULL;
+            value_env_t *oldenv = value_env_copy_lnew(state, oldclosure->env);
 
             if (!removecode)
                 code = oldclosure->code;
-            value_closure_init(closure, type_closure, code,
-                               value_env_copy_lnew(state, oldclosure->env),
+            value_closure_init(closure, type_closure, code, oldenv,
                                autorun, /*on_heap*/TRUE);
+            value_unlocal(value_env_value(oldenv));
         }
     }
     return closure==NULL? NULL: &closure->value;
@@ -18358,8 +18359,8 @@ parser_builtin_arg(parser_state_t *parser_state, int argno)
  *  looking up values - effectively hiding the values in directories from the
  *  stack beyond it.
  *
- *  Note: The \c root environment must not be part of an existing directory stack
- *        (since it has only one "link" field(. Before adding a directory
+ *  Note: The \c root environment must not be part of an existing directory 
+ *        stack (since it has only one "link" field(. Before adding a directory
  *        that is also used on a different stack a clone should be taken.
  */
 extern dir_stack_pos_t
@@ -18387,8 +18388,8 @@ parser_env_push(parser_state_t *parser_state, dir_t *newdir, bool outer_visible)
  *  looking up values - effectively hiding the values in directories from the
  *  stack beyond it.
  *
- *  Note: The \c newdir directory must not be part of an existing directory stack
- *        (since it has only one "link" field(. Before adding a directory
+ *  Note: The \c newdir directory must not be part of an existing directory 
+ *        stack (since it has only one "link" field). Before adding a directory
  *        that is also used on a different stack a clone should be taken.
  */
 extern bool /* ok */
@@ -23014,7 +23015,7 @@ dir_dot_lookup(parser_state_t *state, dir_t *dir, const value_t *name)
                 return name;
         }
         else
-        {
+        {   const value_t *val;
             OMIT(
                DPRINTF("%s: dir lookup %s index in type %s (%p)\n",
                        codeid(), value_type_name(name),
@@ -23022,7 +23023,10 @@ dir_dot_lookup(parser_state_t *state, dir_t *dir, const value_t *name)
                        value_type(dir_value(dir)));
                VALUE_SHOW("index: ", name);
             );
-            return /*lnew*/dir_get(dir, name);
+            val = /*lnew*/dir_get(dir, name);
+            value_local(state, (value_t *)/*un-const*/val);
+            /*< to ensure that the result is always local */
+            return val;
         }
     }
 }
@@ -27110,8 +27114,10 @@ fn_bind(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
 
     if (value_istype(closure, type_closure))
-        val = value_closure_bind_lnew(state, closure, arg);
-    else
+    {   val = value_closure_bind_lnew(state, closure, arg);
+        value_unlocal(closure);
+        value_unlocal(arg);
+    } else
         parser_report_help(state, this_fn);
 
     return val;
@@ -27125,8 +27131,10 @@ fn_prime(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
 
     if (value_istype(closure, type_closure))
-        val = value_closure_prime_lnew(state, (value_t *)closure);
-    else
+    {   val = value_closure_prime_lnew(state, (value_t *)closure);
+        if (val != closure)
+            value_unlocal(closure);
+    } else
         parser_report_help(state, this_fn);
 
     return val;
@@ -27141,8 +27149,10 @@ fn_deprime(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
 
     if (value_istype(closure, type_closure))
-        val = value_closure_deprime_lnew(state, (value_t *)closure);
-    else
+    {   val = value_closure_deprime_lnew(state, (value_t *)closure);
+        if (val != closure)
+            value_unlocal(closure);
+    } else
         parser_report_help(state, this_fn);
 
     return val;
@@ -27157,8 +27167,7 @@ fn_code(const value_t *this_fn, parser_state_t *state)
     const value_t *val = &value_null;
 
     if (value_istype(closure, type_closure))
-    {
-        dir_t *env = NULL;
+    {   dir_t *env = NULL;
         const value_t *unbound = NULL;
 
         (void)value_closure_get(closure, &val, &env, &unbound);
@@ -30967,6 +30976,9 @@ cmds_generic_type(parser_state_t *state, dir_t *cmds)
     smod_add_val(state, types, type_name(type_code), value_type_value(type_code));
     smod_add_val(state, types, type_name(type_closure), value_type_value(type_closure));
     smod_add_val(state, types, type_name(type_int), value_type_value(type_int));
+#ifdef USE_REALS
+    smod_add_val(state, types, type_name(type_real), value_type_value(type_real));
+#endif
     smod_add_val(state, types, type_name(type_dir), value_type_value(type_dir));
     smod_add_val(state, types, type_name(type_cmd), value_type_value(type_cmd));
     smod_add_val(state, types, type_name(type_func), value_type_value(type_func));
@@ -35441,6 +35453,7 @@ cmd_help(const char **ref_line, const value_t *this_cmd, parser_state_t *state)
     {   if (helpval != &value_null)
         {   help_show_val(state, cmd, strlen(cmd), helpval, 0,
                           include_vars?-1: 0, include_vars);
+            value_unlocal(helpval);
         } else
         {   /* the current directory will be the help command's local */
             /* variables so use the outer (calling) directory         */

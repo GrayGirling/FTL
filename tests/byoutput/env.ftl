@@ -26,3 +26,7 @@ inenv ids.[x="i", y="b"] "x"
 #FALSE
 inenv ids.[x="i", y="b"] "y"
 #TRUE
+
+set ix[]:{<"local">.0}
+ix
+# "local" (fails in some pre 1.29 builds)
