@@ -1,0 +1,28 @@
+> int 42
+42
+> # 42
+> eval int "42"!
+42
+> # 42
+> eval int "42.4"!
+42
+> # 42
+> eval int "42+4"!
+42
+> # 42
+> int 42+4
+ftl $*console*:+9 in
+ftl $*console*:10: warning - trailing text ...+4
+42
+> # ...: warning - trailing text ...+4
+> # 42
+> int 0b00101010
+42
+> # 42
+> int 0x2a
+42
+> # 42
+> int 0o52
+42
+> # 42
+> 

@@ -12,7 +12,7 @@ elf_lib_type=ELF
 force_native=no
 ndebug=no
 
-# Hint: if you are using windows 10 under WSL and you want to buld a Windows
+# Hint: if you are using windows 10/11 under WSL and you want to buld a Windows
 #       (non-WSL) executable try
 #          make use_elf=no force_native=yes
 #       To test the compiler system try
@@ -37,7 +37,7 @@ ndebug=no
 
 # OS CUSTOMIZATION
 
-# $(info OS='$(OS)' OSARCH='$(OSARCH)' OSNAME='$(OSNAME)')
+ $(info OS='$(OS)' OSARCH='$(OSARCH)' OSNAME='$(OSNAME)')
 
 ARCH=$(OSARCH)
 ifeq ($(OSARCH),)
@@ -55,8 +55,13 @@ ifeq ($(OSARCH),linux64)
     KERNEL_NONMS=$(KERNEL:-Microsoft=)
     #$(info KERNEL=$(KERNEL) KERNEL_NONMS=$(KERNEL_NONMS))
     ifneq ($(KERNEL),$(KERNEL_NONMS))
-        #$(info Windows WSL Kernel detected)
+        #$(info Windows WSL Kernel detected - no kernel name)
         ARCH=winlinux
+    else
+        ifneq ($(findstring WSL,$(KERNEL)),)
+            #$(info Windows WSL Kernel detected - WSL kernel name)
+            ARCH=winlinux
+        endif
     endif
 endif
 ifeq ($(OSARCH),Windows_NT)
@@ -340,4 +345,4 @@ docs:
 	make -C doc
 
 clean:
-	rm -f ftl$(FTLVER)$(EXE) penv$(FTLVER) hi$(FTLVER)$(EXE) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)
+	rm -f ftl$(FTLVER)$(EXE) penv$(FTLVER) hi$(EXE) $(FTL_OBJS) $(PENV_OBJS) $(HI_OBJS) $(FTLEXTS)

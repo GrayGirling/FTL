@@ -32673,7 +32673,7 @@ genfn_fmt_g_uc(char *buf, size_t buflen, fprint_flags_t flags, int precision,
                           "%+.*"FC_REAL_T, "%.*"FC_REAL_T);
 }
 #endif
-
+        
 
 
 
@@ -34176,7 +34176,7 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_d);
     printf_addformat(type_int, "u", "<f> <p> <val> - %u unsigned format",
                      &fn_fmt_u);
-    printf_addformat(type_int, "o", "<f> <p> <val> - %u unsigned octal format",
+    printf_addformat(type_int, "o", "<f> <p> <val> - %o unsigned octal format",
                      &fn_fmt_o);
     printf_addformat(type_int, "x", "<f> <p> <val> - %x unsigned hex format",
                      &fn_fmt_x);
@@ -34184,7 +34184,7 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_x_uc);
     printf_addformat(type_int, "s", "<f> <p> <val> - %s string format",
                      &fn_fmt_s);
-    printf_addformat(type_int, "S", "<f> <p> <val> - %s zero terminated string format",
+    printf_addformat(type_int, "S", "<f> <p> <val> - %S zero terminated string format",
                      &fn_fmt_s_uc);
     printf_addformat(type_int, "c", "<f> <p> <val> - %c character format",
                      &fn_fmt_c);
@@ -34205,7 +34205,7 @@ cmds_generic_string(parser_state_t *state, dir_t *cmds)
                      &fn_fmt_e);
     printf_addformat(type_int, "E", "<f> <p> <val> - %E real exponent format",
                      &fn_fmt_e_uc);
-    printf_addformat(type_int, "g", "<f> <p> <val> - %e real general format",
+    printf_addformat(type_int, "g", "<f> <p> <val> - %g real general format",
                      &fn_fmt_g);
     printf_addformat(type_int, "G", "<f> <p> <val> - %E real general format",
                      &fn_fmt_g_uc);
@@ -36584,17 +36584,17 @@ cmds_generic_mem(parser_state_t *state, dir_t *cmds)
               "<mem> <ix> <len> - force read <len> string at <ix> in memory",
               &fn_mem_get, 3);
     smod_addfn(state, mem, "len_can",
-              "<mem> [rwgc] <ix> - return length of area at <ix> that can do ops",
+              "<mem> [rwgc] <ix> - length of area at <ix> that can do ops",
               &fn_mem_len_can, 3);
     smod_addfn(state, mem, "len_cant",
-              "<mem> [rwgc] <ix> - return length of area at <ix> that can not do ops",
+              "<mem> [rwgc] <ix> - length of area at <ix> that can not do ops",
               &fn_mem_len_cant, 3);
 
     smod_addfn(state, mem, "base_can",
-              "<mem> [rwgc] <ix> - return start of area ending at <ix> that can do ops",
+              "<mem> [rwgc] <ix> - start of area ending at <ix> that can do ops",
               &fn_mem_base_can, 3);
     smod_addfn(state, mem, "base_cant",
-              "<mem> [rwgc] <ix> - return start of area ending at <ix> that can do ops",
+              "<mem> [rwgc] <ix> - start of area ending at <ix> that can not do ops",
               &fn_mem_base_cant, 3);
     smod_addfn(state, mem, "bin",
               "<base> <string> - create mem with base index and read-only string",
