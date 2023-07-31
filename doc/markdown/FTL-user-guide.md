@@ -2584,6 +2584,94 @@ See also: bind, code, closure, argname, argnames</td>
 </tbody>
 </table>
 
+### **cos** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>cos</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number of radians and returns its trigonometric cosine.<br />
+The inverse function to acos.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cos(x).<br />
+See also: sin, tan, asin, acos, atan, cosh</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (cos 0.0!)</p>
+<p>1.000000000000</p>
+<p>&gt; preal (cos PI/3!)**2</p>
+<p>0.250000000000</p>
+<p>&gt; preal (cos (-PI/3)!)**2</p>
+<p>0.250000000000</p>
+<p>&gt; preal (cos PI/4!)**2</p>
+<p>0.500000000000</p>
+<p>&gt; preal (cos PI/2!)**2</p>
+<p>0.000000000000</p>
+<p>&gt; preal (cos (acos 0.123!)!)</p>
+<p>0.123000000000</p></td>
+</tr>
+</tbody>
+</table>
+
+### **cosh** \<**real**\> 
+
+<table>
+<tbody>
+<tr class="odd">
+<td>Name</td>
+<td>cosh</td>
+</tr>
+<tr class="even">
+<td>Kind</td>
+<td>Function (available only when the real type is supported.)</td>
+</tr>
+<tr class="odd">
+<td>Arg syntax</td>
+<td>&lt;x:real&gt;</td>
+</tr>
+<tr class="even">
+<td>Description</td>
+<td>Takes a real number and returns its hyperbolic cosine (½(e<sup>x</sup>-e<sup>-x</sup>)).<br />
+The inverse function to acosh.</td>
+</tr>
+<tr class="odd">
+<td>Returns</td>
+<td>A real with the value cosh(x).<br />
+See also: sinh, tanh, asinh, acosh, atanh, cos</td>
+</tr>
+<tr class="even">
+<td>Example</td>
+<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
+<p>&gt; preal (cosh (0.0)!)</p>
+<p>1.000000000000</p>
+<p>&gt; preal (cosh (1.0)!)</p>
+<p>1.543080634815</p>
+<p>&gt; preal (cosh (-1.0)!)</p>
+<p>1.543080634815</p>
+<p>&gt; preal (cosh (acosh 0.123!)!)</p>
+<p>-nan</p>
+<p>&gt; preal (cosh (acosh 1.23!)!)</p>
+<p>1.230000000000</p></td>
+</tr>
+</tbody>
+</table>
+
 ### div \<**number**\> \<**number**\> 
 
 <table>
@@ -4502,94 +4590,6 @@ See also: mul, pow, sqrt, exp</td>
 <p>2</p>
 <p>&gt; log (exp 3.4!)</p>
 <p>3.4</p></td>
-</tr>
-</tbody>
-</table>
-
-### **cos** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>cos</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number of radians and returns its trigonometric cosine.<br />
-The inverse function to acos.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value cos(x).<br />
-See also: sin, tan, asin, acos, atan, cosh</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (cos 0.0!)</p>
-<p>1.000000000000</p>
-<p>&gt; preal (cos PI/3!)**2</p>
-<p>0.250000000000</p>
-<p>&gt; preal (cos (-PI/3)!)**2</p>
-<p>0.250000000000</p>
-<p>&gt; preal (cos PI/4!)**2</p>
-<p>0.500000000000</p>
-<p>&gt; preal (cos PI/2!)**2</p>
-<p>0.000000000000</p>
-<p>&gt; preal (cos (acos 0.123!)!)</p>
-<p>0.123000000000</p></td>
-</tr>
-</tbody>
-</table>
-
-### **cosh** \<**real**\> 
-
-<table>
-<tbody>
-<tr class="odd">
-<td>Name</td>
-<td>cosh</td>
-</tr>
-<tr class="even">
-<td>Kind</td>
-<td>Function (available only when the real type is supported.)</td>
-</tr>
-<tr class="odd">
-<td>Arg syntax</td>
-<td>&lt;x:real&gt;</td>
-</tr>
-<tr class="even">
-<td>Description</td>
-<td>Takes a real number and returns its hyperbolic cosine (½(e<sup>x</sup>-e<sup>-x</sup>)).<br />
-The inverse function to acosh.</td>
-</tr>
-<tr class="odd">
-<td>Returns</td>
-<td>A real with the value cosh(x).<br />
-See also: sinh, tanh, asinh, acosh, atanh, cos</td>
-</tr>
-<tr class="even">
-<td>Example</td>
-<td><p>&gt; set preal[x]:{echo (strf "%.12f" &lt;x&gt;!)!}</p>
-<p>&gt; preal (cosh (0.0)!)</p>
-<p>1.000000000000</p>
-<p>&gt; preal (cosh (1.0)!)</p>
-<p>1.543080634815</p>
-<p>&gt; preal (cosh (-1.0)!)</p>
-<p>1.543080634815</p>
-<p>&gt; preal (cosh (acosh 0.123!)!)</p>
-<p>-nan</p>
-<p>&gt; preal (cosh (acosh 1.23!)!)</p>
-<p>1.230000000000</p></td>
 </tr>
 </tbody>
 </table>

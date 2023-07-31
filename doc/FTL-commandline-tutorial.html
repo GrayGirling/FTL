@@ -1,1164 +1,1614 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html><head>
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=windows-1252"/>
+	<title>FTL Client Tools Command Line and Scripting Guide</title>
+	<meta name="generator" content="LibreOffice 7.1.4.2 (Windows)"/>
+	<meta name="author" content="Gray Girling"/>
+	<meta name="created" content="00:00:00"/>
+	<meta name="changedby" content="Gray Girling"/>
+	<meta name="changed" content="2021-08-06T14:56:47.339000000"/>
+</head>
+<body lang="en-GB" dir="ltr"><h1>FTL Client Tool Command Line
+Interface</h1>
+<p><br/>
+<br/>
 
-<meta content="text/html; charset=ISO-8859-1" http-equiv="content-type"><title>FTL Client Tools Command Line and Scripting Guide</title>
-  <meta content="Gray Girling" name="author"></head><body>
-<h1>FTL Client Tool Command Line Interface</h1>
-
-<br>
-<h1>Built-in Commands<span style="font-family: monospace;"></span></h1>
-
-<p><span style="font-family: monospace;"></span>It is a simple matter
-for FTL-based tools to add a set of standard commands to those that it
-defines.&nbsp; For this reason most utilities will have the following
-commands available.<br>
- </p>
-They are divided into groups with prefixes 
-<ul>
-<li> &lt;none&gt; - language features 
-</li><li> io - input and output 
-</li><li> sys - operating system interface 
-</li><li> parse - language parsing library 
-</li><li> reg - Windows registry (Windows only) </li>
-</ul>
-
-<p>The language features can be divided into those for: </p>
-
-<ul>
-<li> Program control 
-</li><li> General features 
-</li><li> Types 
-</li><li> Booleans 
-</li><li> Integers 
-</li><li> Environments and directories 
-</li><li> Character handling 
-</li><li> Input and Output 
-</li><li> Parser interface 
-</li><li> Operating System interface 
-</li><li> Windows-only interface </li>
-</ul>
-
-<p>Program control: </p>
-
-<ul>
-<li> do &lt;do&gt; &lt;test&gt; - execute &lt;do&gt; while &lt;test&gt; evaluates non-zero 
-</li><li> every &lt;n&gt; &lt;command&gt; - repeat command every &lt;n&gt; ms 
-</li><li> exit - abandon all command inputs 
-</li><li> forall &lt;env&gt; &lt;binding&gt; - execute &lt;binding&gt; for all &lt;env&gt; values 
-</li><li> if &lt;n&gt; &lt;then-code&gt; &lt;else-code&gt; - execute &lt;then-code&gt; if &lt;n&gt;!=0 
-</li><li> return &lt;rc&gt; - abandon current command input returning &lt;rc&gt; 
-</li><li> source &lt;filename&gt; - read from file &lt;filename&gt; 
-</li><li> sourcetext &lt;stringexpr&gt; - read characters from string 
-</li><li> while &lt;test&gt; &lt;do&gt; - while &lt;test&gt; evaluates non-zero execute &lt;do&gt; </li>
-</ul>
-
-<p>General features: </p>
-
-<ul>
-<li> cmd &lt;function&gt; &lt;help&gt; - create a command from a function 
-</li><li> cmp &lt;expr&gt; &lt;expr&gt; - returns integer comparing its arguments 
-</li><li> echo &lt;whole line&gt; - prints the line out 
-</li><li> eval &lt;expr&gt; - evaluate expression 
-</li><li> help - prints command information 
-</li><li> rnd &lt;n&gt; - return random number less than &lt;n&gt; 
-</li><li> set &lt;name&gt; &lt;expr&gt; - set value in environment 
-</li><li> sleep &lt;n&gt; - sleep for &lt;n&gt; milliseconds </li>
-</ul>
-
-<p>Types: </p>
-
-<ul>
-<li> NULL - nul value 
-</li><li> type &lt;typename&gt; - return the type with the given name 
-</li><li> typeof &lt;expr&gt; - returns the type of &lt;expr&gt; </li>
-</ul>
-
-<p>Booleans: </p>
-
-<ul>
-<li> TRUE - the TRUE value 
-</li><li> FALSE - an un-TRUE value 
-</li><li> moreeq &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; more than or equal to second 
-</li><li> more &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; more than second 
-</li><li> lesseq &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; less than or equal to second 
-</li><li> less &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; less than second 
-</li><li> notequal &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; not equal to second 
-</li><li> equal &lt;val&gt; &lt;val&gt; - TRUE if first &lt;val&gt; equal to second 
-</li><li> invert &lt;val&gt; - TRUE if &lt;val&gt; is FALSE, FALSE otherwise 
-</li><li> logand &lt;val1&gt; &lt;val2&gt; - FALSE if &lt;val1&gt; is FALSE, &lt;val2&gt; otherwise 
-</li><li> logor &lt;val1&gt; &lt;val2&gt; - TRUE if &lt;val1&gt; is TRUE, &lt;val2&gt; otherwise </li>
-</ul>
-
-<p>Integers: </p>
-
-<ul>
-<li> bitor &lt;n1&gt; &lt;n2&gt; - return n1 "or"ed with n2 
-</li><li> bitxor &lt;n1&gt; &lt;n2&gt; - return n1 exclusive "or"ed with n2 
-</li><li> bitand &lt;n1&gt; &lt;n2&gt; - return n1 "and"ed with n2 
-</li><li> bitnot &lt;n&gt; - return the bitwise "not" of n 
-</li><li> shiftl &lt;n1&gt; &lt;n2&gt; - return n1 left shifted by n2 bits 
-</li><li> shiftr &lt;n1&gt; &lt;n2&gt; - return n1 right shifted by n2 bits 
-</li><li> add &lt;n1&gt; &lt;n2&gt; - return n1 with n2 added 
-</li><li> sub &lt;n1&gt; &lt;n2&gt; - return n1 with n2 subtracted 
-</li><li> mul &lt;n1&gt; &lt;n2&gt; - return n1 multiplied by n2 
-</li><li> div &lt;n1&gt; &lt;n2&gt; - return n1 divided by n2 
-</li><li> neg &lt;n&gt; - return negated &lt;n&gt; 
-</li><li> rnd &lt;n&gt; - return random number less than &lt;n&gt; 
-</li><li> int &lt;integer expr&gt; - numeric value </li>
-</ul>
-
-<p>Environments and directories: </p>
-
-<ul>
-<li> domain &lt;env&gt; - generate vector of names in &lt;env&gt; 
-</li><li> enter &lt;env&gt; - add commands from &lt;env&gt; to current environment 
-</li><li> inenv &lt;env&gt; &lt;name&gt; - returns 0 unless string &lt;name&gt; is in &lt;env&gt; 
-</li><li> len [&lt;env&gt;|&lt;closure&gt;|&lt;string&gt;] - number of elements in object 
-</li><li> lock &lt;env&gt; - prevent new names being added to &lt;env&gt; 
-</li><li> new &lt;env&gt; - copy all &lt;env&gt; values 
-</li><li> range &lt;env&gt; - generate vector of values in &lt;env&gt; 
-</li><li> restrict &lt;env&gt; - restrict further commands to those in &lt;env&gt; 
-</li><li> select &lt;binding&gt; &lt;env&gt; - subset of &lt;env&gt; for which &lt;binding&gt; returns TRUE 
-</li><li> sort &lt;env&gt; - sorted vector of values in &lt;env&gt; 
-</li><li> sortby &lt;cmpfn&gt; &lt;env&gt; - sorted vector of values in &lt;env&gt; using &lt;cmpfn&gt; 
-</li><li> sortdom &lt;env&gt; - sorted vector of names in &lt;env&gt; 
-</li><li> sortdomby &lt;cmpfn&gt; &lt;env&gt; - sorted vector of names in &lt;env&gt; using &lt;cmpfn&gt; </li>
-</ul>
-
-<p>Character handling: </p>
-
-<ul>
-<li> collate &lt;str1&gt; &lt;str2&gt; - compare collating sequence of chars in strings 
-</li><li> len [&lt;env&gt;|&lt;closure&gt;|&lt;string&gt;] - number of elements in object 
-</li><li> joinchr &lt;delim&gt; &lt;str&gt; - join vector of chars and strings separated by &lt;delim&gt;s 
-</li><li> join &lt;delim&gt; &lt;str&gt; - join vector of octets and strings separated by &lt;delim&gt;s 
-</li><li> chr &lt;int&gt; - returns string of (multibyte) char with given ordinal 
-</li><li> octet &lt;int&gt; - returns single byte string containing given octet 
-</li><li> chrcode &lt;string&gt; - returns ordinal of the first character of string 
-</li><li> octetcode &lt;string&gt; - returns ordinal of the first byte of string 
-</li><li> split &lt;delim&gt; &lt;str&gt; - make vector of strings separated by &lt;delim&gt;s 
-</li><li> str &lt;expr&gt; - evaluate expression and return string representation 
-</li><li> strf &lt;fmt&gt; &lt;env&gt; - formatted string from values in &lt;env&gt; 
-</li><li> strcoll &lt;str1&gt; &lt;str2&gt; - compare collating sequence of chars in strings 
-</li><li> strlen [&lt;string&gt;] - number of (possibly multibyte) chars in string 
-</li><li> tolower &lt;str&gt; - lower case version of string 
-</li><li> toupper &lt;str&gt; - upper case version of string </li>
-</ul>
-
-<p>Input and Output: </p>
-
-<ul>
-<li> fmt - updateable directory of formatting functions for io.fprintf 
-</li><li> io close &lt;stream&gt; - close stream 
-</li><li> io err - default error stream 
-</li><li> io file &lt;filename&gt; &lt;rw&gt; - return stream for opened file 
-</li><li> io filetostring &lt;filename&gt; [&lt;outfile&gt;] - write file out as a C string 
-</li><li> io getc &lt;stream&gt; - read the next character from the stream 
-</li><li> io in - default input stream 
-</li><li> io instring &lt;string&gt; &lt;rw&gt; - return stream for reading string 
-</li><li> io out - default output stream 
-</li><li> io outstring &lt;closure&gt; - apply output stream to closure and return string 
-</li><li> io read &lt;stream&gt; &lt;size&gt; - read up to &lt;size&gt; bytes from stream 
-</li><li> io stringify &lt;stream&gt; &lt;expr&gt; - write FTL representation to stream 
-</li><li> io write &lt;stream&gt; &lt;string&gt; - write string to stream 
-</li><li> io fprintf &lt;stream&gt; &lt;format&gt; &lt;env&gt; - write formatted string to stream </li>
-</ul>
-
-<p>Parser interface: </p>
-
-<ul>
-<li> parse argv &lt;subcommand&gt; - commands: 
-</li><li> parse codeid - name of interpreter 
-</li><li> parse env - return current invocation environment 
-</li><li> parse errors - total number of errors encountered by parser 
-</li><li> parse errors_reset &lt;n&gt; - reset total number of errors to &lt;n&gt; 
-</li><li> parse exec &lt;cmds&gt; &lt;stream&gt; - return value of executing initial &lt;cmds&gt; then stream 
-</li><li> parse line - number of the line in the character source 
-</li><li> parse newerror - register the occurrance of a new error 
-</li><li> parse op - environment containing operation definitions 
-</li><li> parse opeval &lt;opdefs&gt; &lt;code&gt; - execute code according to operator definitions 
-</li><li> parse opset &lt;opdefs&gt; &lt;prec&gt; &lt;assoc&gt; &lt;name&gt; &lt;function&gt; - define an operator in opdefs 
-</li><li> parse root - return current root environment 
-</li><li> parse scan &lt;string&gt; - return parse object from string 
-</li><li> parse scanned &lt;parseobj&gt; - return text remaining in parse object 
-</li><li> parse scanempty &lt;parseobj&gt; - parse empty line from string from parse object, update string 
-</li><li> parse scanwhite &lt;parseobj&gt; - parse white spce from string from parse object, update string 
-</li><li> parse scanspace &lt;parseobj&gt; - parse over white space from string from parse object, update string 
-</li><li> parse scanint &lt;@int&gt; &lt;parseobj&gt; - parse integer from string from parse object, update string 
-</li><li> parse scanhex &lt;@int&gt; &lt;parseobj&gt; - parse hex string from parse object, update string 
-</li><li> parse scanhexw &lt;width&gt; &lt;@int&gt; &lt;parseobj&gt; - parse hex in &lt;width&gt; chars from parse object, update string 
-</li><li> parse scanstr &lt;@string&gt; &lt;parseobj&gt; - parse item until delimiter, update string 
-</li><li> parse scanid &lt;@string&gt; &lt;parseobj&gt; - parse identifier, update string 
-</li><li> parse scanitemstr &lt;@string&gt; &lt;parseobj&gt; - parse item or string, update string 
-</li><li> parse scanitem &lt;delims&gt; &lt;@string&gt; &lt;parseobj&gt; - parse item until delimiter, update string 
-</li><li> parse scanmatch &lt;dir&gt; &lt;@val&gt; &lt;parseobj&gt; -
-parse prefix in dir from string in parse object giving matching value,
-update string </li><li> parse source - name of the source of chars at start of the last line </li>
-</ul>
-
-<p>Operating System interface: </p>
-
-<ul>
-<li> sys env - system environment variable environment 
-</li><li> sys osfamily - name of operating system type 
-</li><li> sys run &lt;line&gt; - execute system &lt;line&gt; 
-</li><li> sys uid &lt;user&gt; - return the UID of the named user 
-</li><li> sys utctime &lt;time&gt; - broken down UTC time 
-</li><li> sys localtime &lt;time&gt; - broken down local time 
-</li><li> sys utctimef &lt;format&gt; &lt;time&gt; - formatted UTC time 
-</li><li> sys localtimef &lt;format&gt; &lt;time&gt; - formatted local time 
-</li><li> sys time - system calendar time in seconds </li>
-</ul>
-
-<p>Windows-only interface: </p>
-
-<ul>
-<li> reg value HKEY_CLASSES_ROOT &lt;key&gt; - open key values in HKEY_CLASSES_ROOT 
-</li><li> reg value HKEY_USERS &lt;key&gt; - open key values in HKEY_USERS 
-</li><li> reg value HKEY_CURRENT_USER &lt;key&gt; - open key values in HKEY_CURRENT_USER 
-</li><li> reg value HKEY_LOCAL_MACHINE &lt;key&gt; - open key values in HKEY_LOCAL_MACHINE 
-</li><li> reg value HKEY_CURRENT_CONFIG &lt;key&gt; - open key values in HKEY_CURRENT_CONFIG 
-</li><li> reg allow_edit &lt;boolean&gt; - enable/disable write to the registry from new keys 
-</li><li> reg key - directory of key value types </li>
-</ul>
-
-<p>The &lt;name&gt;s defined by <tt>set</tt> can be used in macro ($) expansion.  For example 
 </p>
-
-<pre>    &gt; set ip "10.20.128.33" <br>    &gt; echo My IP address is $ip <br>    My IP address is 10.20.128.33 <br> <br>    &gt; set tick 4000 <br>    &gt; every $tick echo Tick <br>    Tick <br>    Tick <br>    Tick <br>    : <br></pre>
-
-<p>The name of the variable to be expanded can be delimited using '{'
+<h1>Built-in Commands</h1>
+<p>It is a simple matter for FTL-based tools to add a set of standard
+commands to those that it defines.&nbsp; For this reason most
+utilities will have the following commands available.</p>
+<p>They are divided into groups with prefixes 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">&lt;none&gt; - language features 
+	</p>
+	<li><p style="margin-bottom: 0cm">io - input and output 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys - operating system interface 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse - language parsing library 
+	</p>
+	<li><p>reg - Windows registry (Windows only) 
+	</p>
+</ul>
+<p>The language features can be divided into those for: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">Program control 
+	</p>
+	<li><p style="margin-bottom: 0cm">General features 
+	</p>
+	<li><p style="margin-bottom: 0cm">Types 
+	</p>
+	<li><p style="margin-bottom: 0cm">Booleans 
+	</p>
+	<li><p style="margin-bottom: 0cm">Integers 
+	</p>
+	<li><p style="margin-bottom: 0cm">Environments and directories 
+	</p>
+	<li><p style="margin-bottom: 0cm">Character handling 
+	</p>
+	<li><p style="margin-bottom: 0cm">Input and Output 
+	</p>
+	<li><p style="margin-bottom: 0cm">Parser interface 
+	</p>
+	<li><p style="margin-bottom: 0cm">Operating System interface 
+	</p>
+	<li><p>Windows-only interface 
+	</p>
+</ul>
+<p>Program control: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">do &lt;do&gt; &lt;test&gt; -
+	execute &lt;do&gt; while &lt;test&gt; evaluates non-zero 
+	</p>
+	<li><p style="margin-bottom: 0cm">every &lt;n&gt; &lt;command&gt; -
+	repeat command every &lt;n&gt; ms 
+	</p>
+	<li><p style="margin-bottom: 0cm">exit - abandon all command inputs 
+	</p>
+	<li><p style="margin-bottom: 0cm">forall &lt;env&gt; &lt;binding&gt;
+	- execute &lt;binding&gt; for all &lt;env&gt; values 
+	</p>
+	<li><p style="margin-bottom: 0cm">if &lt;n&gt; &lt;then-code&gt;
+	&lt;else-code&gt; - execute &lt;then-code&gt; if &lt;n&gt;!=0 
+	</p>
+	<li><p style="margin-bottom: 0cm">return &lt;rc&gt; - abandon
+	current command input returning &lt;rc&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">source &lt;filename&gt; - read
+	from file &lt;filename&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">sourcetext &lt;stringexpr&gt; -
+	read characters from string 
+	</p>
+	<li><p>while &lt;test&gt; &lt;do&gt; - while &lt;test&gt; evaluates
+	non-zero execute &lt;do&gt; 
+	</p>
+</ul>
+<p>General features: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">cmd &lt;function&gt; &lt;help&gt;
+	- create a command from a function 
+	</p>
+	<li><p style="margin-bottom: 0cm">cmp &lt;expr&gt; &lt;expr&gt; -
+	returns integer comparing its arguments 
+	</p>
+	<li><p style="margin-bottom: 0cm">echo &lt;whole line&gt; - prints
+	the line out 
+	</p>
+	<li><p style="margin-bottom: 0cm">eval &lt;expr&gt; - evaluate
+	expression 
+	</p>
+	<li><p style="margin-bottom: 0cm">help - prints command information 
+	</p>
+	<li><p style="margin-bottom: 0cm">rnd &lt;n&gt; - return random
+	number less than &lt;n&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">set &lt;name&gt; &lt;expr&gt; -
+	set value in environment 
+	</p>
+	<li><p>sleep &lt;n&gt; - sleep for &lt;n&gt; milliseconds 
+	</p>
+</ul>
+<p>Types: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">NULL - nul value 
+	</p>
+	<li><p style="margin-bottom: 0cm">type &lt;typename&gt; - return the
+	type with the given name 
+	</p>
+	<li><p>typeof &lt;expr&gt; - returns the type of &lt;expr&gt; 
+	</p>
+</ul>
+<p>Booleans: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">TRUE - the TRUE value 
+	</p>
+	<li><p style="margin-bottom: 0cm">FALSE - an un-TRUE value 
+	</p>
+	<li><p style="margin-bottom: 0cm">moreeq &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; more than or equal to second 
+	</p>
+	<li><p style="margin-bottom: 0cm">more &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; more than second 
+	</p>
+	<li><p style="margin-bottom: 0cm">lesseq &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; less than or equal to second 
+	</p>
+	<li><p style="margin-bottom: 0cm">less &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; less than second 
+	</p>
+	<li><p style="margin-bottom: 0cm">notequal &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; not equal to second 
+	</p>
+	<li><p style="margin-bottom: 0cm">equal &lt;val&gt; &lt;val&gt; -
+	TRUE if first &lt;val&gt; equal to second 
+	</p>
+	<li><p style="margin-bottom: 0cm">invert &lt;val&gt; - TRUE if &lt;val&gt;
+	is FALSE, FALSE otherwise 
+	</p>
+	<li><p style="margin-bottom: 0cm">logand &lt;val1&gt; &lt;val2&gt; -
+	FALSE if &lt;val1&gt; is FALSE, &lt;val2&gt; otherwise 
+	</p>
+	<li><p>logor &lt;val1&gt; &lt;val2&gt; - TRUE if &lt;val1&gt; is
+	TRUE, &lt;val2&gt; otherwise 
+	</p>
+</ul>
+<p>Integers: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">bitor &lt;n1&gt; &lt;n2&gt; -
+	return n1 &quot;or&quot;ed with n2 
+	</p>
+	<li><p style="margin-bottom: 0cm">bitxor &lt;n1&gt; &lt;n2&gt; -
+	return n1 exclusive &quot;or&quot;ed with n2 
+	</p>
+	<li><p style="margin-bottom: 0cm">bitand &lt;n1&gt; &lt;n2&gt; -
+	return n1 &quot;and&quot;ed with n2 
+	</p>
+	<li><p style="margin-bottom: 0cm">bitnot &lt;n&gt; - return the
+	bitwise &quot;not&quot; of n 
+	</p>
+	<li><p style="margin-bottom: 0cm">shiftl &lt;n1&gt; &lt;n2&gt; -
+	return n1 left shifted by n2 bits 
+	</p>
+	<li><p style="margin-bottom: 0cm">shiftr &lt;n1&gt; &lt;n2&gt; -
+	return n1 right shifted by n2 bits 
+	</p>
+	<li><p style="margin-bottom: 0cm">add &lt;n1&gt; &lt;n2&gt; - return
+	n1 with n2 added 
+	</p>
+	<li><p style="margin-bottom: 0cm">sub &lt;n1&gt; &lt;n2&gt; - return
+	n1 with n2 subtracted 
+	</p>
+	<li><p style="margin-bottom: 0cm">mul &lt;n1&gt; &lt;n2&gt; - return
+	n1 multiplied by n2 
+	</p>
+	<li><p style="margin-bottom: 0cm">div &lt;n1&gt; &lt;n2&gt; - return
+	n1 divided by n2 
+	</p>
+	<li><p style="margin-bottom: 0cm">neg &lt;n&gt; - return negated &lt;n&gt;
+		</p>
+	<li><p style="margin-bottom: 0cm">rnd &lt;n&gt; - return random
+	number less than &lt;n&gt; 
+	</p>
+	<li><p>int &lt;integer expr&gt; - numeric value 
+	</p>
+</ul>
+<p>Environments and directories: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">domain &lt;env&gt; - generate
+	vector of names in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">enter &lt;env&gt; - add commands
+	from &lt;env&gt; to current environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">inenv &lt;env&gt; &lt;name&gt; -
+	returns 0 unless string &lt;name&gt; is in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">len [&lt;env&gt;|&lt;closure&gt;|&lt;string&gt;]
+	- number of elements in object 
+	</p>
+	<li><p style="margin-bottom: 0cm">lock &lt;env&gt; - prevent new
+	names being added to &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">new &lt;env&gt; - copy all &lt;env&gt;
+	values 
+	</p>
+	<li><p style="margin-bottom: 0cm">range &lt;env&gt; - generate
+	vector of values in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">restrict &lt;env&gt; - restrict
+	further commands to those in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">select &lt;binding&gt; &lt;env&gt;
+	- subset of &lt;env&gt; for which &lt;binding&gt; returns TRUE 
+	</p>
+	<li><p style="margin-bottom: 0cm">sort &lt;env&gt; - sorted vector
+	of values in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">sortby &lt;cmpfn&gt; &lt;env&gt; -
+	sorted vector of values in &lt;env&gt; using &lt;cmpfn&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">sortdom &lt;env&gt; - sorted
+	vector of names in &lt;env&gt; 
+	</p>
+	<li><p>sortdomby &lt;cmpfn&gt; &lt;env&gt; - sorted vector of names
+	in &lt;env&gt; using &lt;cmpfn&gt; 
+	</p>
+</ul>
+<p>Character handling: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">collate &lt;str1&gt; &lt;str2&gt;
+	- compare collating sequence of chars in strings 
+	</p>
+	<li><p style="margin-bottom: 0cm">len [&lt;env&gt;|&lt;closure&gt;|&lt;string&gt;]
+	- number of elements in object 
+	</p>
+	<li><p style="margin-bottom: 0cm">joinchr &lt;delim&gt; &lt;str&gt;
+	- join vector of chars and strings separated by &lt;delim&gt;s 
+	</p>
+	<li><p style="margin-bottom: 0cm">join &lt;delim&gt; &lt;str&gt; -
+	join vector of octets and strings separated by &lt;delim&gt;s 
+	</p>
+	<li><p style="margin-bottom: 0cm">chr &lt;int&gt; - returns string
+	of (multibyte) char with given ordinal 
+	</p>
+	<li><p style="margin-bottom: 0cm">octet &lt;int&gt; - returns single
+	byte string containing given octet 
+	</p>
+	<li><p style="margin-bottom: 0cm">chrcode &lt;string&gt; - returns
+	ordinal of the first character of string 
+	</p>
+	<li><p style="margin-bottom: 0cm">octetcode &lt;string&gt; - returns
+	ordinal of the first byte of string 
+	</p>
+	<li><p style="margin-bottom: 0cm">split &lt;delim&gt; &lt;str&gt; -
+	make vector of strings separated by &lt;delim&gt;s 
+	</p>
+	<li><p style="margin-bottom: 0cm">str &lt;expr&gt; - evaluate
+	expression and return string representation 
+	</p>
+	<li><p style="margin-bottom: 0cm">strf &lt;fmt&gt; &lt;env&gt; -
+	formatted string from values in &lt;env&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">strcoll &lt;str1&gt; &lt;str2&gt;
+	- compare collating sequence of chars in strings 
+	</p>
+	<li><p style="margin-bottom: 0cm">strlen [&lt;string&gt;] - number
+	of (possibly multibyte) chars in string 
+	</p>
+	<li><p style="margin-bottom: 0cm">tolower &lt;str&gt; - lower case
+	version of string 
+	</p>
+	<li><p>toupper &lt;str&gt; - upper case version of string 
+	</p>
+</ul>
+<p>Input and Output: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">fmt - updateable directory of
+	formatting functions for io.fprintf 
+	</p>
+	<li><p style="margin-bottom: 0cm">io close &lt;stream&gt; - close
+	stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io err - default error stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io file &lt;filename&gt; &lt;rw&gt;
+	- return stream for opened file 
+	</p>
+	<li><p style="margin-bottom: 0cm">io filetostring &lt;filename&gt;
+	[&lt;outfile&gt;] - write file out as a C string 
+	</p>
+	<li><p style="margin-bottom: 0cm">io getc &lt;stream&gt; - read the
+	next character from the stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io in - default input stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io instring &lt;string&gt; &lt;rw&gt;
+	- return stream for reading string 
+	</p>
+	<li><p style="margin-bottom: 0cm">io out - default output stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io outstring &lt;closure&gt; -
+	apply output stream to closure and return string 
+	</p>
+	<li><p style="margin-bottom: 0cm">io read &lt;stream&gt; &lt;size&gt;
+	- read up to &lt;size&gt; bytes from stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io stringify &lt;stream&gt; &lt;expr&gt;
+	- write FTL representation to stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">io write &lt;stream&gt; &lt;string&gt;
+	- write string to stream 
+	</p>
+	<li><p>io fprintf &lt;stream&gt; &lt;format&gt; &lt;env&gt; - write
+	formatted string to stream 
+	</p>
+</ul>
+<p>Parser interface: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">parse argv &lt;subcommand&gt; -
+	commands: 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse codeid - name of interpreter
+		</p>
+	<li><p style="margin-bottom: 0cm">parse env - return current
+	invocation environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse errors - total number of
+	errors encountered by parser 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse errors_reset &lt;n&gt; -
+	reset total number of errors to &lt;n&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse exec &lt;cmds&gt; &lt;stream&gt;
+	- return value of executing initial &lt;cmds&gt; then stream 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse line - number of the line in
+	the character source 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse newerror - register the
+	occurrance of a new error 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse op - environment containing
+	operation definitions 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse opeval &lt;opdefs&gt; &lt;code&gt;
+	- execute code according to operator definitions 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse opset &lt;opdefs&gt; &lt;prec&gt;
+	&lt;assoc&gt; &lt;name&gt; &lt;function&gt; - define an operator in
+	opdefs 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse root - return current root
+	environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scan &lt;string&gt; - return
+	parse object from string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanned &lt;parseobj&gt; -
+	return text remaining in parse object 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanempty &lt;parseobj&gt; -
+	parse empty line from string from parse object, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanwhite &lt;parseobj&gt; -
+	parse white spce from string from parse object, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanspace &lt;parseobj&gt; -
+	parse over white space from string from parse object, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanint &lt;@int&gt;
+	&lt;parseobj&gt; - parse integer from string from parse object,
+	update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanhex &lt;@int&gt;
+	&lt;parseobj&gt; - parse hex string from parse object, update string
+		</p>
+	<li><p style="margin-bottom: 0cm">parse scanhexw &lt;width&gt;
+	&lt;@int&gt; &lt;parseobj&gt; - parse hex in &lt;width&gt; chars
+	from parse object, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanstr &lt;@string&gt;
+	&lt;parseobj&gt; - parse item until delimiter, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanid &lt;@string&gt;
+	&lt;parseobj&gt; - parse identifier, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanitemstr &lt;@string&gt;
+	&lt;parseobj&gt; - parse item or string, update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanitem &lt;delims&gt;
+	&lt;@string&gt; &lt;parseobj&gt; - parse item until delimiter,
+	update string 
+	</p>
+	<li><p style="margin-bottom: 0cm">parse scanmatch &lt;dir&gt; &lt;@val&gt;
+	&lt;parseobj&gt; - parse prefix in dir from string in parse object
+	giving matching value, update string 
+	</p>
+	<li><p>parse source - name of the source of chars at start of the
+	last line 
+	</p>
+</ul>
+<p>Operating System interface: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">sys env - system environment
+	variable environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys osfamily - name of operating
+	system type 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys run &lt;line&gt; - execute
+	system &lt;line&gt; 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys uid &lt;user&gt; - return the
+	UID of the named user 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys utctime &lt;time&gt; - broken
+	down UTC time 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys localtime &lt;time&gt; -
+	broken down local time 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys utctimef &lt;format&gt; &lt;time&gt;
+	- formatted UTC time 
+	</p>
+	<li><p style="margin-bottom: 0cm">sys localtimef &lt;format&gt;
+	&lt;time&gt; - formatted local time 
+	</p>
+	<li><p>sys time - system calendar time in seconds 
+	</p>
+</ul>
+<p>Windows-only interface: 
+</p>
+<ul>
+	<li><p style="margin-bottom: 0cm">reg value HKEY_CLASSES_ROOT &lt;key&gt;
+	- open key values in HKEY_CLASSES_ROOT 
+	</p>
+	<li><p style="margin-bottom: 0cm">reg value HKEY_USERS &lt;key&gt; -
+	open key values in HKEY_USERS 
+	</p>
+	<li><p style="margin-bottom: 0cm">reg value HKEY_CURRENT_USER &lt;key&gt;
+	- open key values in HKEY_CURRENT_USER 
+	</p>
+	<li><p style="margin-bottom: 0cm">reg value HKEY_LOCAL_MACHINE &lt;key&gt;
+	- open key values in HKEY_LOCAL_MACHINE 
+	</p>
+	<li><p style="margin-bottom: 0cm">reg value HKEY_CURRENT_CONFIG
+	&lt;key&gt; - open key values in HKEY_CURRENT_CONFIG 
+	</p>
+	<li><p style="margin-bottom: 0cm">reg allow_edit &lt;boolean&gt; -
+	enable/disable write to the registry from new keys 
+	</p>
+	<li><p>reg key - directory of key value types 
+	</p>
+</ul>
+<p>The &lt;name&gt;s defined by <tt>set</tt> can be used in macro ($)
+expansion. For example 
+</p>
+<pre>    &gt; set ip &quot;10.20.128.33&quot; 
+    &gt; echo My IP address is $ip 
+    My IP address is 10.20.128.33 
+ 
+    &gt; set tick 4000 
+    &gt; every $tick echo Tick 
+    Tick 
+    Tick 
+    Tick 
+    : </pre><p>
+The name of the variable to be expanded can be delimited using '{'
 and '}'. The system environment variables can be used inside these
-delimiters as follows: </p>
-
-<pre>    &gt; echo My IP address is ${ip} <br>    My IP address is 10.20.128.33 <br>    &gt; echo My computer is called ${sys.env.HOST} <br>    My computer is called iolite <br></pre>
-
-<p>Names with string values can also be used wherever a string expression is required: 
+delimiters as follows: 
 </p>
-
-<pre>    &gt; set hi "echo \"hello\"\n echo world\n" <br>    &gt; sourcetext hi <br>    "hello" <br>    world <br></pre>
-
-<p>Both strings, numbers and bracketed expressions are simple FTL expressions: 
+<pre>    &gt; echo My IP address is ${ip} 
+    My IP address is 10.20.128.33 
+    &gt; echo My computer is called ${sys.env.HOST} 
+    My computer is called iolite </pre><p>
+Names with string values can also be used wherever a string
+expression is required: 
 </p>
-
-<pre>    &gt; eval 0xff-(4*-3) <br>    267 <br>    &gt; eval hi <br>    "echo \"hello\"\n echo world\n" <br>    &gt; eval ("IP address $ip") <br>    "IP address 10.20.128.33" <br></pre>
-
-
-<h1>FTL Expressions</h1>
-
+<pre>    &gt; set hi &quot;echo \&quot;hello\&quot;\n echo world\n&quot; 
+    &gt; sourcetext hi 
+    &quot;hello&quot; 
+    world </pre><p>
+Both strings, numbers and bracketed expressions are simple FTL
+expressions: 
+</p>
+<pre>    &gt; eval 0xff-(4*-3) 
+    267 
+    &gt; eval hi 
+    &quot;echo \&quot;hello\&quot;\n echo world\n&quot; 
+    &gt; eval (&quot;IP address $ip&quot;) 
+    &quot;IP address 10.20.128.33&quot; </pre><h1>
+FTL Expressions</h1>
 <p>The commands typed at the console are not FTL expressions.
 Nonetheless, as is evident above, FTL expressions can be used in a
-number of places and, if needed, can be used to create new commands to
-augment those built-in using C. </p>
-
-<p>The design of the FTL syntax is described in the FTL specification<a href="http://www.google.com/url?q=http%3A%2F%2Fintranet%2F%257Ecgg%2FFTL-spec.html&amp;sa=D&amp;sntz=1&amp;usg=AFrqEzdNmiyrY2MWcnXGBTj9F2Ca0AwidA"></a>.
-It is a simple language with few potentially built-in constructs. A
-complete user's guide to the Solarflare implementation can be found in the FTL User's Guide. 
+number of places and, if needed, can be used to create new commands
+to augment those built-in using C. 
 </p>
-
-<p>The <tt>eval</tt> command always takes an FTL expression and executes it, so we can use it to demonstrate how an expression is built up. 
+<p>The design of the FTL syntax is described in the FTL
+specification. It is a simple language with few potentially built-in
+constructs. A complete user's guide to the Solarflare implementation
+can be found in the FTL User's Guide. 
 </p>
-
-<p>Perhaps the most querky aspect of it is the syntax for a
-function call which involves a final "!" to invoke it. For example the <tt>rnd</tt> command is actually a function in FTL that can be invoked in an FTL expression: 
+<p>The <tt>eval</tt> command always takes an FTL expression and
+executes it, so we can use it to demonstrate how an expression is
+built up. 
 </p>
-
-<pre>    &gt; eval rnd 5! <br>    2 <br></pre>
-
-<p>Some of the built-in commands are FTL functions and others (<tt>echo</tt> and <tt>system</tt>, for example) are FTL commands like <tt>sleep</tt>
-defined above. FTL commands can be executed as part of an expression -
-they always take exactly one argument which is a string (the string
+<p>Perhaps the most querky aspect of it is the syntax for a function
+call which involves a final &quot;!&quot; to invoke it. For example
+the <tt>rnd</tt> command is actually a function in FTL that can be
+invoked in an FTL expression: 
+</p>
+<pre>    &gt; eval rnd 5! 
+    2 </pre><p>
+Some of the built-in commands are FTL functions and others (<tt>echo</tt>
+and <tt>system</tt>, for example) are FTL commands like <tt>sleep</tt>
+defined above. FTL commands can be executed as part of an expression
+- they always take exactly one argument which is a string (the string
 that would otherwise have appeared as its argument on the command
 line). Thus <tt>echo</tt> can be called in an FTL expression 
 </p>
-
-<pre>    &gt; eval echo "Hello world" ! <br>    Hello world <br>    &gt; eval sleep "20" ! <br>    &gt; <br></pre>
-
-<p>The syntax of a macro expansion is a little more involved than
-implied above. The syntax "$&lt;name&gt;" provides the same expansion
-as "${&lt;name&gt;}" but the latter syntax is actually an instance of
-the more generally allowed form "${&lt;ftl-expr&gt;}". For example: </p>
-
-<pre>    &gt; set rndip "${rnd 256!}.${rnd 256!}.${rnd 256!}.${rnd 256!}" <br>    &gt; eval rndip <br>   "205.40.102.33" <br></pre>
-
-<p>In FTL, program code and the "environment" in which it runs (the
-mapping from symbols to values) are both first-class values that can be
-manipulated and returned by functions. A function, itself, is an
-association of an environment and a code value. The syntax used to
-specify a code item; and then an environment, is illustrated here: </p>
-
-<pre>    &gt; set printrnd { echo "random \$max gives \${rnd max!}"! } <br>    &gt; eval printrnd <br>    { echo "random \$max gives \${rnd max!}"! } <br>    &gt; set env [max=10] <br>    &gt; eval env <br>    ["max"=10] <br></pre>
-
-<p>Code can be bound to an environment using the ':' operator, which can then be stored as a value or executed 
+<pre>    &gt; eval echo &quot;Hello world&quot; ! 
+    Hello world 
+    &gt; eval sleep &quot;20&quot; ! 
+    &gt; </pre><p>
+The syntax of a macro expansion is a little more involved than
+implied above. The syntax &quot;$&lt;name&gt;&quot; provides the same
+expansion as &quot;${&lt;name&gt;}&quot; but the latter syntax is
+actually an instance of the more generally allowed form
+&quot;${&lt;ftl-expr&gt;}&quot;. For example: 
 </p>
-
-<pre>    &gt; eval env:printrnd <br>    ["max"=10]:{ echo "random \$max gives \${rnd max!}"! } <br>    &gt; set printrnd10 env:printrnd <br>    &gt; eval printrnd10 <br>    ["max"=10]:{ echo "random \$max gives \${rnd max!}"! } <br>    &gt; eval printrnd10! <br>    random 10 gives 8 <br></pre>
-
-<p>Values of symbols in an environment can conveniently be accessed using the '.' operator: 
+<pre>    &gt; set rndip &quot;${rnd 256!}.${rnd 256!}.${rnd 256!}.${rnd 256!}&quot; 
+    &gt; eval rndip 
+   &quot;205.40.102.33&quot; </pre><p>
+In FTL, program code and the &quot;environment&quot; in which it runs
+(the mapping from symbols to values) are both first-class values that
+can be manipulated and returned by functions. A function, itself, is
+an association of an environment and a code value. The syntax used to
+specify a code item; and then an environment, is illustrated here: 
 </p>
-
-<pre>    &gt; eval env.max <br>    10 <br>    &gt; eval printrnd10.max <br>    10 <br>    &gt; set env.max 15 <br>    &gt; eval env.max <br>    15 <br></pre>
-
-<p>The environment used in functions normally involves "unbound"
+<pre>    &gt; set printrnd { echo &quot;random \$max gives \${rnd max!}&quot;! } 
+    &gt; eval printrnd 
+    { echo &quot;random \$max gives \${rnd max!}&quot;! } 
+    &gt; set env [max=10] 
+    &gt; eval env 
+    [&quot;max&quot;=10] </pre><p>
+Code can be bound to an environment using the ':' operator, which can
+then be stored as a value or executed 
+</p>
+<pre>    &gt; eval env:printrnd 
+    [&quot;max&quot;=10]:{ echo &quot;random \$max gives \${rnd max!}&quot;! } 
+    &gt; set printrnd10 env:printrnd 
+    &gt; eval printrnd10 
+    [&quot;max&quot;=10]:{ echo &quot;random \$max gives \${rnd max!}&quot;! } 
+    &gt; eval printrnd10! 
+    random 10 gives 8 </pre><p>
+Values of symbols in an environment can conveniently be accessed
+using the '.' operator: 
+</p>
+<pre>    &gt; eval env.max 
+    10 
+    &gt; eval printrnd10.max 
+    10 
+    &gt; set env.max 15 
+    &gt; eval env.max 
+    15 </pre><p>
+The environment used in functions normally involves &quot;unbound&quot;
 variables which must be substituted for an argument value before the
-resulting closure can be executed. </p>
-
-<pre>    &gt; set prnd [max]:{echo "random \$max gives \${rnd max!}"!} <br>    &gt; eval prnd <br>    ["max"]:{echo "random \$max gives \${rnd max!}"!} <br>    &gt; eval prnd 10 <br>    ["max"=10]:{echo "random \$max gives \${rnd max!}"!} <br>    &gt; eval prnd 10! <br>    random 10 gives 5 <br>    &gt; eval (prnd 10).max <br>    10 <br></pre>
-
-<p>A special environment <tt>sys.env</tt> is available giving access to system environment variables: 
+resulting closure can be executed. 
 </p>
-
-<pre>    &gt; eval sys.env.HOME <br>    "/home/cgg" <br>    &gt; set sys.env.local "new envionment variable" <br>    &gt; eval sys.env.local <br>    "new envionment variable" <br></pre>
-
-
-<h1>Scripting</h1>
-If you are a programmer you may find the following useful.&nbsp; Otherwise a more detailed description follows that.<br>
-<h2>Scripting in FTL Client Tools - Introduction for Programmers<br>
-</h2>
-
-
-When a client tool uses the FTL library it will automatically support a simple scripting environment.<br>
-
-
-<br>
-
-
-FTL is a third-party tiny language which is designed to supplement a
-traditional command-line interface. You need to know one or two things
-about the way it works before you can use it successfully.<br>
-
-
-<br>
-
-
-Each line of a script begins with an action name. This is the name of
-an FTL function or command which is executed, or an FTL directory of
-functions, commands or directories which are added to those available
-on the rest of the command line.<br>
-
-
-<br>
-
-
-A series of FTL expressions follow the name of a function which are evaluated and supplied to it as arguments.<br>
-
-
-New functions can be created. They are written in FTL, not the script language.<br>
-
-
-<br>
-
-
-Commands parse the command line and can be created from a function that takes a single string argument.<br>
-
-
-<br>
-
-
-Directories are associations between names and other FTL values. Naming
-one on the command line acts as a prefix that gives access to further
-action names. It also makes the values in the directory available to
-subsequent actions on the command line.<br>
-
-
-<br>
-
-
-Unlike most other languages FTL employs an operator ("!") to require
-the execution of a function. A function to which one or more arguments
-are supplied is a 'closure' that will not be executed until "!" is
-applied. Such closures are first-class values in the language.<br>
-
-<br>
-
-
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">fputs(stdout, "this\n")</td>
-      <td style="vertical-align: top;">
-puts stdout "this\n"</td>
-      <td style="vertical-align: top;">
-fputs stdout "this\n" !</td>
-    </tr>
-  </tbody>
+<pre>    &gt; set prnd [max]:{echo &quot;random \$max gives \${rnd max!}&quot;!} 
+    &gt; eval prnd 
+    [&quot;max&quot;]:{echo &quot;random \$max gives \${rnd max!}&quot;!} 
+    &gt; eval prnd 10 
+    [&quot;max&quot;=10]:{echo &quot;random \$max gives \${rnd max!}&quot;!} 
+    &gt; eval prnd 10! 
+    random 10 gives 5 
+    &gt; eval (prnd 10).max 
+    10 </pre><p>
+A special environment <tt>sys.env</tt> is available giving access to
+system environment variables: 
+</p>
+<pre>    &gt; eval sys.env.HOME 
+    &quot;/home/cgg&quot; 
+    &gt; set sys.env.local &quot;new envionment variable&quot; 
+    &gt; eval sys.env.local 
+    &quot;new envionment variable&quot; </pre><h1>
+Scripting</h1>
+<p>If you are a programmer you may find the following useful.&nbsp;
+Otherwise a more detailed description follows that.</p>
+<h2>Scripting in FTL Client Tools - Introduction for Programmers</h2>
+<p>When a client tool uses the FTL library it will automatically
+support a simple scripting environment.<br/>
+<br/>
+FTL is a
+third-party tiny language which is designed to supplement a
+traditional command-line interface. You need to know one or two
+things about the way it works before you can use it
+successfully.<br/>
+<br/>
+Each line of a script begins with an action
+name. This is the name of an FTL function or command which is
+executed, or an FTL directory of functions, commands or directories
+which are added to those available on the rest of the command
+line.<br/>
+<br/>
+A series of FTL expressions follow the name of a
+function which are evaluated and supplied to it as arguments.<br/>
+New
+functions can be created. They are written in FTL, not the script
+language.<br/>
+<br/>
+Commands parse the command line and can be
+created from a function that takes a single string
+argument.<br/>
+<br/>
+Directories are associations between names and
+other FTL values. Naming one on the command line acts as a prefix
+that gives access to further action names. It also makes the values
+in the directory available to subsequent actions on the command
+line.<br/>
+<br/>
+Unlike most other languages FTL employs an operator
+(&quot;!&quot;) to require the execution of a function. A function to
+which one or more arguments are supplied is a 'closure' that will not
+be executed until &quot;!&quot; is applied. Such closures are
+first-class values in the language.</p>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			fputs(stdout, &quot;this\n&quot;)</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			puts stdout &quot;this\n&quot;</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			fputs stdout &quot;this\n&quot; !</p>
+		</td>
+	</tr>
 </table>
-
-<br>
-
-
-Also unlike most other languages the control structures of FTL are simply functions. They take literal closures as arguments.<br>
-
-
-<br>
-
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">
-if (success)<br>
-
-
-{&nbsp; rc = 0;<br>
-
-
-} else {<br>
+<p><br/>
+Also unlike most other languages the control structures of
+FTL are simply functions. They take literal closures as arguments.</p>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			if (success)<br/>
+{&nbsp; rc = 0;<br/>
+} else {<br/>
 &nbsp;&nbsp;&nbsp;
-
-rc = -1; <br>
-}</td>
-      <td style="vertical-align: top;">
-
-if $success {<br>
-
-
-&nbsp;&nbsp; set rc 0<br>
-
-
-} else {<br>
-
-
-&nbsp;&nbsp; set rc -1<br>
-}<br>
-</td>
-      <td style="vertical-align: top;">
-if success {<br>
-
-
-&nbsp;&nbsp; rc = 0;<br>
-
-
-} {<br>
-&nbsp;&nbsp; rc = -1;<br>
-
-
-}!</td>
-    </tr>
-  </tbody>
+			rc = -1; <br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			if $success {<br/>
+&nbsp;&nbsp; set rc 0<br/>
+} else {<br/>
+&nbsp;&nbsp;
+			set rc -1<br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			if success {<br/>
+&nbsp;&nbsp; rc = 0;<br/>
+} {<br/>
+&nbsp;&nbsp;
+			rc = -1;<br/>
+}!</p>
+		</td>
+	</tr>
 </table>
-
-
-<br>
-
-
-The arguments to 'if' are<br>
-
-
-
+<p><br/>
+The arguments to 'if' are</p>
 <ul>
-<li>success - a boolean value <br>
-  </li><li>{ rc = 0; } - a closure value <br>
-  </li><li>{ rc = -1; } - a closure value</li>
+	<li><p style="margin-bottom: 0cm">success - a boolean value 
+	</p>
+	<li><p style="margin-bottom: 0cm">{ rc = 0; } - a closure value 
+	</p>
+	<li><p>{ rc = -1; } - a closure value 
+	</p>
 </ul>
-
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">
-
-for (i=0; i&lt;20; i++)
-{ <br>
-&nbsp;&nbsp; sum += i;<br>
-}<br>
-</td>
-      <td style="vertical-align: top;">
-      for { set i 0 } {$i &lt;= 20 } { incr i } {<br>
-
-
-&nbsp;&nbsp; set sum [expr {$sum + 1}]<br>
-
-
-}
-</td>
-      <td style="vertical-align: top;">forall &lt;0..19&gt; [i]:{<br>
-&nbsp;&nbsp; sum = sum + i;<br>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			for (i=0; i&lt;20; i++) { <br/>
+&nbsp;&nbsp; sum += i;<br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			for { set i 0 } {$i &lt;= 20 } { incr i } {<br/>
+&nbsp;&nbsp; set
+			sum [expr {$sum + 1}]<br/>
+} 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			forall &lt;0..19&gt; [i]:{<br/>
+&nbsp;&nbsp; sum = sum + i;<br/>
 }!
-</td>
-    </tr>
-  </tbody>
+						</p>
+		</td>
+	</tr>
 </table>
-
-
-<br>
-
-
-The arguments to 'forall' are<br>
-
+<p><br/>
+The arguments to 'forall' are</p>
 <ul>
-<li>
-&lt;0..19&gt; - an array of the 20 numbers from 0 to 19 inclusive <br>
-  </li><li>[i]:{sum = sum + i;} - a closure taking an argument used for each item
-in the array</li>
+	<li><p style="margin-bottom: 0cm">&lt;0..19&gt; - an array of the 20
+	numbers from 0 to 19 inclusive 
+	</p>
+	<li><p>[i]:{sum = sum + i;} - a closure taking an argument used for
+	each item in the array 
+	</p>
 </ul>
-
-
-
-
-Control functions supported include:<br>
-
+<p>Control functions supported include:</p>
 <ul>
-<li>
-forall &lt;env&gt; &lt;binding&gt; - execute &lt;binding&gt; for all &lt;env&gt; values</li><li>
-if &lt;n&gt; &lt;then-code&gt; &lt;else-code&gt; - execute
-&lt;then-code&gt; if &lt;n&gt;!=FALSE <br>
-  </li><li>while &lt;test&gt; &lt;do&gt; -
-while &lt;test&gt; evaluates non-FALSE execute &lt;do&gt; <br>
-  </li><li>do &lt;do&gt;
-&lt;test&gt; - execute &lt;do&gt; while &lt;test&gt; evaluates to
-non-FALSE</li>
+	<li><p style="margin-bottom: 0cm">forall &lt;env&gt; &lt;binding&gt;
+	- execute &lt;binding&gt; for all &lt;env&gt; values</p>
+	<li><p style="margin-bottom: 0cm">if &lt;n&gt; &lt;then-code&gt;
+	&lt;else-code&gt; - execute &lt;then-code&gt; if &lt;n&gt;!=FALSE 
+	</p>
+	<li><p style="margin-bottom: 0cm">while &lt;test&gt; &lt;do&gt; -
+	while &lt;test&gt; evaluates non-FALSE execute &lt;do&gt; 
+	</p>
+	<li><p>do &lt;do&gt; &lt;test&gt; - execute &lt;do&gt; while &lt;test&gt;
+	evaluates to non-FALSE 
+	</p>
 </ul>
-
-
-
-Boolean values are either TRUE or FALSE, both of which are functions
-requiring a single closure as an argument. TRUE will execute its
-argument and FALSE will ignore it.<br>
-
-<br>
-
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-
-
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">
-
-if (success)<br>
-
-
-{ fputs(stdout, "this\n");<br>
-
-
+<p>Boolean values are either TRUE or FALSE, both of which are
+functions requiring a single closure as an argument. TRUE will
+execute its argument and FALSE will ignore it.</p>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			if (success)<br/>
+{ fputs(stdout, &quot;this\n&quot;);<br/>
+} 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			if $success {<br/>
+&nbsp;&nbsp; puts &quot;this\n&quot;<br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			success {<br/>
+&nbsp;&nbsp; fputs stdout &quot;this\n&quot; !;<br/>
 }
-</td>
-      <td style="vertical-align: top;">
-if $success {<br>
-
-
-&nbsp;&nbsp; puts "this\n"<br>
-}<br>
-
-</td>
-      <td style="vertical-align: top;">
-success {<br>
-
-
-&nbsp;&nbsp; fputs stdout "this\n" !;<br>
-
-
-}
-</td>
-    </tr>
-  </tbody>
+						</p>
+		</td>
+	</tr>
 </table>
-
-
-<br>
-
-
-<br>
-
-
-FTL does support a small but extensible set of operators, such as ==,
-!=, +, -, /, *, !, not etc. They have associated FTL functions which
-are executed immediately (rather than requiring "!").<br>
-
-
-<br>
-
-All FTL statements return a value, but that value might be NULL. ';' is
-an operator that discards the value of the left hand operand.<br>
-
-
-<br>
-
-
-The 'set' command is equivalent to the assignment operator (=) in FTL. It assigns values to names in the current environment.<br>
-
-
-<br>
-
-
-Environments are the other major type of value in the language and, as
-well as being implicitly associated with a closure, they occupy the
-same position in the language as array and structures or dictionaries
-in other languages. The only two kinds of user-created environment are
-those indexed by number (vectors), and those indexed by string
-(directories).<br>
-<br>
-
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">
-
-const char *names[] = { "harry", "sally" };<br>
-      <br>
-
-
-struct {<br>
-
-
-
-&nbsp;&nbsp; int number;<br>
-
-
-
-&nbsp;&nbsp; const char *name;<br>
-
-
-
-} shopping = { 3, "bananas" };<br>
-      <br>
-
-
-
-# example use:<br>
-
-
-
-static void show(void) {<br>
-
-
-
-&nbsp;&nbsp; puts(names[0]);<br>
+<p><br/>
+<br/>
+FTL does support a small but extensible set of
+operators, such as ==, !=, +, -, /, *, !, not etc. They have
+associated FTL functions which are executed immediately (rather than
+requiring &quot;!&quot;).<br/>
+<br/>
+All FTL statements return a
+value, but that value might be NULL. ';' is an operator that discards
+the value of the left hand operand.<br/>
+<br/>
+The 'set' command is
+equivalent to the assignment operator (=) in FTL. It assigns values
+to names in the current environment.<br/>
+<br/>
+Environments are the
+other major type of value in the language and, as well as being
+implicitly associated with a closure, they occupy the same position
+in the language as array and structures or dictionaries in other
+languages. The only two kinds of user-created environment are those
+indexed by number (vectors), and those indexed by string
+(directories).</p>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			const char *names[] = { &quot;harry&quot;, &quot;sally&quot;
+			};<br/>
+<br/>
+struct {<br/>
+&nbsp;&nbsp; int number;<br/>
 &nbsp;&nbsp;
-
-
-puts(shopping.name);<br>
-
-
-
-}<br>
-</td>
-      <td style="vertical-align: top;">
-set names [list "harry" "sally"]<br>
-      <br>
-array set shopping [list \<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-{number} {3} \<br>
+			const char *name;<br/>
+} shopping = { 3, &quot;bananas&quot; };<br/>
+<br/>
+#
+			example use:<br/>
+static void show(void) {<br/>
+&nbsp;&nbsp;
+			puts(names[0]);<br/>
+&nbsp;&nbsp; puts(shopping.name);<br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			set names [list &quot;harry&quot; &quot;sally&quot;]<br/>
+<br/>
+array
+			set shopping [list \<br/>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-{name} {bananas} \<br>
+			{number} {3} \<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+			{name} {bananas} \<br/>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-]<br>
-      <br>
-
-
-# example use:<br>
-
-
-
-proc show {} {<br>
-
-
-
-&nbsp;&nbsp; puts [lindex $names 0]<br>
+			]<br/>
+<br/>
+# example use:<br/>
+proc show {} {<br/>
 &nbsp;&nbsp;
-
-
-
-puts shopping(name) <br>
-}<br>
-</td>
-      <td style="vertical-align: top;">
-names = &lt;"harry", "sally"&gt; # (a vector)<br>
-      <br>
-shopping = [<br>
-
-
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; number = 3;<br>
-
-
-
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; name = "bananas";<br>
-] 
-
-# (a directory)<br>
-      <br>
-# example use:<br>
-show = []:{<br>
-&nbsp;&nbsp; puts names.0!;<br>
-
-
-&nbsp;&nbsp; puts shopping.name!;<br>
-}<br>
-</td>
-    </tr>
-  </tbody>
+			puts [lindex $names 0]<br/>
+&nbsp;&nbsp; puts shopping(name) <br/>
+}</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			names = &lt;&quot;harry&quot;, &quot;sally&quot;&gt; # (a
+			vector)<br/>
+<br/>
+shopping = [<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+			number = 3;<br/>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+			name = &quot;bananas&quot;;<br/>
+] # (a directory)<br/>
+<br/>
+#
+			example use:<br/>
+show = []:{<br/>
+&nbsp;&nbsp; puts names.0!;<br/>
+&nbsp;&nbsp;
+			puts shopping.name!;<br/>
+}</p>
+		</td>
+	</tr>
 </table>
-
-<br>
+<p><br/>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-<br>
-
-
-Basic values can be integers (64-bit) or strings (which can be used
-both as binary containers or as UTF-8 character lists). There is no
-floating point number support. The only structure is an 'environment'
-but this comes in two forms: one where every value is named by an
-integer (enclosed by '&lt;' and '&gt;'); and one where every value is
-named by a string (enclosed by '[' and ']'). (However the :: operator
-can be used to concatenate environments into one containing both kinds
-of name.)<br>
-
-
-<br>
-
-
-A closure can be constructed with the ':' operator which takes an
-environment, normally with unbound variables, as its left argument and
-"code" as its right. This creates a function, which is typically
-assigned to a variable. For example:<br>
-<pre style="margin-left: 40px;">add = [a, b]:{ a+b }</pre>
-Normally the 'set' command is used to perform this assignment in a script<br>
-<br>
-<table style="text-align: left; width: 100%;" border="1" cellpadding="2" cellspacing="2">
-
-
-  <tbody>
-    <tr>
-      <th style="vertical-align: top;">
-C-like</th>
-      <th style="vertical-align: top;">
-TCL-like</th>
-      <th style="vertical-align: top;">
-FTL-like</th>
-    </tr>
-    <tr>
-      <td style="vertical-align: top;">
-      <pre>static int add(int a, int b)<br>{&nbsp; return a + b;<br><br></pre>
-</td>
-      <td style="vertical-align: top;">
-      <pre>proc add {a b} {<br>&nbsp;&nbsp; return [expr $a + $b]<br>}</pre>
-</td>
-      <td style="vertical-align: top;">
-      <pre>set add [a, b]:{<br>&nbsp;&nbsp; a + b<br>}</pre>
-</td>
-    </tr>
-  </tbody>
+<br/>
+Basic values can be integers (64-bit) or strings (which can be
+used both as binary containers or as UTF-8 character lists). There is
+no floating point number support. The only structure is an
+'environment' but this comes in two forms: one where every value is
+named by an integer (enclosed by '&lt;' and '&gt;'); and one where
+every value is named by a string (enclosed by '[' and ']'). (However
+the :: operator can be used to concatenate environments into one
+containing both kinds of name.)<br/>
+<br/>
+A closure can be
+constructed with the ':' operator which takes an environment,
+normally with unbound variables, as its left argument and &quot;code&quot;
+as its right. This creates a function, which is typically assigned to
+a variable. For example:</p>
+<pre style="margin-left: 0.71cm; margin-bottom: 0.5cm">add = [a, b]:{ a+b }</pre><p>
+Normally the 'set' command is used to perform this assignment in a
+script</p>
+<table cellpadding="3" cellspacing="2">
+	<tr>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			C-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			TCL-like</p>
+		</th>
+		<th style="border-top: 1px double #808080; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding: 0.05cm"><p>
+			FTL-like</p>
+		</th>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><pre>static int add(int a, int b)
+{ return a + b;</pre>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><pre>proc add {a b} {
+ return [expr $a + $b]
+}</pre>
+		</td>
+		<td style="border-top: none; border-bottom: 1px double #808080; border-left: 1px double #808080; border-right: 1px double #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><pre>set add [a, b]:{
+ a + b
+}</pre>
+		</td>
+	</tr>
 </table>
-
-<br>
-
-
-The value assigned to 'add' is [a, b]:{a+b} - a closure value<br>
-<h2>Scripting in more Detail<br>
-</h2>
-
-
-<p>There are two approaches to scripting supported. </p>
-
+<p><br/>
+The value assigned to 'add' is [a, b]:{a+b} - a closure
+value</p>
+<h2>Scripting in more Detail</h2>
+<p>There are two approaches to scripting supported. 
+</p>
 <ol>
-<li>string values can be defined and expanded 
-</li><li>compound FTL expressions can be defined and executed </li>
+	<li><p style="margin-bottom: 0cm">string values can be defined and
+	expanded 
+	</p>
+	<li><p>compound FTL expressions can be defined and executed 
+	</p>
 </ol>
-
-<p>In both of these the way in which lines are built by the library is
-relevant. In addition to concatenating physical lines ending with '\'
-and splitting the result into lines separated by ';' the library will
-incorporate line endings into logical lines that are contained within
-bracketed structures. The brackets include: </p>
-
+<p>In both of these the way in which lines are built by the library
+is relevant. In addition to concatenating physical lines ending with
+'\' and splitting the result into lines separated by ';' the library
+will incorporate line endings into logical lines that are contained
+within bracketed structures. The brackets include: 
+</p>
 <ul>
-<li> '(' and ')' - used to group sub-expressions 
-</li><li> '[' and ']' - used to define identifier environments 
-</li><li> '&lt;' and '&gt;' - used to define vector environment 
-</li><li> '{' and '}' - used to define code 
-</li><li> '"' and a corresponding closing '"' - used to define strings </li>
+	<li><p style="margin-bottom: 0cm">'(' and ')' - used to group
+	sub-expressions 
+	</p>
+	<li><p style="margin-bottom: 0cm">'[' and ']' - used to define
+	identifier environments 
+	</p>
+	<li><p style="margin-bottom: 0cm">'&lt;' and '&gt;' - used to define
+	vector environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">'{' and '}' - used to define code 
+	</p>
+	<li><p>'&quot;' and a corresponding closing '&quot;' - used to
+	define strings 
+	</p>
 </ul>
-
-<p>Very long "lines" can be generated by incorporating these structures. 
+<p>Very long &quot;lines&quot; can be generated by incorporating
+these structures. 
 </p>
-
 <p>(Note: currently the prompt provided whilst awaiting a closing
-bracket does not vary from the normal prompt - this can be a source of
-confusion.) </p>
-
-
+bracket does not vary from the normal prompt - this can be a source
+of confusion.) 
+</p>
 <h2>String scripts</h2>
-
-<p>The <tt>sourcetext</tt> command can take an FTL expression evaluating to a string and use it as literal input to the parser.  For example: 
+<p>The <tt>sourcetext</tt> command can take an FTL expression
+evaluating to a string and use it as literal input to the parser. For
+example: 
 </p>
-
-<pre>    &gt; sourcetext "rnd 10\n" <br>    7 <br>    &gt; set prog " <br>    &gt; echo first command <br>    &gt; echo second command <br>    &gt; " <br>    &gt; sourcetext prog <br>    first command <br>    second command <br></pre>
-
-<p>It is possible, therefore, to construct simple scripts as a string,
-perhaps involving the expansion of variables via the idom '\$variable'.
+<pre>    &gt; sourcetext &quot;rnd 10\n&quot; 
+    7 
+    &gt; set prog &quot; 
+    &gt; echo first command 
+    &gt; echo second command 
+    &gt; &quot; 
+    &gt; sourcetext prog 
+    first command 
+    second command </pre><p>
+It is possible, therefore, to construct simple scripts as a string,
+perhaps involving the expansion of variables via the idom
+'\$variable'. 
 </p>
-
-<p>The next characters read by the parser are taken from the string given to <i>sourcetext</i> - beware that this can give confusing results if the text does not incorporate a new line: 
+<p>The next characters read by the parser are taken from the string
+given to <i>sourcetext</i> - beware that this can give confusing
+results if the text does not incorporate a new line: 
 </p>
-
-<pre>    &gt; sourcetext "echo " <br>    &gt; set nextthing 55 <br>    set nextthing 55 <br></pre>
-
-<p>Such scripts can also be placed in files and then executed using the <i>source</i> command, which simply takes the file name as its argument. 
+<pre>    &gt; sourcetext &quot;echo &quot; 
+    &gt; set nextthing 55 
+    set nextthing 55 </pre><p>
+Such scripts can also be placed in files and then executed using the
+<i>source</i> command, which simply takes the file name as its
+argument. 
 </p>
-
-
 <h2>FTL scripts</h2>
-
 <p>As described above, '{' and '} can be used to bracket an FTL
-expression that can later be executed. This expression can make use of
-the ';' operator which discards the value of its left-hand argument and
-returns the value of its right-hand one. </p>
-
-<pre>    &gt; eval { rnd 10!; 500 } ! <br>    500 <br>    &gt; eval { 500; rnd 10! } ! <br>    3 <br>    &gt; eval { 500; rnd 10!; } ! <br>    &gt; <br></pre>
-
-<p>Simple multi-line scripts can be constructed simply by assigning code to a variable that is later executed. 
+expression that can later be executed. This expression can make use
+of the ';' operator which discards the value of its left-hand
+argument and returns the value of its right-hand one. 
 </p>
-
-<pre>    &gt; set prog { <br>    &gt;    echo "first command"!; <br>    &gt;    echo "second command"! <br>    &gt; } <br>    &gt; eval prog! <br>    first command <br>    second command <br></pre>
-
-<p>As illustrated the code can either be executed as part of an FTL expression using <i>eval</i>. 
+<pre>    &gt; eval { rnd 10!; 500 } ! 
+    500 
+    &gt; eval { 500; rnd 10! } ! 
+    3 
+    &gt; eval { 500; rnd 10!; } ! 
+    &gt; </pre><p>
+Simple multi-line scripts can be constructed simply by assigning code
+to a variable that is later executed. 
 </p>
-
+<pre>    &gt; set prog { 
+    &gt;    echo &quot;first command&quot;!; 
+    &gt;    echo &quot;second command&quot;! 
+    &gt; } 
+    &gt; eval prog! 
+    first command 
+    second command </pre><p>
+As illustrated the code can either be executed as part of an FTL
+expression using <i>eval</i>. 
+</p>
 <p>Functions can be defined as closures in the way implied above: 
 </p>
-
-<pre>    &gt; set fn [msg]: { <br>    &gt;    echo "The message follows..."!; <br>    &gt;    echo msg!; <br>    &gt; } <br>    &gt; eval fn "hello world"! <br>    The message follows... <br>    hello world <br></pre>
-
-<p>There are a small number of control primitives built-in including <tt>if</tt>, <tt>while</tt>, <tt>do</tt> and <tt>forall</tt>.  Each of these are implemented as closures that take FTL values are arguments.   
+<pre>    &gt; set fn [msg]: { 
+    &gt;    echo &quot;The message follows...&quot;!; 
+    &gt;    echo msg!; 
+    &gt; } 
+    &gt; eval fn &quot;hello world&quot;! 
+    The message follows... 
+    hello world </pre><p>
+There are a small number of control primitives built-in including <tt>if</tt>,
+<tt>while</tt>, <tt>do</tt> and <tt>forall</tt>. Each of these are
+implemented as closures that take FTL values are arguments. 
 </p>
-
-<p><tt>if</tt> (always) takes three arguments - the
-first being an integer value and the second and third being code
-values. As you may expect the second code value is executed if the
-integer value is zero and the first is executed otherwise. Both code
-values must be supplied - the empty code value "{}" can be provided if
-necessary. Integer expressions can contain the following operators: </p>
-
-<table border="1" cellpadding="3" cellspacing="0">
-
-<tbody>
-<tr>
-<td> == </td>
-<td> equal </td>
-</tr>
-<tr>
-<td> != </td>
-<td> not equal </td>
-</tr>
-<tr>
-<td> le </td>
-<td> less than or equal </td>
-</tr>
-<tr>
-<td> lt </td>
-<td> less than </td>
-</tr>
-<tr>
-<td> ge </td>
-<td> greater than or equal </td>
-</tr>
-<tr>
-<td> gt </td>
-<td> greater than </td>
-</tr>
-</tbody>
+<p><tt>if</tt> (always) takes three arguments - the first being an
+integer value and the second and third being code values. As you may
+expect the second code value is executed if the integer value is zero
+and the first is executed otherwise. Both code values must be
+supplied - the empty code value &quot;{}&quot; can be provided if
+necessary. Integer expressions can contain the following operators: 
+</p>
+<table cellpadding="3" cellspacing="0">
+	<tr>
+		<td style="border-top: 1px solid #808080; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding: 0.05cm"><p>
+			== 
+			</p>
+		</td>
+		<td style="border-top: 1px solid #808080; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding: 0.05cm"><p>
+			equal 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			!= 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			not equal 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			le 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			less than or equal 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			lt 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			less than 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			ge 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			greater than or equal 
+			</p>
+		</td>
+	</tr>
+	<tr>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			gt 
+			</p>
+		</td>
+		<td style="border-top: none; border-bottom: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid #808080; padding-top: 0cm; padding-bottom: 0.05cm; padding-left: 0.05cm; padding-right: 0.05cm"><p>
+			greater than 
+			</p>
+		</td>
+	</tr>
 </table>
-
 <p>(integer expressions are not properly built in to the language,
 these are infix operators with no equivalent closures and FTL
 expressions can only be incorporated in integer expressions using
-syntax such as "+(&lt;FTL expression&gt;)". Note, also, that the <tt>cmp</tt> function will compare values from arbitrary types - including strings.) 
+syntax such as &quot;+(&lt;FTL expression&gt;)&quot;. Note, also,
+that the <tt>cmp</tt> function will compare values from arbitrary
+types - including strings.) 
 </p>
-
-<pre>   &gt; set myfor [n, code]:{ <br>   &gt;    if (0 lt (n)) {  <br>   &gt;        code!; myfor (-1+(n)) code!  <br>   &gt;    } {}! <br>   &gt; } <br>   &gt; eval myfor 3 { echo "hello"! }! <br>   hello <br>   hello <br>   hello  <br>   &gt; <br></pre>
-
-<p><tt>if</tt> returns the value returned by the executed code: 
+<pre>   &gt; set myfor [n, code]:{ 
+   &gt;    if (0 lt (n)) {  
+   &gt;        code!; myfor (-1+(n)) code!  
+   &gt;    } {}! 
+   &gt; } 
+   &gt; eval myfor 3 { echo &quot;hello&quot;! }! 
+   hello 
+   hello 
+   hello  
+   &gt; </pre><p>
+<tt>if</tt> returns the value returned by the executed code: 
 </p>
-
-<pre>    &gt; if 0 == (cmp "this" "that"!) { "yes" } { "no" } <br>    "no" <br></pre>
-
-<p>A "for" loop need not be constructed in the "myfor" example above because a function is available that implement it.  The <tt>forall</tt>
-command takes two arguments - the first an environment to ennumerate
-and the second some code to execute for each element in the
-environment. Perhaps the most useful type of environment to use is a
-vector series. Vectors are environments in which numeric names are
-assigned numeric values, and series are vectors that are defined by a
-simple rule. </p>
-
-<pre>    &gt; eval &lt;42, 50, 11&gt; <br>    &lt;42, 50, 11&gt; <br>    &gt; eval &lt;42, 50, 11&gt;.1 <br>    50 <br>    &gt; eval &lt;4..9&gt; <br>    &lt;4 .. 9&gt; <br>    &gt; range &lt;4..9&gt; <br>    &lt;4, 5, 6, 7, 8, 9&gt; <br>    &gt; range &lt;..4&gt; <br>    &lt;1, 2, 3, 4&gt; <br>    &gt; range &lt;2, 4 .. 10&gt; <br>    &lt;2, 4, 6, 8, 10&gt; <br>    &gt; forall &lt;..3&gt; { echo "Again!"! } <br>    Again! <br>    Again! <br>    Again! <br></pre>
-
-<p>The code argument to <tt>forall</tt> can be a code
-value (as above) or a closure with one or two arguments. If a closure
-is used the first argument is bound to the value in the environment for
-which the code is executed, and the second is the name that was looked
-up in the environment to provide it. (Note that there is no <i>defined</i> ordering in which the name-value pairs chosen in an environment, unless it is a vector.) 
+<pre>    &gt; if 0 == (cmp &quot;this&quot; &quot;that&quot;!) { &quot;yes&quot; } { &quot;no&quot; } 
+    &quot;no&quot; </pre><p>
+A &quot;for&quot; loop need not be constructed in the &quot;myfor&quot;
+example above because a function is available that implement it. The
+<tt>forall</tt> command takes two arguments - the first an
+environment to ennumerate and the second some code to execute for
+each element in the environment. Perhaps the most useful type of
+environment to use is a vector series. Vectors are environments in
+which numeric names are assigned numeric values, and series are
+vectors that are defined by a simple rule. 
 </p>
-
-<pre>    &gt; forall &lt;..3&gt; [i]:{ echo "val \$i"! } <br>    val 1 <br>    val 2 <br>    val 3 <br>    &gt; forall [first=1, second=2] [val]:{ echo "val \$val"! } <br>    val 1 <br>    val 2 <br>    &gt; forall [first="one", second=2] [val,name]:{ echo "\$name is \$val"! } <br>    first is one <br>    second is 2 <br></pre>
-
-<p>Other loop constructs available include <tt>do</tt> and <tt>while</tt>.  <tt>do&nbsp;{code}&nbsp;{test}&nbsp;</tt> and <tt>while&nbsp;{test}&nbsp;{code}&nbsp;</tt> will execute the code while <tt>test</tt> evaluates non-zero. The difference between the constructs is simply that the test is executed before the code in the case of <tt>while</tt> and after it in the case of <tt>do</tt>. 
+<pre>    &gt; eval &lt;42, 50, 11&gt; 
+    &lt;42, 50, 11&gt; 
+    &gt; eval &lt;42, 50, 11&gt;.1 
+    50 
+    &gt; eval &lt;4..9&gt; 
+    &lt;4 .. 9&gt; 
+    &gt; range &lt;4..9&gt; 
+    &lt;4, 5, 6, 7, 8, 9&gt; 
+    &gt; range &lt;..4&gt; 
+    &lt;1, 2, 3, 4&gt; 
+    &gt; range &lt;2, 4 .. 10&gt; 
+    &lt;2, 4, 6, 8, 10&gt; 
+    &gt; forall &lt;..3&gt; { echo &quot;Again!&quot;! } 
+    Again! 
+    Again! 
+    Again! </pre><p>
+The code argument to <tt>forall</tt> can be a code value (as above)
+or a closure with one or two arguments. If a closure is used the
+first argument is bound to the value in the environment for which the
+code is executed, and the second is the name that was looked up in
+the environment to provide it. (Note that there is no <i>defined</i>
+ordering in which the name-value pairs chosen in an environment,
+unless it is a vector.) 
 </p>
-
-<pre>    &gt; set nosix_run[]: { <br>        count = 0; <br>        do {n = rnd 6!;  <br>            count = 1+(count);   <br>            count  <br>        } { 0 != (n) }! <br>    } <br>    &gt; nosix_run <br>    21 <br>    &gt; nosix_run <br>    3 <br>    &gt; nosix_run <br>    5 <br>    &gt; <br>    &gt; set which[app]: { <br>        path = split ":" sys.env.PATH!; <br>        fname = NULL; <br>        n = 0; <br>        while { 0 == (cmp NULL fname!) and (inenv path n!) } { <br>            fn = ""+(path.(n))+"/"+(app); <br>            out = io.file fn "r"!; <br>            n = 1+(n); <br>            if 0 == (cmp NULL out!) {} { <br>                fname = fn; io.close out!; <br>            }! <br>        }!; <br>        fname <br>    } <br>    &gt; which "echo" <br>    "/bin/echo" <br>    &gt; which "ftl" <br>    "/home/cgg/tree/clean/v5/build/gnu/tools/ftl/ftl" <br></pre>
-
-
-<h2>Script Extension using FTL</h2>
-
-
+<pre>    &gt; forall &lt;..3&gt; [i]:{ echo &quot;val \$i&quot;! } 
+    val 1 
+    val 2 
+    val 3 
+    &gt; forall [first=1, second=2] [val]:{ echo &quot;val \$val&quot;! } 
+    val 1 
+    val 2 
+    &gt; forall [first=&quot;one&quot;, second=2] [val,name]:{ echo &quot;\$name is \$val&quot;! } 
+    first is one 
+    second is 2 </pre><p>
+Other loop constructs available include <tt>do</tt> and <tt>while</tt>.
+<tt>do&nbsp;{code}&nbsp;{test}&nbsp;</tt> and <tt>while&nbsp;{test}&nbsp;{code}&nbsp;</tt>
+will execute the code while <tt>test</tt> evaluates non-zero. The
+difference between the constructs is simply that the test is executed
+before the code in the case of <tt>while</tt> and after it in the
+case of <tt>do</tt>. 
+</p>
+<pre>    &gt; set nosix_run[]: { 
+        count = 0; 
+        do {n = rnd 6!;  
+            count = 1+(count);   
+            count  
+        } { 0 != (n) }! 
+    } 
+    &gt; nosix_run 
+    21 
+    &gt; nosix_run 
+    3 
+    &gt; nosix_run 
+    5 
+    &gt; 
+    &gt; set which[app]: { 
+        path = split &quot;:&quot; sys.env.PATH!; 
+        fname = NULL; 
+        n = 0; 
+        while { 0 == (cmp NULL fname!) and (inenv path n!) } { 
+            fn = &quot;&quot;+(path.(n))+&quot;/&quot;+(app); 
+            out = io.file fn &quot;r&quot;!; 
+            n = 1+(n); 
+            if 0 == (cmp NULL out!) {} { 
+                fname = fn; io.close out!; 
+            }! 
+        }!; 
+        fname 
+    } 
+    &gt; which &quot;echo&quot; 
+    &quot;/bin/echo&quot; 
+    &gt; which &quot;ftl&quot; 
+    &quot;/home/cgg/tree/clean/v5/build/gnu/tools/ftl/ftl&quot; </pre><h2>
+Script Extension using FTL</h2>
 <h3>Adding Built-in Commands</h3>
-
-<p>"Simple Use", above described how a command that parses its own arguments can be created. 
+<p>&quot;Simple Use&quot;, above described how a command that parses
+its own arguments can be created. 
 </p>
-
 <p>It is also possible to add FTL functions - which are presented
 with a fixed number of FTL values to operate on. For example, the
-implementation of the "rnd" functions is: </p>
-
-<pre>    static const value_t * <br>    fn_rnd(const value_t *this_fn, parser_state_t *state) <br>    {   const value_t *upb = parser_builtin_arg(state, 1); /* get the first argument */ <br>        const value_t *val = &amp;value_null;                  /* default return value */ <br>     <br>        if (value_istype(upb, type_int)) <br>        {   number_t upbval = value_int_number(upb); <br>            val = value_int_new((int)(((float)upbval)*rand()/(RAND_MAX+1.0))); <br>        } else <br>            parser_report_help(state, this_fn); <br> <br>        return val; <br>    } <br></pre>
-
+implementation of the &quot;rnd&quot; functions is: 
+</p>
+<pre>    static const value_t * 
+    fn_rnd(const value_t *this_fn, parser_state_t *state) 
+    {   const value_t *upb = parser_builtin_arg(state, 1); /* get the first argument */ 
+        const value_t *val = &amp;value_null;                  /* default return value */ 
+     
+        if (value_istype(upb, type_int)) 
+        {   number_t upbval = value_int_number(upb); 
+            val = value_int_new((int)(((float)upbval)*rand()/(RAND_MAX+1.0))); 
+        } else 
+            parser_report_help(state, this_fn); 
  
+        return val; 
+    } </pre><p>
 and it was added to the functions in the library using 
-<pre>    mod_addfn(cmds, "rnd", <br>              "&lt;n&gt; - return random number less than &lt;n&gt;",  &amp;fn_rnd, /*no of args*/ 1); <br></pre>
-
-<p>Other functions can easily be added. FTL values can be of a number
-of types including: null values, type values, integer values, string
-values, FTL code values, environment values, closure values, and stream
-values. Each of these has their own support provided by functions
-declared in the header "ftl.h". </p>
-
-
+</p>
+<pre>    mod_addfn(cmds, &quot;rnd&quot;, 
+              &quot;&lt;n&gt; - return random number less than &lt;n&gt;&quot;,  &amp;fn_rnd, /*no of args*/ 1); </pre><p>
+Other functions can easily be added. FTL values can be of a number of
+types including: null values, type values, integer values, string
+values, FTL code values, environment values, closure values, and
+stream values. Each of these has their own support provided by
+functions declared in the header &quot;ftl.h&quot;. 
+</p>
 <h3>Adding Commands from a Script</h3>
-
-<p>The above examples name built-in functions as the first item on the
-command line. It is possible to define additional commands simply by
-setting a code body or a closure to the name of a new command. The
-examples above will have defined new scripting commands illustrated as
-follows: </p>
-
-<pre>    &gt; set prog { <br>    &gt;    echo "first command"!; <br>    &gt;    echo "second command"! <br>    &gt; } <br>    &gt; prog <br>    first command <br>    second command <br>    &gt; <br>    &gt; set fn [msg]: { <br>    &gt;    echo "The message follows..."!; <br>    &gt;    echo msg!; <br>    &gt; } <br>    &gt; fn "Hello again" <br>    The message follows... <br>    Hello again <br></pre>
-
-<p>The <tt>set</tt> command normally defines objects in
-the "root" name directory, but other directories can be created and
-used. If the first name on a command line is the name of such a
-directory then the rest of the line can use use those names as commands
-(in addition to the root commands). (This is the mechanism described
-above in Simple Use - Subcommands.) For example, </p>
-
-<pre>    &gt; set prefix [version=[str="Ver. 1.00", n=100], random = [msg]:{echo "\$msg: \${rnd 10!}"!}] <br>    &gt; eval prefix.version.str <br>    "Ver. 1.00" <br>    &gt; eval prefix.random "Number"! <br>    Number: 7 <br>    &gt; prefix random "Random" <br>    Random: 3 <br>    &gt; prefix version n <br>    100 <br>    &gt; prefix version eval echo str! <br>    Ver. 1.00 <br></pre>
-
-
-<h3>Adding Command Help</h3>
-
-<p>The <tt>help</tt> command will include any such new commands automatically: 
+<p>The above examples name built-in functions as the first item on
+the command line. It is possible to define additional commands simply
+by setting a code body or a closure to the name of a new command. The
+examples above will have defined new scripting commands illustrated
+as follows: 
 </p>
-
-<pre>    &gt; help <br>    prefix &lt;subcommand&gt; - commands: <br>        random - closure value <br>        version &lt;subcommand&gt; - commands: <br>            n - int value <br>            str - string value <br>    : <br>    : <br>or <br>    &gt; prefix help all <br>    random - closure value <br>    version &lt;subcommand&gt; - commands: <br>        n - int value <br>        str - string value <br> <br></pre>
-
-<p>It is possible to include your own one-line help string for closures by defining a "_help" text. 
+<pre>    &gt; set prog { 
+    &gt;    echo &quot;first command&quot;!; 
+    &gt;    echo &quot;second command&quot;! 
+    &gt; } 
+    &gt; prog 
+    first command 
+    second command 
+    &gt; 
+    &gt; set fn [msg]: { 
+    &gt;    echo &quot;The message follows...&quot;!; 
+    &gt;    echo msg!; 
+    &gt; } 
+    &gt; fn &quot;Hello again&quot; 
+    The message follows... 
+    Hello again </pre><p>
+The <tt>set</tt> command normally defines objects in the &quot;root&quot;
+name directory, but other directories can be created and used. If the
+first name on a command line is the name of such a directory then the
+rest of the line can use use those names as commands (in addition to
+the root commands). (This is the mechanism described above in Simple
+Use - Subcommands.) For example, 
 </p>
-
-<pre>    &gt; set prefix.random [_help="&lt;msg&gt; - show random number with message", msg]:{echo "\$msg: \${rnd 10!}"!} <br>    &gt; prefix help <br>    random &lt;msg&gt; - show random number with message <br>    version &lt;subcommand&gt; - commands: <br>       n - int value <br>       str - string value <br></pre>
-
-<p>This is, in fact, how the help text for the normal commands is provided: 
+<pre>    &gt; set prefix [version=[str=&quot;Ver. 1.00&quot;, n=100], random = [msg]:{echo &quot;\$msg: \${rnd 10!}&quot;!}] 
+    &gt; eval prefix.version.str 
+    &quot;Ver. 1.00&quot; 
+    &gt; eval prefix.random &quot;Number&quot;! 
+    Number: 7 
+    &gt; prefix random &quot;Random&quot; 
+    Random: 3 
+    &gt; prefix version n 
+    100 
+    &gt; prefix version eval echo str! 
+    Ver. 1.00 </pre><h3>
+Adding Command Help</h3>
+<p>The <tt>help</tt> command will include any such new commands
+automatically: 
 </p>
-
-<pre>    &gt; eval echo <br>    ["_help"="&lt;whole line&gt; - prints the line out", "_1"]::&lt;cmd:0x8056ff0,1&gt; <br></pre>
-
-
-<h3>Restricting Available Commands</h3>
-
+<pre>    &gt; help 
+    prefix &lt;subcommand&gt; - commands: 
+        random - closure value 
+        version &lt;subcommand&gt; - commands: 
+            n - int value 
+            str - string value 
+    : 
+    : 
+or 
+    &gt; prefix help all 
+    random - closure value 
+    version &lt;subcommand&gt; - commands: 
+        n - int value 
+        str - string value 
+ </pre><p>
+It is possible to include your own one-line help string for closures
+by defining a &quot;_help&quot; text. 
+</p>
+<pre>    &gt; set prefix.random [_help=&quot;&lt;msg&gt; - show random number with message&quot;, msg]:{echo &quot;\$msg: \${rnd 10!}&quot;!} 
+    &gt; prefix help 
+    random &lt;msg&gt; - show random number with message 
+    version &lt;subcommand&gt; - commands: 
+       n - int value 
+       str - string value </pre><p>
+This is, in fact, how the help text for the normal commands is
+provided: 
+</p>
+<pre>    &gt; eval echo 
+    [&quot;_help&quot;=&quot;&lt;whole line&gt; - prints the line out&quot;, &quot;_1&quot;]::&lt;cmd:0x8056ff0,1&gt; </pre><h3>
+Restricting Available Commands</h3>
 <p>Once a set of C programmed commands have been extended with
 FTL-based ones the range of syntax accepted by the parser may be too
 great. It is likely, for example, that many of the built-in commands
-would better be faulted than accepted in scripts. The <tt>restrict</tt> command is available to limit successive commands to those in its argument root directory. 
+would better be faulted than accepted in scripts. The <tt>restrict</tt>
+command is available to limit successive commands to those in its
+argument root directory. 
 </p>
-
-<p>This illustrates the use of FTL to set up a small interpreter for the parsing of a simple file that defines events. 
+<p>This illustrates the use of FTL to set up a small interpreter for
+the parsing of a simple file that defines events. 
 </p>
-
-<pre>&gt; set events [] <br>&gt; set this_event NULL <br>&gt; set default [date="some date", allday=0] <br>&gt; <br>&gt; set ev_new [_help="&lt;name&gt; - define a new event", name]: { <br>&gt;     events.(name) = new default!; <br>&gt;     this_event = name; <br>&gt; } <br>&gt; set ev_date [d]: {events.(this_event).date = d; } <br>&gt; set ev_allday []: {events.(this_event).allday = 1; } <br>&gt; set ev_end [_help="- finish event definition"]: {this_event=NULL;} <br>&gt; set ev_print []:{ <br>&gt;     forall events [ev, name]:{ <br>&gt;         echo "\$name on \${ev.date} \${&lt;\"\", \"all day\"&gt;.(ev.allday)}"!; <br>&gt;     }! <br>&gt; } <br>&gt; <br>&gt; restrict [event=ev_new, date=ev_date, <br>&gt;           allday=ev_allday, end=ev_end, print=ev_print, <br>&gt;           include=source, help=help, exit=exit] <br></pre>
-
-<p>The file to be parsed can then be <tt>include</tt>d or typed in on the command line.  For example if the file "diary" contains the lines 
+<pre>&gt; set events [] 
+&gt; set this_event NULL 
+&gt; set default [date=&quot;some date&quot;, allday=0] 
+&gt; 
+&gt; set ev_new [_help=&quot;&lt;name&gt; - define a new event&quot;, name]: { 
+&gt;     events.(name) = new default!; 
+&gt;     this_event = name; 
+&gt; } 
+&gt; set ev_date [d]: {events.(this_event).date = d; } 
+&gt; set ev_allday []: {events.(this_event).allday = 1; } 
+&gt; set ev_end [_help=&quot;- finish event definition&quot;]: {this_event=NULL;} 
+&gt; set ev_print []:{ 
+&gt;     forall events [ev, name]:{ 
+&gt;         echo &quot;\$name on \${ev.date} \${&lt;\&quot;\&quot;, \&quot;all day\&quot;&gt;.(ev.allday)}&quot;!; 
+&gt;     }! 
+&gt; } 
+&gt; 
+&gt; restrict [event=ev_new, date=ev_date, 
+&gt;           allday=ev_allday, end=ev_end, print=ev_print, 
+&gt;           include=source, help=help, exit=exit] </pre><p>
+The file to be parsed can then be <tt>include</tt>d or typed in on
+the command line. For example if the file &quot;diary&quot; contains
+the lines 
 </p>
-
-<pre>event "Christmas" <br>date "25 Dec" <br>allday <br>end <br> <br>event "Dentist" <br>date "27 Nov" <br>end <br> <br>event "Manjana" <br>allday <br>end <br></pre>
-
-<p>then it is possible to execute the following: 
+<pre>event &quot;Christmas&quot; 
+date &quot;25 Dec&quot; 
+allday 
+end 
+ 
+event &quot;Dentist&quot; 
+date &quot;27 Nov&quot; 
+end 
+ 
+event &quot;Manjana&quot; 
+allday 
+end </pre><p>
+then it is possible to execute the following: 
 </p>
-
-<pre>&gt; include "diary" <br>&gt; print <br>Christmas on 25 Dec all day <br>Dentist on 27 Nov <br>Manjana on some date all day <br></pre>
-
-<p>More notable, however is what is not possible: 
+<pre>&gt; include &quot;diary&quot; 
+&gt; print 
+Christmas on 25 Dec all day 
+Dentist on 27 Nov 
+Manjana on some date all day </pre><p>
+More notable, however is what is not possible: 
 </p>
-
-<pre>&gt; help <br>exit - abandon all command inputs <br>help - prints command information <br>include &lt;stringexpr&gt; - execute file &lt;stringexpr&gt; <br>print - closure value <br>end - finish event definition <br>allday - closure value <br>date - closure value <br>event &lt;name&gt; - define a new event <br>&gt; <br>&gt; eval events <br>ftl $*console* line 39: unknown command 'eval events' <br>&gt; <br>&gt; set events."mynew event" [datestr="wrong", allday=55] <br>ftl $*console* line 41: unknown command 'set events."mynew event" [datestr="wrong", allday=55]' <br></pre>
-
-<p>The commands other than those explicitly adopted in the <tt>restrict</tt> command are not available, and can not be used, for example, to interfere with implementation details. 
+<pre>&gt; help 
+exit - abandon all command inputs 
+help - prints command information 
+include &lt;stringexpr&gt; - execute file &lt;stringexpr&gt; 
+print - closure value 
+end - finish event definition 
+allday - closure value 
+date - closure value 
+event &lt;name&gt; - define a new event 
+&gt; 
+&gt; eval events 
+ftl $*console* line 39: unknown command 'eval events' 
+&gt; 
+&gt; set events.&quot;mynew event&quot; [datestr=&quot;wrong&quot;, allday=55] 
+ftl $*console* line 41: unknown command 'set events.&quot;mynew event&quot; [datestr=&quot;wrong&quot;, allday=55]' </pre><p>
+The commands other than those explicitly adopted in the <tt>restrict</tt>
+command are not available, and can not be used, for example, to
+interfere with implementation details. 
 </p>
-
-
 <h3>Restricting Available Syntax</h3>
-
 <p>In the example above the line 
 </p>
-
-<pre>ev_new "Christmas" <br></pre>
-
- 
-evaluates <tt>"Christmas"</tt> as an FTL-expression which returns a string and then calls the <tt>ev_new</tt>
-function with the string as its argument. Because an expression is
-parsed, a number of other possibilities exist that also deliver a
-string. This may, or may not, be considered a good thing. It offers the
-person generating the script a degree of additional flexibility, but
-also offers the possibility of a number of side-effects. For example,
-the rather bizzar 
-<pre>ev_new "Christmas"+({ev_new "NewYear"!; "Day"}!) <br></pre>
-
- 
-Will make a "ChristmasDay" event but will - as a side effect - start a "NewYear" event too. 
-<p>Only functions (such as <tt>ev_new</tt> in the above)
-accept FTL expressions in this way. Commands parse the command line
-explicitly, and therefore have much more control over what is
-acceptable. </p>
-
-<p>The <tt>cmd</tt> function can be used to convert
-an FTL expression, which takes the command line as a single argument,
-into a new command. For example: </p>
-
-<pre>&gt; set evc_new cmd ev_new "&lt;restofline&gt; - give name of an event"! <br>&gt; evc_new Christmas <br>&gt; : <br>&gt; <br>&gt; restrict [event=evc_new, date=(cmd ev_date "&lt;rol&gt; - give event date"!), <br>&gt;           allday=ev_allday, end=ev_end, print=ev_print, <br>&gt;           include=source, help=help, exit=exit] <br></pre>
-
-
-<h2>Control Information available to Scripts</h2>
-
-<p>Command line interfaces can be controlled using information obtained from a number of sources including: </p>
-
+<pre style="margin-bottom: 0.5cm">ev_new &quot;Christmas&quot; </pre><p>
+evaluates <tt>&quot;Christmas&quot;</tt> as an FTL-expression which
+returns a string and then calls the <tt>ev_new</tt> function with the
+string as its argument. Because an expression is parsed, a number of
+other possibilities exist that also deliver a string. This may, or
+may not, be considered a good thing. It offers the person generating
+the script a degree of additional flexibility, but also offers the
+possibility of a number of side-effects. For example, the rather
+bizzar 
+</p>
+<pre style="margin-bottom: 0.5cm">ev_new &quot;Christmas&quot;+({ev_new &quot;NewYear&quot;!; &quot;Day&quot;}!) </pre><p>
+Will make a &quot;ChristmasDay&quot; event but will - as a side
+effect - start a &quot;NewYear&quot; event too. 
+</p>
+<p>Only functions (such as <tt>ev_new</tt> in the above) accept FTL
+expressions in this way. Commands parse the command line explicitly,
+and therefore have much more control over what is acceptable. 
+</p>
+<p>The <tt>cmd</tt> function can be used to convert an FTL
+expression, which takes the command line as a single argument, into a
+new command. For example: 
+</p>
+<pre>&gt; set evc_new cmd ev_new &quot;&lt;restofline&gt; - give name of an event&quot;! 
+&gt; evc_new Christmas 
+&gt; : 
+&gt; 
+&gt; restrict [event=evc_new, date=(cmd ev_date &quot;&lt;rol&gt; - give event date&quot;!), 
+&gt;           allday=ev_allday, end=ev_end, print=ev_print, 
+&gt;           include=source, help=help, exit=exit] </pre><h2>
+Control Information available to Scripts</h2>
+<p>Command line interfaces can be controlled using information
+obtained from a number of sources including: 
+</p>
 <ul>
-<li> the program's command line arguments 
-</li><li> the program environment 
-</li><li> a file 
-</li><li> the registry (on Windows only) </li>
+	<li><p style="margin-bottom: 0cm">the program's command line
+	arguments 
+	</p>
+	<li><p style="margin-bottom: 0cm">the program environment 
+	</p>
+	<li><p style="margin-bottom: 0cm">a file 
+	</p>
+	<li><p>the registry (on Windows only) 
+	</p>
 </ul>
-
 <p>they access these sources of information through FTL. 
 </p>
-
-
 <h3>Information from Command Line Arguments</h3>
-
-<p>The example of the library's use above includes the following line used to initialize obtain access to generic commands: 
+<p>The example of the library's use above includes the following line
+used to initialize obtain access to generic commands: 
 </p>
-
-<pre>    char *app_argv[APP_ARGC_MAX]; <br>    int app_argc = 0; <br>    :     <br>    if (parse_args(argc, argv, .. &amp;init, &amp;app_argc, &amp;app_argv, APP_ARGC_MAX)) <br>    : <br>            cmds_generic(state, app_argc, app_argv); <br></pre>
-
-<p>A function such as <tt>parse_args</tt> above should be provided in such a way as to pass on a vector of arguments to <tt>cmds_generic</tt>.  Typically it might contain all command line elements following a <tt>"--"</tt> command line argument. 
+<pre>    char *app_argv[APP_ARGC_MAX]; 
+    int app_argc = 0; 
+    :     
+    if (parse_args(argc, argv, .. &amp;init, &amp;app_argc, &amp;app_argv, APP_ARGC_MAX)) 
+    : 
+            cmds_generic(state, app_argc, app_argv); </pre><p>
+A function such as <tt>parse_args</tt> above should be provided in
+such a way as to pass on a vector of arguments to <tt>cmds_generic</tt>.
+Typically it might contain all command line elements following a <tt>&quot;--&quot;</tt>
+command line argument. 
 </p>
-
-<p>If this has been done then the <tt>parse.argv</tt> built-in directory can be used to read these values.  For example, 
+<p>If this has been done then the <tt>parse.argv</tt> built-in
+directory can be used to read these values. For example, 
 </p>
-
-<pre>    % ftl -- -one two "three" <br>    : <br>    &gt; eval parse.argv <br>    [0="ftl", 1="-one", 2="two", 3="three"] <br>    &gt; set argc len parse.argv! <br>    &gt; eval argc <br>    4 <br>    &gt; set args join " " parse.argv.&lt;1..(argc)&gt;! <br>    &gt; eval args <br>    "-one two three" <br>    &gt; eval parse.argv.&lt;1,2&gt;.[name=0, value=1] <br>    ["name"="-one", "value"="two"] <br></pre>
-
-
-<h3>Information from the Environment</h3>
-
-<p>Environment variables can be read (and written) using the built-in directory <tt>sys.env</tt> function.  For example, 
+<pre>    % ftl -- -- -one two &quot;three&quot; 
+    : 
+    &gt; eval parse.argv 
+    [0=&quot;ftl&quot;, 1=&quot;-one&quot;, 2=&quot;two&quot;, 3=&quot;three&quot;] 
+    &gt; set argc len parse.argv! 
+    &gt; eval argc 
+    4 
+    &gt; set args join &quot; &quot; parse.argv.&lt;1..(argc)&gt;! 
+    &gt; eval args 
+    &quot;-one two three&quot; 
+    &gt; eval parse.argv.&lt;1,2&gt;.[name=0, value=1] 
+    [&quot;name&quot;=&quot;-one&quot;, &quot;value&quot;=&quot;two&quot;] </pre><h3>
+Information from the Environment</h3>
+<p>Environment variables can be read (and written) using the built-in
+directory <tt>sys.env</tt> function. For example, 
 </p>
-
-<pre>    &gt; sys env USER <br>    "gray" <br>    &gt; set sys.env.USER "unhelpful" <br>    &gt; eval sys.env.USER <br>    "unhelpful" <br>    &gt; if (inenv sys.env "OPTIONAL"!) {} { sys.env.OPTIONAL = "default"; } <br>    &gt; eval sys.env.OPTIONAL <br>    "default" <br>    &gt; sys run env <br>    : <br>    OPTIONAL=default <br>    : <br>    USER=unhelpful <br>    : <br></pre>
-
-
-<h3>Information from Files</h3>
-
-<p>We have already described abvoe how an interpreter can be set up to
-parse commands from a file. It is also possible to read (and write) to
-both character-based and binrary files directly. A number of <tt>io</tt> functions can be used to access files.  <tt>io.file</tt> opens a file, <tt>io.close</tt> closes it and <tt>io.read</tt> reads a number of bytes from it. 
+<pre>    &gt; sys env USER 
+    &quot;gray&quot; 
+    &gt; set sys.env.USER &quot;unhelpful&quot; 
+    &gt; eval sys.env.USER 
+    &quot;unhelpful&quot; 
+    &gt; if (inenv sys.env &quot;OPTIONAL&quot;!) {} { sys.env.OPTIONAL = &quot;default&quot;; } 
+    &gt; eval sys.env.OPTIONAL 
+    &quot;default&quot; 
+    &gt; sys run env 
+    : 
+    OPTIONAL=default 
+    : 
+    USER=unhelpful 
+    : </pre><h3>
+Information from Files</h3>
+<p>We have already described abvoe how an interpreter can be set up
+to parse commands from a file. It is also possible to read (and
+write) to both character-based and binrary files directly. A number
+of <tt>io</tt> functions can be used to access files. <tt>io.file</tt>
+opens a file, <tt>io.close</tt> closes it and <tt>io.read</tt> reads
+a number of bytes from it. 
 </p>
-
-<pre>    &gt; set file io.file "/etc/passwd" "r"! <br>    &gt; set content io.read file 10000! <br>    &gt; eval io.close file! <br>    &gt; # we have the whole file in "content" now <br> <br>    &gt; set line split "\n" content!  # break it down into lines <br>    &gt; eval line.0 <br>    "root:x:0:0:root:/root:/bin/bash" <br>    &gt; eval len line! <br>    38 <br> <br>    &gt; split ":" line.0 <br>    &lt;"root", "x", "0", "0", "root", "/root", "/bin/bash"&gt; <br>     <br>    &gt; # you can use indexing to give more meaning to this kind of breakdown <br>    &gt; eval (split ":" line.0!).[name=0, dir=5] <br>    ["name"="root", "dir"="/root"] <br> <br>    &gt; # lets make our own password list.. <br>    &gt; set pw [] <br>    &gt; forall line [ln]:{rec = (split ":" ln!); pw.(rec.0) = rec.[dir=5, shell=6];} <br>    &gt; eval pw.ftp <br>    ["dir"="/var/ftp", "shell"="/sbin/nologin"] <br></pre>
-
-
-<h3>Information from the Windows Registry</h3>
-
-<p>On Windows <tt>reg</tt> functions are available that
-allow the Windows register to be read. Values from registry keys can be
-looked up using any of the following functions </p>
-
-<pre>    reg.value.HKEY_CLASSES_ROOT &lt;key&gt; - open key in HKEY_CLASSES_ROOT <br>    reg.value.HKEY_USERS &lt;key&gt; - open key in HKEY_USERS <br>    reg.value.HKEY_CURRENT_USER &lt;key&gt; - open key in HKEY_CURRENT_USER <br>    reg.value.HKEY_LOCAL_MACHINE &lt;key&gt; - open key in HKEY_LOCAL_MACHINE <br>    reg.value.HKEY_CURRENT_CONFIG &lt;key&gt; - open key in HKEY_CURRENT_CONFIG <br></pre>
-
-  
-These values can then be used as normal FTL directories.  For example, 
-<pre>    &gt; set key reg.value.HKEY_CURRENT_USER "Identities"! <br>    &gt; forall (domain key!) echo <br>    Identity Ordinal <br>    Migrated5 <br>    Last Username <br>    Last User ID <br>    Identity Login <br>    Default User ID <br>    &gt; eval key."Last User ID" <br>    &gt; eval key."Last User ID" <br>    ["type"=1, "data"="{CA01A243-73B8-488B-9AF5-CAB230636DB9}"] <br>    &gt; set i reg.value.HKEY_CURRENT_USER "Identities\\"+(key."Default User ID".data)! <br>    &gt; forall i [v,n]:{ io.fprintf io.out "%15s: %v\n" &lt;n, v.data&gt;!; } <br>           Username: "Main Identity" <br>            User ID: "{CA01A243-73B8-488B-9AF5-CAB230636DB9}" <br>     Directory Name: 3389104707 <br></pre>
-
-<p>
+<pre>    &gt; set file io.file &quot;/etc/passwd&quot; &quot;r&quot;! 
+    &gt; set content io.read file 10000! 
+    &gt; eval io.close file! 
+    &gt; # we have the whole file in &quot;content&quot; now 
+ 
+    &gt; set line split &quot;\n&quot; content!  # break it down into lines 
+    &gt; eval line.0 
+    &quot;root:x:0:0:root:/root:/bin/bash&quot; 
+    &gt; eval len line! 
+    38 
+ 
+    &gt; split &quot;:&quot; line.0 
+    &lt;&quot;root&quot;, &quot;x&quot;, &quot;0&quot;, &quot;0&quot;, &quot;root&quot;, &quot;/root&quot;, &quot;/bin/bash&quot;&gt; 
+     
+    &gt; # you can use indexing to give more meaning to this kind of breakdown 
+    &gt; eval (split &quot;:&quot; line.0!).[name=0, dir=5] 
+    [&quot;name&quot;=&quot;root&quot;, &quot;dir&quot;=&quot;/root&quot;] 
+ 
+    &gt; # lets make our own password list.. 
+    &gt; set pw [] 
+    &gt; forall line [ln]:{rec = (split &quot;:&quot; ln!); pw.(rec.0) = rec.[dir=5, shell=6];} 
+    &gt; eval pw.ftp 
+    [&quot;dir&quot;=&quot;/var/ftp&quot;, &quot;shell&quot;=&quot;/sbin/nologin&quot;] </pre><h3>
+Information from the Windows Registry</h3>
+<p>On Windows <tt>reg</tt> functions are available that allow the
+Windows register to be read. Values from registry keys can be looked
+up using any of the following functions 
 </p>
-
-<h2>Testing pure FTL scripts</h2>
-
-<p>A utility providing only the generic FTL commands <b>ftl</b> is available. It can be built in <b>.../ftl</b> either on Linux or on Windows.  Before building on Linux, you can set <b>export USEREADLINE=1</b> in your environment to get better command line editing.</p>
-
-<p>On Windows initial commands will be read from the file <b>$HOME\ftl.rc</b> and on Linux they will be read from <b>$HOME/.ftl/ftl.rc</b> if these files exist. 
+<pre>    reg.value.HKEY_CLASSES_ROOT &lt;key&gt; - open key in HKEY_CLASSES_ROOT 
+    reg.value.HKEY_USERS &lt;key&gt; - open key in HKEY_USERS 
+    reg.value.HKEY_CURRENT_USER &lt;key&gt; - open key in HKEY_CURRENT_USER 
+    reg.value.HKEY_LOCAL_MACHINE &lt;key&gt; - open key in HKEY_LOCAL_MACHINE 
+    reg.value.HKEY_CURRENT_CONFIG &lt;key&gt; - open key in HKEY_CURRENT_CONFIG </pre><p>
+These values can then be used as normal FTL directories. For example,
 </p>
-
+<pre>    &gt; set key reg.value.HKEY_CURRENT_USER &quot;Identities&quot;! 
+    &gt; forall (domain key!) echo 
+    Identity Ordinal 
+    Migrated5 
+    Last Username 
+    Last User ID 
+    Identity Login 
+    Default User ID 
+    &gt; eval key.&quot;Last User ID&quot; 
+    &gt; eval key.&quot;Last User ID&quot; 
+    [&quot;type&quot;=1, &quot;data&quot;=&quot;{CA01A243-73B8-488B-9AF5-CAB230636DB9}&quot;] 
+    &gt; set i reg.value.HKEY_CURRENT_USER &quot;Identities\\&quot;+(key.&quot;Default User ID&quot;.data)! 
+    &gt; forall i [v,n]:{ io.fprintf io.out &quot;%15s: %v\n&quot; &lt;n, v.data&gt;!; } 
+           Username: &quot;Main Identity&quot; 
+            User ID: &quot;{CA01A243-73B8-488B-9AF5-CAB230636DB9}&quot; 
+     Directory Name: 3389104707 </pre><h2>
+Testing pure FTL scripts</h2>
+<p>A utility providing only the generic FTL commands <b>ftl</b> is
+available. It can be built in <b>.../ftl</b> either on Linux or on
+Windows. Before building on Linux, you can set <b>export
+USEREADLINE=1</b> in your environment to get better command line
+editing.</p>
+<p>On Windows initial commands will be read from the file
+<b>$HOME\ftl.rc</b> and on Linux they will be read from
+<b>$HOME/.ftl/ftl.rc</b> if these files exist. 
+</p>
 <p>The following command line options can be provided: 
 </p>
+<pre>ftl [-e|-ne|-ep] [-s] [--version] [-c &lt;cmds&gt; | [-f &lt;file&gt;]
+      [[--] &lt;script arg&gt;...]
 
-<pre>  ftl [-r &lt;randseed&gt;] [-e|-ne] [-c &lt;commands&gt; | [-f] &lt;cmdfile&gt;] [[--] &lt;script arg&gt;...] <br> <br>     [-f] &lt;cmdfile&gt;     - read commands from this file instead of the console <br>     -c "cmd;cmd;..."   - execute initial commands <br>     -r &lt;n&gt;             - set random seed <br>     -[n]e | --[no]echo - [don't] echo executed commands <br>     -q | --quiet       - don't report unnecessary info <br></pre>
-
- 
-Script arguments will be available through the <i>parse.argv</i> function in the script. 
-<p>If you have <tt>ftl</tt> on your current PATH you can make an executable ftl script file by using the following first line: 
+     -s                  - run without interactive prompts
+     -f &lt;cmdfile&gt;        - read commands from this file instead of the console
+     -c &quot;cmd;cmd;...&quot;    - execute initial commands
+     -[-n]e | --[no]emit - [don't] echo executed commands
+     --ep | --emitprolog - echo executed commands (including prolog)
+     -q | --quiet        - don't report unnecessary info
+     --version           - just print version number and quit
+</pre><p>
+Script arguments will be available through the <i>parse.argv</i>
+function in the script. 
 </p>
-
-<pre>    #!/usr/bin/env ftl <br></pre>
-
-<p>If you use a number of different build trees it is possible to use the <tt>eftool</tt> script to place your "current" tree's version of <tt>ftl</tt> on your path. The procedure to do this is as follows. 
+<p>If you have <tt>ftl</tt> on your current PATH you can make an
+executable ftl script file by using the following first line: 
 </p>
-
-<pre>    % cd &lt;directory you own on your PATH&gt;  <br>    % cp &lt;path to "v5" in any of your trees&gt;/scripts/eftool eftool  <br>    % ln -s eftool ftl  </pre>
-
-  
-
-</body></html>
+<pre style="margin-bottom: 0.5cm">    #!/usr/bin/env ftl </pre><p>
+If you use a number of different build trees it is possible to use
+the <tt>eftool</tt> script to place your &quot;current&quot; tree's
+version of <tt>ftl</tt> on your path. The procedure to do this is as
+follows. 
+</p>
+<pre>    % cd &lt;directory you own on your PATH&gt;  
+    % cp &lt;path to &quot;v5&quot; in any of your trees&gt;/scripts/eftool eftool  
+    % ln -s eftool ftl</pre>
+</body>
+</html>
